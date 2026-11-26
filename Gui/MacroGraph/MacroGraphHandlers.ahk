@@ -708,9 +708,9 @@ class MacroGraphHandlersMixin {
         }
         ; 同步控件值，避免切换类型后显示旧值
         if (ObjHasOwnProp(data, "SearchColor"))
-            this.ui.Update("SColor_" id, "Text", data.SearchColor)
+            this.ui.Update("SColor_" id, "Text", GetVariableComboText(GetGuiVarArr("color"), data.SearchColor))
         if (ObjHasOwnProp(data, "SearchText"))
-            this.ui.Update("SText_" id, "Text", data.SearchText)
+            this.ui.Update("SText_" id, "Text", GetVariableComboText(GetGuiVarArr("text"), data.SearchText))
         if (c.isImage) {
             imgPath := data.HasOwnProp("SearchImagePath") ? data.SearchImagePath : ""
             ; 搜索Pro：完整路径（过长左侧 ...）；普通搜索仍只显示文件名

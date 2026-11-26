@@ -124,9 +124,8 @@ class AiSettingGui {
         ; 行1：API URL
         row1 := body.Add("Grid").Grid_Row(1).VerticalAlignment("Center")
         row1.Cols(String(labelW), "*")
-        row1.Add("TextBlock").Text(GetLang("API URL：")).Grid_Column(0).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
+        row1.Add("TextBlock").Name("AiBaseUrlLabel").Text(GetLang("API URL：")).ToolTip(GetLang("OpenAI 兼容接口，例如 https://api.openai.com/v1")).Grid_Column(0).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
         this._AddFieldTextBox(row1, "TxtAiBaseUrl", gap)
-            .ToolTip(GetLang("OpenAI 兼容接口，例如 https://api.openai.com/v1"))
 
         ; 行2：API Key
         row2 := body.Add("Grid").Grid_Row(2).VerticalAlignment("Center")
@@ -146,12 +145,11 @@ class AiSettingGui {
         ; 行4：写入权限 + 指令审批（两侧 * 等宽）
         row4 := body.Add("Grid").Grid_Row(4).VerticalAlignment("Center")
         row4.Cols(String(labelW), "*")
-        row4.Add("TextBlock").Text(GetLang("写入权限：")).Grid_Column(0).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
+        row4.Add("TextBlock").Name("AiAccessLabel").Text(GetLang("写入权限：")).ToolTip(GetLang("只读：只能读取任意文件内容") "`n" GetLang("工作区：可以读取任意文件，写入仅限软件目录") "`n" GetLang("完全访问") "：" GetLang("读写不限路径，可执行命令和脚本。")).Grid_Column(0).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
         permHost := row4.Add("Grid").Grid_Column(1).Height(h).Margin(gap ",0,0,0").HorizontalAlignment("Stretch")
         permHost.Cols("*", "Auto", "*")
         cmbAccess := this._StyleCombo(permHost.Add("ComboBox").Name("CmbAiAccess").Grid_Column(0)
-            .Margin("0,0,10,0").HorizontalAlignment("Stretch")
-            .ToolTip(GetLang("只读：只能读取任意文件内容") "`n" GetLang("工作区：可以读取任意文件，写入仅限软件目录") "`n" GetLang("完全访问") "：" GetLang("读写不限路径，可执行命令和脚本。")))
+            .Margin("0,0,10,0").HorizontalAlignment("Stretch"))
         for lab in AiAssist.AccessLabels
             cmbAccess.Add("ComboBoxItem").Content(GetLang(lab))
         permHost.Add("TextBlock").Grid_Column(1).Text(GetLang("指令审批："))

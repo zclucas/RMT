@@ -190,6 +190,7 @@ class FrontInfoGui {
         ; === 创建 XAMLHost ===
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)
         this.ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", this.OwnerHwnd)
+        this.ui._batchEditorRefresh := true
         this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="480" Height="400"')
         this.ui.xaml := StrReplace(this.ui.xaml, 'ResizeMode="CanResize"', 'ResizeMode="NoResize"')
         this.ui.xaml := StrReplace(this.ui.xaml, 'FontFamily="Segoe UI Variable Display, Segoe UI, sans-serif"', 'FontFamily="' MainSoftData.FontType '"')
@@ -251,7 +252,7 @@ class FrontInfoGui {
         this.winInfoCon := winInfoCon
         this._topOn := true
         this._SyncTopBtn()
-        value := winInfoCon.Value
+        value := NormalizeWindowBinding(winInfoCon.Value)
         mode := 2
         if (value == "{所有窗口}")
             mode := 3
@@ -261,8 +262,8 @@ class FrontInfoGui {
             mode := 4
         else if (value == "{宏设置窗口绑定}" || value == "{绑定窗口}" || value == GetLang("{绑定窗口}"))
             mode := 5
-        else if (InStr(value, "❖") == 1) {
-            handle := SubStr(value, 2)
+        else if (IsHandleWindowBinding(value)) {
+            handle := value
             mode := IsMouseWindowBinding(value) ? 0 : 1
         } else if (value != "" && value != "{所有窗口}") {
             mode := 2
@@ -393,8 +394,8 @@ class FrontInfoGui {
 
     GetInfoStr() {
         switch this.SourceMode() {
-            case 0: return "❖{运行时句柄ID}"
-            case 1: return "❖" Trim(this.ui.Query("InfoText2"))
+            case 0: return "{运行时句柄ID}"
+            case 1: return NormalizeWindowBinding(this.ui.Query("InfoText2"))
             case 3: return this.scope == "macro" ? "{所有窗口}" : ""
             case 4: return "{模块窗口绑定}"
             case 5: return "{宏设置窗口绑定}"

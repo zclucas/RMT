@@ -27,7 +27,6 @@ class CompareGui {
         this._title := ""
 
         this.Data := ""
-        this.ResultConArr := ["ResultSaveLabel", "SaveNameCon", "ResultLabelTrueCon", "TrueValueCon", "ResultLabelFalseCon", "FalseValueCon"]
     }
 
     Hwnd() {
@@ -65,7 +64,7 @@ class CompareGui {
         chrome := XAMLHost.AddCmdTitleBar(main, title, titleHeight)
 
         body := main.Add("Grid").Grid_Row(1).Margin("16,10,16,14")
-        body.Rows("34", this._CondiBoxRowH(), "88", "34", "48")
+        body.Rows("34", this._CondiBoxRowH(), "108", "34", "48")
         body.Cols("28", "*", "8", "90", "8", "*", "28")
 
         ; === 逻辑关系 + 备注（备注与比较下拉左对齐）===
@@ -93,8 +92,8 @@ class CompareGui {
         condiHost := sv.Add("StackPanel")
         condiHost.Add("StackPanel").Name("CondiRowsPanel")
         plusRow := condiHost.Add("Grid").Name("BtnAddCondiRow").Margin("0,2,0,0")
-        plusRow.Cols("28", "*", "8", "90", "8", "*", "28")
-        plusRow.Add("Button").Name("BtnAddCondi").Grid_Column(3).Width(24).Height(24).MinHeight(24)
+        plusRow.Cols("*", "8", "90", "8", "*", "28")
+        plusRow.Add("Button").Name("BtnAddCondi").Grid_Column(2).Width(24).Height(24).MinHeight(24)
             .HorizontalAlignment("Center").VerticalAlignment("Center").Cursor("Hand").ToolTip(GetLang("添加"))
             .FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets").FontSize("12").Content(Chr(0xE710))
             .Foreground("{DynamicResource TextMain}").Background("{DynamicResource ControlBg}")
@@ -108,7 +107,7 @@ class CompareGui {
         ft := foundCol.Add("StackPanel").Orientation("Horizontal")
         ft.Add("TextBlock").Text(GetLang("真-分支指令:（可选）")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
         ft.Add("Button").Name("BtnTrueEdit").Content(GetLang("编辑")).Height(26).MinHeight(26).Margin("8,0,0,0").Cursor("Hand")
-        foundCol.Add("TextBox").Name("TrueMacroCon").Height(46).Margin("0,2,0,0").AcceptsReturn("True").TextWrapping("Wrap")
+        foundCol.Add("TextBox").Name("TrueMacroCon").Height(66).Margin("0,2,0,0").AcceptsReturn("True").TextWrapping("Wrap")
             .VerticalContentAlignment("Top").Padding("4,2").FontSize(11)
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
@@ -117,32 +116,21 @@ class CompareGui {
         ft2 := unfoundCol.Add("StackPanel").Orientation("Horizontal")
         ft2.Add("TextBlock").Text(GetLang("假-分支指令:（可选）")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
         ft2.Add("Button").Name("BtnFalseEdit").Content(GetLang("编辑")).Height(26).MinHeight(26).Margin("8,0,0,0").Cursor("Hand")
-        unfoundCol.Add("TextBox").Name("FalseMacroCon").Height(46).Margin("0,2,0,0").AcceptsReturn("True").TextWrapping("Wrap")
+        unfoundCol.Add("TextBox").Name("FalseMacroCon").Height(66).Margin("0,2,0,0").AcceptsReturn("True").TextWrapping("Wrap")
             .VerticalContentAlignment("Top").Padding("4,2").FontSize(11)
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
 
-        ; === 结果保存 ===
+        ; === 结果变量 ===
         saveRow := body.Add("Grid").Grid_Row(3).Grid_ColumnSpan(7).VerticalAlignment("Center")
         saveRow.Cols("*", "8", "*")
         saveLeft := saveRow.Add("Grid").Grid_Column(0)
-        saveLeft.Cols("Auto", "*")
-        saveHead := saveLeft.Add("StackPanel").Grid_Column(0).Orientation("Horizontal").VerticalAlignment("Center")
-        saveHead.Add("CheckBox").Name("SaveToggleCon").VerticalAlignment("Center")
-        saveHead.Add("TextBlock").Name("ResultSaveLabel").Text(GetLang("结果保存")).VerticalAlignment("Center").Margin("6,0,0,0").Foreground("{DynamicResource TextMain}").FontSize("12")
-        saveLeft.Add("ComboBox").Grid_Column(1).Name("SaveNameCon").Height(26).MinHeight(26).Margin("8,0,0,0").IsEditable("True")
-            .HorizontalAlignment("Stretch").VerticalContentAlignment("Center").FontSize("11")
-            .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
-            .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
-        saveRight := saveRow.Add("StackPanel").Grid_Column(2).Orientation("Horizontal").VerticalAlignment("Center").HorizontalAlignment("Right")
-        saveRight.Add("TextBlock").Name("ResultLabelTrueCon").Text(GetLang("真值")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
-        saveRight.Add("TextBox").Name("TrueValueCon").Width(70).Height(26).MinHeight(26).Margin("6,0,0,0")
-            .VerticalContentAlignment("Center").TextAlignment("Center").FontSize("11").Padding("4,0")
-            .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
-            .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
-        saveRight.Add("TextBlock").Name("ResultLabelFalseCon").Text(GetLang("假值")).VerticalAlignment("Center").Margin("12,0,0,0").Foreground("{DynamicResource TextMain}").FontSize("12")
-        saveRight.Add("TextBox").Name("FalseValueCon").Width(70).Height(26).MinHeight(26).Margin("6,0,0,0")
-            .VerticalContentAlignment("Center").TextAlignment("Center").FontSize("11").Padding("4,0")
+        saveLeft.Cols(6 * XAMLHost.ScaleFontSize(XAMLHost.FontSize()), "*")
+        saveLeft.Add("TextBlock").Name("ResultSaveLabel").Text(GetLang("结果变量："))
+            .ToolTip(GetLang("条件成立时保存 1，不成立时保存 0；留空则不保存。"))
+            .VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
+        saveLeft.Add("ComboBox").Grid_Column(1).Name("SaveNameCon").Height(26).MinHeight(26)
+            .IsEditable("True").VerticalAlignment("Center").VerticalContentAlignment("Center").FontSize("11")
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
 
@@ -166,7 +154,6 @@ class CompareGui {
         this.ui.OnEvent("BtnTrueEdit", "Click", ObjBindMethod(this, "OnTrueBtnClick"))
         this.ui.OnEvent("BtnFalseEdit", "Click", ObjBindMethod(this, "OnFalseBtnClick"))
         this.ui.OnEvent("BtnAddCondi", "Click", ObjBindMethod(this, "OnAddCondi"))
-        this.ui.OnEvent("SaveToggleCon", "Click", ObjBindMethod(this, "OnRefresh"))
     }
 
     _CondiScrollStyles() {
@@ -200,7 +187,7 @@ class CompareGui {
     }
 
     _FitHeight() {
-        return Integer(XAMLHost.CmdTitleBarHeight()) + 10 + 14 + 34 + this._CondiBoxRowH() + 88 + 34 + 48
+        return Integer(XAMLHost.CmdTitleBarHeight()) + 10 + 14 + 34 + this._CondiBoxRowH() + 108 + 34 + 48
     }
 
     _EnsureCondiDataLen() {
@@ -208,17 +195,17 @@ class CompareGui {
             this.Data := CompareData()
         if (this.Data.ToggleArr.Length == 0) {
             this.Data.ToggleArr := [1]
-            this.Data.NameArr := ["Value1"]
+            this.Data.NameArr := ["{Value1}"]
             this.Data.CompareTypeArr := [1]
-            this.Data.VariableArr := ["Target1"]
+            this.Data.VariableArr := ["{Target1}"]
         }
         n := this.Data.ToggleArr.Length
         while (this.Data.NameArr.Length < n)
-            this.Data.NameArr.Push("Value" (this.Data.NameArr.Length + 1))
+            this.Data.NameArr.Push("{Value" (this.Data.NameArr.Length + 1) "}")
         while (this.Data.CompareTypeArr.Length < n)
             this.Data.CompareTypeArr.Push(1)
         while (this.Data.VariableArr.Length < n)
-            this.Data.VariableArr.Push("Target" (this.Data.VariableArr.Length + 1))
+            this.Data.VariableArr.Push("{Target" (this.Data.VariableArr.Length + 1) "}")
         while (this.Data.NameArr.Length > n)
             this.Data.NameArr.RemoveAt(this.Data.NameArr.Length)
         while (this.Data.CompareTypeArr.Length > n)
@@ -235,17 +222,16 @@ class CompareGui {
         tip := this._EscapeXml(GetLang("删除"))
         return '<Grid ' ns ' Margin="0,2">'
             . '<Grid.ColumnDefinitions>'
-            . '<ColumnDefinition Width="28"/><ColumnDefinition Width="*"/><ColumnDefinition Width="8"/>'
+            . '<ColumnDefinition Width="*"/><ColumnDefinition Width="8"/>'
             . '<ColumnDefinition Width="90"/><ColumnDefinition Width="8"/><ColumnDefinition Width="*"/><ColumnDefinition Width="28"/>'
             . '</Grid.ColumnDefinitions>'
-            . '<CheckBox Grid.Column="0" Name="ToggleCon_' i '" VerticalAlignment="Center" HorizontalAlignment="Center"/>'
-            . '<ComboBox Grid.Column="1" Name="NameCon_' i '" Height="26" MinHeight="26" IsEditable="True" VerticalContentAlignment="Center"'
+            . '<ComboBox Grid.Column="0" Name="NameCon_' i '" Height="26" MinHeight="26" IsEditable="True" VerticalContentAlignment="Center"'
             . ' Foreground="{DynamicResource InputText}" Background="{DynamicResource InputBg}" BorderBrush="{DynamicResource InputStroke}" BorderThickness="1"/>'
-            . '<ComboBox Grid.Column="3" Name="CompareTypeCon_' i '" Height="26" MinHeight="26" VerticalContentAlignment="Center"'
+            . '<ComboBox Grid.Column="2" Name="CompareTypeCon_' i '" Height="26" MinHeight="26" VerticalContentAlignment="Center"'
             . ' Foreground="{DynamicResource InputText}" Background="{DynamicResource InputBg}" BorderBrush="{DynamicResource InputStroke}" BorderThickness="1">' cmpItems '</ComboBox>'
-            . '<ComboBox Grid.Column="5" Name="VariableCon_' i '" Height="26" MinHeight="26" IsEditable="True" VerticalContentAlignment="Center"'
+            . '<ComboBox Grid.Column="4" Name="VariableCon_' i '" Height="26" MinHeight="26" IsEditable="True" VerticalContentAlignment="Center"'
             . ' Foreground="{DynamicResource InputText}" Background="{DynamicResource InputBg}" BorderBrush="{DynamicResource InputStroke}" BorderThickness="1"/>'
-            . '<Button Grid.Column="6" Name="DelCondi_' i '" Width="24" Height="24" MinHeight="24" Padding="0" Cursor="Hand"'
+            . '<Button Grid.Column="5" Name="DelCondi_' i '" Width="24" Height="24" MinHeight="24" Padding="0" Cursor="Hand"'
             . ' FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="12" Content="&#xE74D;" ToolTip="' tip '"'
             . ' Foreground="{DynamicResource TextMain}" Background="{DynamicResource ControlBg}"'
             . ' BorderBrush="{DynamicResource ControlBorder}" BorderThickness="1" HorizontalAlignment="Center" VerticalAlignment="Center"/>'
@@ -262,18 +248,18 @@ class CompareGui {
     _BindRowEvents() {
         loop this.Data.ToggleArr.Length {
             i := A_Index
-            this._Bind("ToggleCon_" i, "Click", ObjBindMethod(this, "OnRefresh"))
             this._Bind("CompareTypeCon_" i, "SelectionChanged", this._OnCompareTypeChange.Bind(this, i))
             this._Bind("DelCondi_" i, "Click", ObjBindMethod(this, "OnDelCondi", i))
         }
     }
 
     _BatchSetCombo(batch, comboName, items, text) {
+        text := GetVariableComboText(items, text)
         batch.Push({ControlName: comboName, PropertyName: "ClearItems", Value: ""})
         for it in items {
             if (it == "")
                 continue
-            batch.Push({ControlName: comboName, PropertyName: "AddItem", Value: it})
+            batch.Push(CmdEditorForm.ComboItemUpdate(comboName, it))
         }
         batch.Push({ControlName: comboName, PropertyName: "Text", Value: text})
     }
@@ -297,13 +283,11 @@ class CompareGui {
         batch := []
         loop this.Data.ToggleArr.Length {
             i := A_Index
-            tog := this.Data.ToggleArr[i] ? "True" : "False"
-            batch.Push({ControlName: "ToggleCon_" i, PropertyName: "IsChecked", Value: tog})
             ct := this.Data.CompareTypeArr[i]
             items := GetCompareGuiVarArr(ct)
-            this._BatchSetCombo(batch, "NameCon_" i, items, GetLang(this.Data.NameArr[i]))
+            this._BatchSetCombo(batch, "NameCon_" i, items, TranslateBuiltinVarReferences(this.Data.NameArr[i], true))
             batch.Push({ControlName: "CompareTypeCon_" i, PropertyName: "SelectedIndex", Value: String(CompareTypeToComboIndex(ct))})
-            this._BatchSetCombo(batch, "VariableCon_" i, items, GetLang(this.Data.VariableArr[i]))
+            this._BatchSetCombo(batch, "VariableCon_" i, items, TranslateBuiltinVarReferences(this.Data.VariableArr[i], true))
             onlyOne := this.Data.ToggleArr.Length <= 1
             batch.Push({ControlName: "DelCondi_" i, PropertyName: "IsEnabled", Value: onlyOne ? "False" : "True"})
         }
@@ -316,9 +300,9 @@ class CompareGui {
         this.SaveCompareData()
         n := this.Data.ToggleArr.Length + 1
         this.Data.ToggleArr.Push(1)
-        this.Data.NameArr.Push("Value" n)
+        this.Data.NameArr.Push("{Value" n "}")
         this.Data.CompareTypeArr.Push(1)
-        this.Data.VariableArr.Push("Target" n)
+        this.Data.VariableArr.Push("{Target" n "}")
         this._RebuildRows()
         try this.ui.Update("CondiScroll", "ScrollToEnd", "")
         this.OnRefresh()
@@ -343,11 +327,12 @@ class CompareGui {
     ; ---------------- 数据读写辅助 ----------------
 
     _SetCombo(comboName, items, text) {
+        text := GetVariableComboText(items, text)
         this.ui.Update(comboName, "ClearItems", "")
         for it in items {
             if (it == "")
                 continue
-            this.ui.Update(comboName, "AddItem", it)
+            this.ui.BatchUpdate([CmdEditorForm.ComboItemUpdate(comboName, it)])
         }
         this.ui.Update(comboName, "Text", text)
     }
@@ -391,14 +376,23 @@ class CompareGui {
         this.ui.Update("RemarkCon", "Text", cmdArr.Length >= 2 ? cmdArr[2] : "")
         this.Data := GetMacroCMDData(this.SerialStr)
         this.Data.SerialStr := this.SerialStr
+        ; 旧配置的停用条件不再显示，避免去掉勾选框后意外启用。
+        this._EnsureCondiDataLen()
+        i := this.Data.ToggleArr.Length
+        while (i > 0) {
+            if (!this._ToggleInt(this.Data.ToggleArr[i])) {
+                this.Data.ToggleArr.RemoveAt(i)
+                this.Data.NameArr.RemoveAt(i)
+                this.Data.CompareTypeArr.RemoveAt(i)
+                this.Data.VariableArr.RemoveAt(i)
+            }
+            i -= 1
+        }
 
         ; 原生 DropDownList.Value 为 1-based，XAML SelectedIndex 为 0-based
         this.ui.Update("TrueMacroCon", "Text", GetLangMacro(ObjHasOwnProp(this.Data, "TrueMacro") ? this.Data.TrueMacro : "", 1))
         this.ui.Update("FalseMacroCon", "Text", GetLangMacro(ObjHasOwnProp(this.Data, "FalseMacro") ? this.Data.FalseMacro : "", 1))
-        this.ui.Update("SaveToggleCon", "IsChecked", this._ToggleInt(ObjHasOwnProp(this.Data, "SaveToggle") ? this.Data.SaveToggle : 0) ? "True" : "False")
-        this._SetCombo("SaveNameCon", GetGuiVarArr(), GetLang(ObjHasOwnProp(this.Data, "SaveName") ? this.Data.SaveName : ""))
-        this.ui.Update("TrueValueCon", "Text", ObjHasOwnProp(this.Data, "TrueValue") ? this.Data.TrueValue : 1)
-        this.ui.Update("FalseValueCon", "Text", ObjHasOwnProp(this.Data, "FalseValue") ? this.Data.FalseValue : 0)
+        this._SetCombo("SaveNameCon", GetGuiVarArr(), cmd == "" ? "Res" : (this.Data.SaveToggle ? this.Data.SaveName : ""))
         logical := ObjHasOwnProp(this.Data, "LogicalType") ? this.Data.LogicalType : "且"
         this.ui.Update("LogicalTypeCon", "SelectedIndex", String(CmdEnumIndex(logical, CmdEnumLogicNames())))
         this._RebuildRows()
@@ -413,7 +407,7 @@ class CompareGui {
     }
 
     CheckIfValid() {
-        if (this.ui.Query("SaveToggleCon") == "True" && !CheckVarNameIfValid(this.ui.Query("SaveNameCon")))
+        if (Trim(this.ui.Query("SaveNameCon")) != "" && !CheckVarNameIfValid(this.ui.Query("SaveNameCon")))
             return false
 
         return true
@@ -443,16 +437,11 @@ class CompareGui {
             return
         loop this.Data.ToggleArr.Length {
             i := A_Index
-            isEnable := this.ui.Query("ToggleCon_" i) == "True"
-            this.ui.Update("NameCon_" i, "IsEnabled", isEnable ? "True" : "False")
-            this.ui.Update("CompareTypeCon_" i, "IsEnabled", isEnable ? "True" : "False")
-            enableVari := !IsCompareExistVar(ComboIndexToCompareType(this._CompareIndex(i))) && isEnable
+            this.ui.Update("NameCon_" i, "IsEnabled", "True")
+            this.ui.Update("CompareTypeCon_" i, "IsEnabled", "True")
+            enableVari := !IsCompareExistVar(ComboIndexToCompareType(this._CompareIndex(i)))
             this.ui.Update("VariableCon_" i, "IsEnabled", enableVari ? "True" : "False")
         }
-
-        canEditResult := this.ui.Query("SaveToggleCon") == "True"
-        for name in this.ResultConArr
-            this.ui.Update(name, "IsEnabled", canEditResult ? "True" : "False")
     }
 
     OnClickSureBtn(state, ctrl, event) {
@@ -528,10 +517,10 @@ class CompareGui {
     SaveCompareData() {
         this.Data.TrueMacro := GetLangMacro(this.ui.Query("TrueMacroCon"), 2)
         this.Data.FalseMacro := GetLangMacro(this.ui.Query("FalseMacroCon"), 2)
-        this.Data.SaveToggle := this.ui.Query("SaveToggleCon") == "True" ? 1 : 0
+        this.Data.SaveToggle := Trim(this.ui.Query("SaveNameCon")) != "" ? 1 : 0
         this.Data.SaveName := GetVarName(this.ui.Query("SaveNameCon"))
-        this.Data.TrueValue := this.ui.Query("TrueValueCon")
-        this.Data.FalseValue := this.ui.Query("FalseValueCon")
+        this.Data.TrueValue := 1
+        this.Data.FalseValue := 0
         this.Data.LogicalType := CmdEnumFromIndex(this._LogicalIndex(), CmdEnumLogicNames())
         n := this.Data.ToggleArr.Length
         this.Data.ToggleArr := []
@@ -540,10 +529,10 @@ class CompareGui {
         this.Data.VariableArr := []
         loop n {
             i := A_Index
-            this.Data.ToggleArr.Push(this.ui.Query("ToggleCon_" i) == "True" ? 1 : 0)
-            this.Data.NameArr.Push(GetLangKey(this.ui.Query("NameCon_" i)))
+            this.Data.ToggleArr.Push(1)
+            this.Data.NameArr.Push(TranslateBuiltinVarReferences(this.ui.Query("NameCon_" i)))
             this.Data.CompareTypeArr.Push(ComboIndexToCompareType(this._CompareIndex(i)))
-            this.Data.VariableArr.Push(GetLangKey(this.ui.Query("VariableCon_" i)))
+            this.Data.VariableArr.Push(TranslateBuiltinVarReferences(this.ui.Query("VariableCon_" i)))
         }
 
         ; 添加全局变量，方便下拉选取

@@ -116,8 +116,7 @@ class ThemeSettingGui {
         sizeCol.Add("TextBlock").Grid_Column(0).Text(GetLang("界面缩放") "：")
             .Foreground(this._colorUi.labelFg).FontSize(this._colorUi.labelFs)
             .VerticalAlignment("Center")
-        sizeCol.Add("Grid", UiScaleSelectorXaml("UiScaleCon", MainSoftData.UiScale, 260, this._instanceKey)).Grid_Column(1)
-            .ToolTip(GetLang("控件、字号与间距整体缩放，默认 100%，窗口自动适配屏幕。"))
+        sizeCol.Add("Grid", UiScaleSelectorXaml("UiScaleCon", MainSoftData.UiScale, 260, this._instanceKey, false)).Grid_Column(1)
 
         themeRow := panel.Add("Grid").Margin("0,10,0,0").Width(this._colorUi.twoColW)
         themeRow.Cols(String(this._colorUi.labelW), "*")

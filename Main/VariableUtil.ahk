@@ -156,9 +156,13 @@ SetGlobalData(macroStr, visitMap) {
 ; 只有明确读取句柄的变量行才加入窗口绑定候选，不按变量名猜测类型。
 RegisterHandleVariableRows(data) {
     for i, enabled in data.ToggleArr {
+        type := CmdEnumOpera(data.OperaTypeArr[i])
+        source := data.CopyVariableArr[i]
+        isHandle := type == "赋值"
+            ? RegExMatch(source, "^\{([^{}\r\n]+)\}$", &reference) && GetBuiltinVarName(reference[1]) == "运行时句柄ID"
+            : (type == "系统" || type == "数值") && GetBuiltinVarName(source) == "运行时句柄ID"
         if (enabled && data.VariableArr[i] != ""
-            && (CmdEnumOpera(data.OperaTypeArr[i]) == "系统" || CmdEnumOpera(data.OperaTypeArr[i]) == "数值")
-            && GetBuiltinVarName(data.CopyVariableArr[i]) == "运行时句柄ID")
+            && isHandle)
             MySoftData.HandleVarMap[data.VariableArr[i]] := true
     }
 }
@@ -189,7 +193,7 @@ GetGuiVarArr(categories*) {
     }
     for source in sources {
         for name in source {
-            if (name != "" && !reserved.Has(name) && !seen.Has(name)) {
+            if (CustomVariableNameError(name) == "" && !reserved.Has(name) && !seen.Has(name)) {
                 seen[name] := true
                 items.Push(name)
             }
@@ -226,22 +230,18 @@ GetCompareGuiVarArr(operator) {
         operator := CmdEnumCompare(operator)
     switch GetLangKey(operator) {
         case "大于", "大于等于", "小于", "小于等于":
-            return GetGuiVarArr("number")
+            return GetGuiVarReferences("number")
         case "字符包含", "包含", "正则匹配":
-            return GetGuiVarArr("text")
+            return GetGuiVarReferences("text")
         default:
-            return GetGuiVarArr("all")
+            return GetGuiVarReferences("all")
     }
 }
 
 CheckVarNameIfValid(Name) {
-    if (Name == "") {
-        RmtDialog.Info(Format(GetLang("结果变量名不规范：变量名不能为空")))
-        return false
-    }
-
-    if (IsNumber(Name)) {
-        RmtDialog.Info(Format(GetLang("结果变量名不规范：变量名不能是纯数字")))
+    Name := Trim(Name)
+    if ((error := CustomVariableNameError(Name)) != "") {
+        RmtDialog.Info(GetLang(error))
         return false
     }
 
@@ -253,5 +253,6 @@ CheckVarNameIfValid(Name) {
 }
 
 GetVarName(Name) {
-    return GetLangKey(Name)
+    ; 保存目标不能因系统变量显示名转换而绕过名称校验。
+    return InStr(Name, "❖") ? Name : GetLangKey(Name)
 }

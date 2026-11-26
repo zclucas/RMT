@@ -29,10 +29,10 @@ class CompareProEditItemGui {
         this.CondiNumber := 1
 
         this.EditType := 1  ;1正常分支 2兜底分支
-        this.ToggleArr := [1, 0]
-        this.NameArr := ["Value1", "Value2"]
-        this.CompareTypeArr := [1, 1]
-        this.VariableArr := ["Target1", "Target2"]
+        this.ToggleArr := [1]
+        this.NameArr := ["{Value1}"]
+        this.CompareTypeArr := [1]
+        this.VariableArr := ["{Target1}"]
         this.LogicalTypeCon := "LogicalTypeCon"
         this.MacroCon := "MacroCon"
         this.SureFocusCon := ""      ; 外部（CompareProGui:224）可能赋值；内部不使用
@@ -117,8 +117,8 @@ class CompareProEditItemGui {
         condiHost := sv.Add("StackPanel")
         condiHost.Add("StackPanel").Name("CondiRowsPanel")
         plusRow := condiHost.Add("Grid").Name("BtnAddCondiRow").Margin("0,2,0,0")
-        plusRow.Cols("28", "*", "8", "90", "8", "*", "28")
-        plusRow.Add("Button").Name("BtnAddCondi").Grid_Column(3).Width(24).Height(24).MinHeight(24)
+        plusRow.Cols("*", "8", "90", "8", "*", "28")
+        plusRow.Add("Button").Name("BtnAddCondi").Grid_Column(2).Width(24).Height(24).MinHeight(24)
             .HorizontalAlignment("Center").VerticalAlignment("Center").Cursor("Hand").ToolTip(GetLang("添加"))
             .FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets").FontSize("12").Content(Chr(0xE710))
             .Foreground("{DynamicResource TextMain}").Background("{DynamicResource ControlBg}")
@@ -142,6 +142,7 @@ class CompareProEditItemGui {
         ; === 创建 XAMLHost ===
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)
         this.ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", this.OwnerHwnd)
+        this.ui._batchEditorRefresh := true
         this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="540" Height="' this._FitHeight() '"')
         this.ui.xaml := StrReplace(this.ui.xaml, 'FontFamily="Segoe UI Variable Display, Segoe UI, sans-serif"', 'FontFamily="' MainSoftData.FontType '"')
         this.ui.xaml := StrReplace(this.ui.xaml, '%resources%', this._CondiScrollStyles())
@@ -193,17 +194,17 @@ class CompareProEditItemGui {
     _EnsureCondiDataLen() {
         if (this.ToggleArr.Length == 0) {
             this.ToggleArr := [1]
-            this.NameArr := ["Value1"]
+            this.NameArr := ["{Value1}"]
             this.CompareTypeArr := [1]
-            this.VariableArr := ["Target1"]
+            this.VariableArr := ["{Target1}"]
         }
         n := this.ToggleArr.Length
         while (this.NameArr.Length < n)
-            this.NameArr.Push("Value" (this.NameArr.Length + 1))
+            this.NameArr.Push("{Value" (this.NameArr.Length + 1) "}")
         while (this.CompareTypeArr.Length < n)
             this.CompareTypeArr.Push(1)
         while (this.VariableArr.Length < n)
-            this.VariableArr.Push("Target" (this.VariableArr.Length + 1))
+            this.VariableArr.Push("{Target" (this.VariableArr.Length + 1) "}")
         while (this.NameArr.Length > n)
             this.NameArr.RemoveAt(this.NameArr.Length)
         while (this.CompareTypeArr.Length > n)
@@ -220,17 +221,16 @@ class CompareProEditItemGui {
         tip := this._EscapeXml(GetLang("删除"))
         return '<Grid ' ns ' Margin="0,2">'
             . '<Grid.ColumnDefinitions>'
-            . '<ColumnDefinition Width="28"/><ColumnDefinition Width="*"/><ColumnDefinition Width="8"/>'
+            . '<ColumnDefinition Width="*"/><ColumnDefinition Width="8"/>'
             . '<ColumnDefinition Width="90"/><ColumnDefinition Width="8"/><ColumnDefinition Width="*"/><ColumnDefinition Width="28"/>'
             . '</Grid.ColumnDefinitions>'
-            . '<CheckBox Grid.Column="0" Name="ToggleCon_' i '" VerticalAlignment="Center" HorizontalAlignment="Center"/>'
-            . '<ComboBox Grid.Column="1" Name="NameCon_' i '" Height="26" MinHeight="26" IsEditable="True" VerticalContentAlignment="Center"'
+            . '<ComboBox Grid.Column="0" Name="NameCon_' i '" Height="26" MinHeight="26" IsEditable="True" VerticalContentAlignment="Center"'
             . ' Foreground="{DynamicResource InputText}" Background="{DynamicResource InputBg}" BorderBrush="{DynamicResource InputStroke}" BorderThickness="1"/>'
-            . '<ComboBox Grid.Column="3" Name="CompareTypeCon_' i '" Height="26" MinHeight="26" VerticalContentAlignment="Center"'
+            . '<ComboBox Grid.Column="2" Name="CompareTypeCon_' i '" Height="26" MinHeight="26" VerticalContentAlignment="Center"'
             . ' Foreground="{DynamicResource InputText}" Background="{DynamicResource InputBg}" BorderBrush="{DynamicResource InputStroke}" BorderThickness="1">' cmpItems '</ComboBox>'
-            . '<ComboBox Grid.Column="5" Name="VariableCon_' i '" Height="26" MinHeight="26" IsEditable="True" VerticalContentAlignment="Center"'
+            . '<ComboBox Grid.Column="4" Name="VariableCon_' i '" Height="26" MinHeight="26" IsEditable="True" VerticalContentAlignment="Center"'
             . ' Foreground="{DynamicResource InputText}" Background="{DynamicResource InputBg}" BorderBrush="{DynamicResource InputStroke}" BorderThickness="1"/>'
-            . '<Button Grid.Column="6" Name="DelCondi_' i '" Width="24" Height="24" MinHeight="24" Padding="0" Cursor="Hand"'
+            . '<Button Grid.Column="5" Name="DelCondi_' i '" Width="24" Height="24" MinHeight="24" Padding="0" Cursor="Hand"'
             . ' FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="12" Content="&#xE74D;" ToolTip="' tip '"'
             . ' Foreground="{DynamicResource TextMain}" Background="{DynamicResource ControlBg}"'
             . ' BorderBrush="{DynamicResource ControlBorder}" BorderThickness="1" HorizontalAlignment="Center" VerticalAlignment="Center"/>'
@@ -247,18 +247,18 @@ class CompareProEditItemGui {
     _BindRowEvents() {
         loop this.ToggleArr.Length {
             i := A_Index
-            this._Bind("ToggleCon_" i, "Click", ObjBindMethod(this, "OnRefresh"))
             this._Bind("CompareTypeCon_" i, "SelectionChanged", this._OnCompareTypeChange.Bind(this, i))
             this._Bind("DelCondi_" i, "Click", ObjBindMethod(this, "OnDelCondi", i))
         }
     }
 
     _BatchSetCombo(batch, comboName, items, text) {
+        text := GetVariableComboText(items, text)
         batch.Push({ControlName: comboName, PropertyName: "ClearItems", Value: ""})
         for it in items {
             if (it == "")
                 continue
-            batch.Push({ControlName: comboName, PropertyName: "AddItem", Value: it})
+            batch.Push(CmdEditorForm.ComboItemUpdate(comboName, it))
         }
         batch.Push({ControlName: comboName, PropertyName: "Text", Value: text})
     }
@@ -283,16 +283,13 @@ class CompareProEditItemGui {
         canEdit := this.EditType == 1
         loop this.ToggleArr.Length {
             i := A_Index
-            tog := this.ToggleArr[i] ? "True" : "False"
-            batch.Push({ControlName: "ToggleCon_" i, PropertyName: "IsChecked", Value: tog})
             ct := this.CompareTypeArr[i]
             items := GetCompareGuiVarArr(ct)
-            this._BatchSetCombo(batch, "NameCon_" i, items, GetLang(this.NameArr[i]))
+            this._BatchSetCombo(batch, "NameCon_" i, items, TranslateBuiltinVarReferences(this.NameArr[i], true))
             batch.Push({ControlName: "CompareTypeCon_" i, PropertyName: "SelectedIndex", Value: String(CompareTypeToComboIndex(ct))})
-            this._BatchSetCombo(batch, "VariableCon_" i, items, GetLang(this.VariableArr[i]))
+            this._BatchSetCombo(batch, "VariableCon_" i, items, TranslateBuiltinVarReferences(this.VariableArr[i], true))
             onlyOne := this.ToggleArr.Length <= 1
             batch.Push({ControlName: "DelCondi_" i, PropertyName: "IsEnabled", Value: (canEdit && !onlyOne) ? "True" : "False"})
-            batch.Push({ControlName: "ToggleCon_" i, PropertyName: "IsEnabled", Value: canEdit ? "True" : "False"})
         }
         batch.Push({ControlName: "BtnAddCondi", PropertyName: "IsEnabled", Value: canEdit ? "True" : "False"})
         this.ui.BatchUpdate(batch)
@@ -306,10 +303,10 @@ class CompareProEditItemGui {
         this.VariableArr := []
         loop n {
             i := A_Index
-            this.ToggleArr.Push(this.ui.Query("ToggleCon_" i) == "True" ? 1 : 0)
-            this.NameArr.Push(GetLangKey(this.ui.Query("NameCon_" i)))
+            this.ToggleArr.Push(1)
+            this.NameArr.Push(TranslateBuiltinVarReferences(this.ui.Query("NameCon_" i)))
             this.CompareTypeArr.Push(this._CompareTypeIndex(i))
-            this.VariableArr.Push(GetLangKey(this.ui.Query("VariableCon_" i)))
+            this.VariableArr.Push(TranslateBuiltinVarReferences(this.ui.Query("VariableCon_" i)))
         }
     }
 
@@ -319,9 +316,9 @@ class CompareProEditItemGui {
         this._SaveCondiFromUi()
         n := this.ToggleArr.Length + 1
         this.ToggleArr.Push(1)
-        this.NameArr.Push("Value" n)
+        this.NameArr.Push("{Value" n "}")
         this.CompareTypeArr.Push(1)
-        this.VariableArr.Push("Target" n)
+        this.VariableArr.Push("{Target" n "}")
         this._RebuildRows()
         try this.ui.Update("CondiScroll", "ScrollToEnd", "")
         this.OnRefresh()
@@ -346,11 +343,12 @@ class CompareProEditItemGui {
     ; ---------------- 数据读写辅助 ----------------
 
     _SetCombo(comboName, items, text) {
+        text := GetVariableComboText(items, text)
         this.ui.Update(comboName, "ClearItems", "")
         for it in items {
             if (it == "")
                 continue
-            this.ui.Update(comboName, "AddItem", it)
+            this.ui.BatchUpdate([CmdEditorForm.ComboItemUpdate(comboName, it)])
         }
         this.ui.Update(comboName, "Text", text)
     }
@@ -377,10 +375,10 @@ class CompareProEditItemGui {
         CompareTypeArr := DataArr[2]
         VariableArr := DataArr[3]
         if (VariNameArr.Length == 0) {
-            this.ToggleArr := [1, 0]
-            this.NameArr := ["Value1", "Value2"]
-            this.CompareTypeArr := [1, 1]
-            this.VariableArr := ["Target1", "Target2"]
+            this.ToggleArr := [1]
+            this.NameArr := ["{Value1}"]
+            this.CompareTypeArr := [1]
+            this.VariableArr := ["{Target1}"]
         }
         else {
             this.ToggleArr := []
@@ -391,7 +389,7 @@ class CompareProEditItemGui {
                 this.ToggleArr.Push(1)
                 this.NameArr.Push(VariNameArr[A_Index])
                 this.CompareTypeArr.Push(CompareTypeArr.Length >= A_Index ? CompareTypeArr[A_Index] : 1)
-                this.VariableArr.Push(VariableArr.Length >= A_Index ? VariableArr[A_Index] : "Target" A_Index)
+                this.VariableArr.Push(VariableArr.Length >= A_Index ? VariableArr[A_Index] : "{Target" A_Index "}")
             }
         }
         this._RebuildRows()
@@ -417,10 +415,9 @@ class CompareProEditItemGui {
         canEdit := this.EditType == 1
         loop this.ToggleArr.Length {
             i := A_Index
-            isEnable := canEdit && this.ui.Query("ToggleCon_" i) == "True"
-            this.ui.Update("NameCon_" i, "IsEnabled", isEnable ? "True" : "False")
-            this.ui.Update("CompareTypeCon_" i, "IsEnabled", isEnable ? "True" : "False")
-            enableVari := isEnable && !IsCompareExistVar(this._CompareTypeIndex(i))
+            this.ui.Update("NameCon_" i, "IsEnabled", canEdit ? "True" : "False")
+            this.ui.Update("CompareTypeCon_" i, "IsEnabled", canEdit ? "True" : "False")
+            enableVari := canEdit && !IsCompareExistVar(this._CompareTypeIndex(i))
             this.ui.Update("VariableCon_" i, "IsEnabled", enableVari ? "True" : "False")
         }
     }
@@ -439,15 +436,13 @@ class CompareProEditItemGui {
                 CompareTypeArr := []
                 VariableArr := []
                 loop this.ToggleArr.Length {
-                    if (!this.ToggleArr[A_Index])
-                        continue
                     VariNameArr.Push(this.NameArr[A_Index])
                     CompareTypeArr.Push(this.CompareTypeArr[A_Index])
                     VariableArr.Push(this.VariableArr[A_Index])
                 }
-                this.Data.VariNameArr[this.CondiNumber] := GetLangKeyArr(VariNameArr)
+                this.Data.VariNameArr[this.CondiNumber] := VariNameArr
                 this.Data.CompareTypeArr[this.CondiNumber] := GetLangKeyArr(CompareTypeArr)
-                this.Data.VariableArr[this.CondiNumber] := GetLangKeyArr(VariableArr)
+                this.Data.VariableArr[this.CondiNumber] := VariableArr
                 this.Data.LogicTypeArr[this.CondiNumber] := this._LogicalTypeIndex()
                 this.Data.MacroArr[this.CondiNumber] := GetLangMacro(this.ui.Query("MacroCon"), 2)
                 this.Data.ControlTypeArr[this.CondiNumber] := GetLangKey(this.LegacyControlType)
@@ -464,8 +459,6 @@ class CompareProEditItemGui {
             condiStr := ""
             loop this.ToggleArr.Length {
                 i := A_Index
-                if (!this.ToggleArr[i])
-                    continue
                 if (this.ui.Query("CompareTypeCon_" i) != GetLang("变量存在")) {
                     condiStr .= this.ui.Query("NameCon_" i) " " this.ui.Query("CompareTypeCon_" i) " " this.ui.Query("VariableCon_" i)
                 }

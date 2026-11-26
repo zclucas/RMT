@@ -90,8 +90,8 @@ class MMProGui {
         ; === 内容 ===
         body := main.Add("Grid").Grid_Row(1).Margin("10,8,10,18")
         ; 为拖拽坐标预留行高，避免引擎首次测量后展开新行将确定按钮挤出窗口。
-        body.Rows("32", "36", "36", "36", "36", "36", "36", "24", "40")
-        body.Cols("90", "130", "110", "150")
+        body.Rows("32", "36", "36", "36", "36", "36", "36", "24", "*")
+        body.Cols("Auto", "*", "Auto", "*")
 
         ; 行0：当前鼠标位置 + 备注（备注与坐标Y左对齐，输入右对齐下方下拉）
         body.Add("TextBlock").Grid_Row(0).Grid_Column(0).Grid_ColumnSpan(2).Name("MousePosCon")
@@ -99,7 +99,7 @@ class MMProGui {
             .Foreground("{DynamicResource TextMain}").FontSize("12")
         body.Add("TextBlock").Grid_Row(0).Grid_Column(2).Text(GetLang("备注：")).VerticalAlignment("Center").Margin("20,0,0,0")
             .Foreground("{DynamicResource TextMain}").FontSize("12")
-        body.Add("TextBox").Grid_Row(0).Grid_Column(3).Name("RemarkCon").Height(26).MinHeight(26).Margin("-45,0,0,0")
+        body.Add("TextBox").Grid_Row(0).Grid_Column(3).Name("RemarkCon").Height(26).MinHeight(26)
             .VerticalContentAlignment("Center").FontSize("11").Padding("4,0")
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
@@ -117,12 +117,12 @@ class MMProGui {
 
         ; 行2：窗口信息（坐标基准=窗口时显示）
         winRow := body.Add("Grid").Name("WinInfoRow").Grid_Row(2).Grid_ColumnSpan(4).Visibility("Hidden")
-        winRow.Cols("90", "130", "110", "150")
+        winRow.Cols("Auto", "*", "Auto")
         winRow.Add("TextBlock").Grid_Column(0).Text(GetLang("窗口绑定：")).VerticalAlignment("Center")
             .Foreground("{DynamicResource TextMain}").FontSize("12")
-        CmdEditorForm.WindowBindingCombo(winRow, "WinInfoCon").Grid_Column(1).Grid_ColumnSpan(2).FontSize(11)
-        winRow.Add("Button").Grid_Column(3).Name("BtnWinInfoEdit").Content(GetLang("编辑")).Height(26).MinHeight(26)
-            .Margin("20,0,0,0").HorizontalAlignment("Left").VerticalAlignment("Center")
+        CmdEditorForm.WindowBindingCombo(winRow, "WinInfoCon").Grid_Column(1).FontSize(11)
+        winRow.Add("Button").Grid_Column(2).Name("BtnWinInfoEdit").Content(GetLang("编辑")).Height(26).MinHeight(26)
+            .Margin("8,0,0,0").HorizontalAlignment("Left").VerticalAlignment("Center")
 
         ; 行3：移动方式 + 鼠标动作
         body.Add("TextBlock").Grid_Row(3).Grid_Column(0).Text(GetLang("移动方式：")).VerticalAlignment("Center")
@@ -148,13 +148,13 @@ class MMProGui {
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
         body.Add("TextBlock").Grid_Row(4).Grid_Column(2).Name("PosYLabel").Text(GetLang("坐标位置Y:")).VerticalAlignment("Center").Margin("20,0,0,0")
             .Foreground("{DynamicResource TextMain}").FontSize("12")
-        body.Add("ComboBox").Grid_Row(4).Grid_Column(3).Name("PosVarY").Width(130).HorizontalAlignment("Left").Height(26).MinHeight(26).Margin("20,0,0,0").IsEditable("True")
+        body.Add("ComboBox").Grid_Row(4).Grid_Column(3).Name("PosVarY").Height(26).MinHeight(26).Margin("20,0,0,0").IsEditable("True")
             .VerticalContentAlignment("Center").FontSize("11")
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
 
         ; 绝对拖拽终止坐标；其他动作折叠此行。
         endRow := body.Add("Grid").Grid_Row(5).Grid_ColumnSpan(4).Name("EndPosRow").Visibility("Collapsed").Height(36)
-        endRow.Cols("90", "130", "110", "150")
+        endRow.Cols("Auto", "*", "Auto", "*")
         endRow.Add("TextBlock").Grid_Column(0).Text(GetLang("终止点")).VerticalAlignment("Center")
             .Foreground("{DynamicResource TextMain}").FontSize("12")
         endRow.Add("ComboBox").Grid_Column(1).Name("EndPosVarX").Height(26).MinHeight(26).IsEditable("True")
@@ -162,7 +162,7 @@ class MMProGui {
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
         endRow.Add("TextBlock").Grid_Column(2).Text("").VerticalAlignment("Center").Margin("20,0,0,0")
             .Foreground("{DynamicResource TextMain}").FontSize("12")
-        endRow.Add("ComboBox").Grid_Column(3).Name("EndPosVarY").Width(130).HorizontalAlignment("Left").Height(26).MinHeight(26).Margin("-90,0,0,0").IsEditable("True")
+        endRow.Add("ComboBox").Grid_Column(3).Name("EndPosVarY").Height(26).MinHeight(26).Margin("20,0,0,0").IsEditable("True")
             .VerticalContentAlignment("Center").FontSize("11")
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
 
@@ -247,6 +247,7 @@ class MMProGui {
     }
 
     _SetCombo(comboName, items, text) {
+        text := GetVariableComboText(items, text)
         if (!IsObject(this.ui))
             return
         this._ComboPush(comboName, "ClearItems", "")

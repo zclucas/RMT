@@ -183,9 +183,19 @@ GetLastWinPos() {
 RefreshGui() {
     CfgWrite(false, SettingFile, SettingSection, "IsReload")
 
+    ; 托盘在建窗前就可用；引擎还没回传句柄时 MyGui 仍是空对象，不能直接 Show。
+    if (!HasMethod(MainSoftData.MyGui, "Show")) {
+        WaitMainWinReady(RefreshGuiWhenReady)
+        return
+    }
     ; 建窗已恢复位置/尺寸，并由引擎按档位适配工作区；再次显示不能重放旧几何。
     MainSoftData.MyGui.Show()
     RefreshListenVarGui()
+}
+
+RefreshGuiWhenReady() {
+    if (HasMethod(MainSoftData.MyGui, "Show"))
+        RefreshGui()
 }
 
 RefreshListenVarGui(isForce := false) {
@@ -333,6 +343,8 @@ CmdEditorPlayTip(hotkey := "!l") {
 BindCmdEditorChrome(ui, helpRoute := "", playAction := "", playHotkey := "!l", targeterAction := "", f1Action := "", f2Action := "", f3Action := "") {
     if (!IsObject(ui))
         return
+    ; 所有指令编辑器（含动态卡片）的类型切换共用事件级刷新合并。
+    ui._batchEditorRefresh := true
     hash := "#指令手册"
     helpRoute := Trim(helpRoute)
     if (helpRoute != "")
@@ -528,6 +540,51 @@ class CmdEditorForm {
             .IsEditable(editable ? "True" : "False").IsTextSearchEnabled(editable ? "False" : "True")
     }
 
+    ; 下拉项只显示变量名；TextSearch.Text 保留选中后写入编辑框的引用。
+    static ComboItem(parent, value) {
+        item := parent.Add("ComboBoxItem")
+        if (RegExMatch(value, "^\{([^{}\r\n]+)\}$", &match))
+            return item.Content(match[1]).Tag("{}" value).TextSearch_Text("{}" value)
+        return item.Content(value)
+    }
+
+    static ComboItemUpdate(name, value) {
+        property := "AddItem"
+        this.NormalizeComboItem(&property, &value)
+        return {ControlName: name, PropertyName: property, Value: value}
+    }
+
+    static NormalizeComboItem(&property, &value) {
+        if (property != "AddItem" || !RegExMatch(value, "^\{([^{}\r\n]+)\}$", &match))
+            return
+        property := "AddXamlItem"
+        value := '<ComboBoxItem xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" Content="'
+            . EscapeXamlXml(match[1]) '" Tag="{}' EscapeXamlXml(value) '" TextSearch.Text="{}' EscapeXamlXml(value) '"/>'
+    }
+
+    ; 等待变量与控件值条件共用固定高度、居中添加按钮和稳定的滚动条列。
+    static ConditionPanel(parent, panelName, scrollName, rowsName, addName) {
+        vp := parent.Add("Border").Name(panelName).Visibility("Collapsed")
+            .Margin("0,5,0,4").BorderBrush("{DynamicResource ControlBorder}").BorderThickness(1).CornerRadius(4)
+        scroll := vp.Add("ScrollViewer").Name(scrollName)
+            .Height(4 * 30).VerticalScrollBarVisibility("Auto").HorizontalScrollBarVisibility("Disabled")
+        template := scroll.Add("ScrollViewer.Template").Add("ControlTemplate").TargetType("ScrollViewer")
+        viewport := template.Add("Grid")
+        viewport.Cols("*", "Auto")
+        viewport.Add("ScrollContentPresenter").Name("PART_ScrollContentPresenter")
+        viewport.Add("ScrollBar").Name("PART_VerticalScrollBar").Grid_Column(1).Margin("0,2,2,2")
+            .Style("{DynamicResource VerticalScrollBarStyle}").Visibility("Hidden")
+            .Value("{TemplateBinding VerticalOffset}").Maximum("{TemplateBinding ScrollableHeight}")
+            .ViewportSize("{TemplateBinding ViewportHeight}")
+        ; 隐藏时仍保留滚动条列的宽度，避免条件行在溢出时改变宽度。
+        template.Add("ControlTemplate.Triggers").Add("Trigger").Property("ComputedVerticalScrollBarVisibility").Value("Visible")
+            .Add("Setter").TargetName("PART_VerticalScrollBar").Property("Visibility").Value("Visible")
+        list := scroll.Add("StackPanel").Margin("6,0").VerticalAlignment("Top")
+        list.Add("StackPanel").Name(rowsName)
+        CmdEditorForm.IconButton(list, addName, 0xE710, "添加").HorizontalAlignment("Center").Margin("0,2")
+        return vp
+    }
+
     static OcrCombo(parent, name) {
         combo := this.Combo(parent, name)
         for label in [GetLang("跟随全局"), "RapidOCR", "Tesseract OCR"]
@@ -538,13 +595,13 @@ class CmdEditorForm {
     static WindowBindingOptions {
         get {
             options := [
-                ["运行时窗口", "❖{运行时句柄ID}"],
+                ["运行时窗口", "{运行时句柄ID}"],
                 ["宏窗口绑定", "{宏设置窗口绑定}"],
                 ["模块窗口绑定", "{模块窗口绑定}"]]
             if (MySoftData.HasOwnProp("HandleVarMap")) {
                 for name in MySoftData.HandleVarMap {
                     if (name != "")
-                        options.Push([name, "❖{" name "}"])
+                        options.Push([name, "{" name "}"])
                 }
             }
             return options

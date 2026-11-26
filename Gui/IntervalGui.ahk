@@ -148,6 +148,7 @@ class IntervalGui {
 
     ; 设置可编辑 ComboBox 候选项 + 当前文本
     _SetCombo(comboName, items, text) {
+        text := GetVariableComboText(items, text)
         if (!IsObject(this.ui))
             return
         this._ComboPush(comboName, "ClearItems", "")

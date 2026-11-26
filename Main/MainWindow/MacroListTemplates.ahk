@@ -193,7 +193,7 @@
             . '</BulletDecorator>'
             . '<ControlTemplate.Triggers>'
             . '<Trigger Property="IsChecked" Value="True"><Setter TargetName="CheckMark" Property="Visibility" Value="Visible"/></Trigger>'
-            . '<Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Border" Property="BorderBrush" Value="{DynamicResource Accent}"/><Setter TargetName="Border" Property="Background" Value="{DynamicResource ControlBorder}"/></Trigger>'
+            . '<Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Border" Property="BorderBrush" Value="{DynamicResource Accent}"/><Setter TargetName="Border" Property="Background" Value="{DynamicResource EditHoverBg}"/></Trigger>'
             . '</ControlTemplate.Triggers>'
             . '</ControlTemplate></CheckBox.Template></CheckBox>'
     }

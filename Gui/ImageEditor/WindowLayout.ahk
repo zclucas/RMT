@@ -116,7 +116,6 @@
             .VerticalAlignment("Center").Foreground("{DynamicResource TextMain}")
         popGrid2.Add("Slider").Grid_Column(1).Name("IgnoreSizeSlider")
             .VerticalAlignment("Center").Margin("0,0,6,0").Minimum(1).Maximum(8).Value(this.IgnoreBrushSize)
-            .ToolTip(GetLang("蒙版笔刷直径（像素）"))
         popGrid2.Add("TextBlock").Grid_Column(2).Name("IgnoreSizeVal")
             .Text(String(this.IgnoreBrushSize)).FontSize("11").TextAlignment("Center")
             .VerticalAlignment("Center").Foreground("{DynamicResource TextMain}")
@@ -233,7 +232,6 @@
             .SetProp("FontFamily", "Segoe MDL2 Assets").FontSize("15")
         ctl1.Add("CheckBox").Grid_Column(3).Name("ChkSampleFixed").Content(GetLang("固定位置"))
             .FontSize("11").VerticalAlignment("Center").Foreground("{DynamicResource TextMain}")
-            .ToolTip(GetLang("勾选时自动截取与上一次相同的区域"))
 
         ctl2 := origPanel.Add("Grid").Name("SampleCtl2Con").Height(30).Margin("0,0,0,2").Visibility("Collapsed")
         ctl2.Cols("64", "*", "32")
@@ -267,7 +265,6 @@
             .VerticalAlignment("Center").Foreground("{DynamicResource TextMain}")
         popGrid.Add("Slider").Grid_Column(1).Name("EraseBrushSlider")
             .VerticalAlignment("Center").Margin("0,0,6,0").Minimum(1).Maximum(8).Value(this.EraseBrushSize)
-            .ToolTip(GetLang("涂抹笔刷直径（像素）"))
         popGrid.Add("TextBlock").Grid_Column(2).Name("EraseBrushVal")
             .Text(String(this.EraseBrushSize)).FontSize("11").TextAlignment("Center")
             .VerticalAlignment("Center").Foreground("{DynamicResource TextMain}")

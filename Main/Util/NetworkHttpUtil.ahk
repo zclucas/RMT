@@ -350,7 +350,7 @@ NetworkHttpDecodeUtf8Bytes(byteStr) {
 
 ; 变量名合法性：仅允许字母/数字/下划线（PRD P0-5）
 NetworkIsValidVarName(name) {
-    return RegExMatch(name, "^[A-Za-z0-9_]+$") != 0
+    return CustomVariableNameError(name) == "" && RegExMatch(name, "^[A-Za-z0-9_]+$") != 0
 }
 
 ; ---------- 端口工具（P2-1：保存校验与启动钳制共用）----------

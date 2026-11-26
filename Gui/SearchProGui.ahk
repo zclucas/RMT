@@ -43,11 +43,10 @@ class SearchProGui {
         this.MultiPointMode := ""
         this._windowToken := 0
         this.ImageProcessGui := ""
+        this._textBuilder := ""
         this.CountTogArr := ["SearchIntervalHost"]
         this.MouseSpeedArr := ["SpeedTipCon", "SpeedCon"]
         this.MouseClickArr := ["ClickCountCon"]
-        this.ResultTogArr := ["ResultSaveNameCon", "TrueValueCon", "FalseValueCon"]
-        this.CoordTogArr := ["CoordXNameCon", "CoordYNameCon"]
         this.WinInfoArr := ["WinInfoTipCon", "WinInfoCon", "BtnWinEdit"]
         this.ImageVariArr := ["ImagePanel"]
         this.ColorArr := ["ColorPanel"]
@@ -184,7 +183,7 @@ class SearchProGui {
                 .HorizontalAlignment("Stretch").VerticalAlignment("Center").VerticalContentAlignment("Center").FontSize("11")
                 .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
                 .BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1")
-            for t in GetLangArr(["无动作", "移动至目标", "移动至目标点击"])
+            for t in GetLangArr(CmdEnumSearchMouseActItems(true))
                 mac.Add("ComboBoxItem").Content(t)
             coord.Add("TextBlock").Grid_Row(3).Grid_Column(0).Name("SpeedTipCon").Text(GetLang("移动速度：")).ToolTip(GetLang("左侧填写移动速度，右侧填写点击次数。")).VerticalAlignment("Center").HorizontalAlignment("Left")
                 .Foreground("{DynamicResource TextMain}").FontSize("12")
@@ -192,7 +191,7 @@ class SearchProGui {
                 .HorizontalAlignment("Stretch").VerticalAlignment("Center").VerticalContentAlignment("Center").Padding("2,0").TextAlignment("Center").FontSize("11")
                 .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
                 .BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1").Tag("NumOnly|NoIME|MaxLen:3")
-            coord.Add("TextBox").Grid_Row(3).Grid_Column(4).Name("ClickCountCon").Height(28).MinHeight(28)
+            coord.Add("TextBox").Grid_Row(3).Grid_Column(4).Name("ClickCountCon").ToolTip(GetLang("这是鼠标点击次数。")).Height(28).MinHeight(28)
                 .HorizontalAlignment("Stretch").VerticalAlignment("Center").VerticalContentAlignment("Center")
                 .Padding("2,0").TextAlignment("Center").FontSize("11")
                 .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
@@ -228,7 +227,7 @@ class SearchProGui {
         colorMatch.Add("TextBlock").Text(GetLang("颜色匹配") "：").Margin("0,0,6,0")
             .VerticalAlignment("Center").Foreground("{DynamicResource TextMain}")
         colorMatch.Add("CheckBox").Name("ColorMatchCon").Style("{StaticResource ColorMatchSwitch}")
-            .VerticalAlignment("Center").IsChecked("False").ToolTip(GetLang("颜色匹配"))
+            .VerticalAlignment("Center").IsChecked("False")
         imgRow1.Cols("*", "8", "28", "8", "28", "8", "28")
         imgRow1.Add("ComboBox").Grid_Column(0).Name("ImagePathCon").Height(28).MinHeight(28)
             .HorizontalAlignment("Stretch").VerticalAlignment("Center").IsEditable("True").FontSize("11")
@@ -278,16 +277,19 @@ class SearchProGui {
             .BorderBrush("#FF4B5563").BorderThickness("1").VerticalAlignment("Center")
 
         txtPanel := typeHost.Add("Grid").Name("TextPanel").VerticalAlignment("Top").Visibility("Collapsed")
-        txtPanel.Rows("32", "32")
-        txtPanel.Cols(String(XAMLHost.FontSize() * 6), "*")
+        txtPanel.Rows("32")
+        txtPanel.Cols(String(XAMLHost.FontSize() * 6), "*", 8, 28)
         txtPanel.Add("TextBlock").Grid_Column(0).Text(GetLang("搜索文本：")).VerticalAlignment("Center").HorizontalAlignment("Left")
             .Foreground("{DynamicResource TextMain}").FontSize("12")
         txtPanel.Add("ComboBox").Grid_Column(1).Name("TextCon").Height(28).MinHeight(28).IsEditable("True")
             .HorizontalAlignment("Stretch").VerticalAlignment("Center").VerticalContentAlignment("Center").FontSize("11")
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1")
-        txtPanel.Add("TextBlock").Grid_Row(1).Grid_Column(0).Text(GetLang("OCR模型：")).VerticalAlignment("Center")
-        CmdEditorForm.OcrCombo(txtPanel, "OcrEngineCon").Grid_Row(1).Grid_Column(1)
+        txtPanel.Add("Button").Grid_Column(3).Name("BtnEditSearchText").Width(28).Height(28).MinHeight(28)
+            .Padding("0").Cursor("Hand").VerticalAlignment("Center")
+            .FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets").Content(Chr(0xE70F)).FontSize("12")
+            .ToolTip(GetLang("文本构造")).Foreground("{DynamicResource TextMain}")
+            .Background("{DynamicResource ControlBg}").BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1")
 
         ; 行3：找到 / 未找到
         macroRow := body.Add("Grid").Grid_Row(3).Grid_ColumnSpan(3).Margin("0,4,0,0")
@@ -330,21 +332,31 @@ class SearchProGui {
         ; 行4：结果保存 | 目标点保存
         saveRow := body.Add("Grid").Grid_Row(4).Grid_ColumnSpan(3).Margin("0,6,0,0")
         saveRow.Cols("*", "12", "*")
-        resCol := saveRow.Add("StackPanel").Orientation("Horizontal").VerticalAlignment("Center")
-        resCol.Add("CheckBox").Name("ResultToggleCon").VerticalAlignment("Center").Margin("0,0,2,0")
-            .ToolTip(GetLang("从左到右填写结果变量、找到时的值、未找到时的值。"))
-        this._AddSaveField(resCol, "ResultSaveNameCon", "ComboBox", 120, "0,0,8,0")
-        this._AddSaveField(resCol, "TrueValueCon", "TextBox", 56, "0,0,8,0")
-        this._AddSaveField(resCol, "FalseValueCon", "TextBox", 56, "")
-
+        labelWidth := 6 * XAMLHost.ScaleFontSize(XAMLHost.FontSize())
+        resCol := saveRow.Add("Grid").VerticalAlignment("Center").Cols(labelWidth, "*")
+        resCol.Add("TextBlock").Name("ResultSaveLabel").Text(GetLang("结果变量："))
+            .ToolTip(GetLang("找到时保存 1，未找到时保存 0；留空则不保存。"))
+            .VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
+        resCol.Add("ComboBox").Grid_Column(1).Name("ResultSaveNameCon").Height(28).MinHeight(28)
+            .IsEditable("True").VerticalAlignment("Center").VerticalContentAlignment("Center").FontSize("11")
+            .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
+            .BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1")
+            .Width(this.IsAll ? "{Binding ActualWidth, ElementName=SearchCountCon}" : "{Binding ActualWidth, ElementName=SpeedCon}").HorizontalAlignment("Left")
         if (this.IsAll) {
             this.BuildAllArrayField(saveRow)
         } else {
-            coordCol := saveRow.Add("StackPanel").Grid_Column(2).Orientation("Horizontal").VerticalAlignment("Center")
-            coordCol.Add("CheckBox").Name("CoordToogleCon").VerticalAlignment("Center").Margin("0,0,2,0")
-                .ToolTip(GetLang("左侧填写 X 坐标变量，右侧填写 Y 坐标变量。"))
-            this._AddSaveField(coordCol, "CoordXNameCon", "ComboBox", 110, "0,0,8,0")
-            this._AddSaveField(coordCol, "CoordYNameCon", "ComboBox", 110, "")
+            coordCol := saveRow.Add("Grid").Grid_Column(2).VerticalAlignment("Center")
+            coordCol.Cols(labelWidth, "*", "8", "*")
+            coordCol.Add("TextBlock").Name("CoordSaveLabel").Text(GetLang("目标坐标："))
+                .VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
+            coordCol.Add("ComboBox").Grid_Column(1).Name("CoordXNameCon").Height(28).MinHeight(28)
+                .IsEditable("True").VerticalAlignment("Center").VerticalContentAlignment("Center").FontSize("11")
+                .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
+                .BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1")
+            coordCol.Add("ComboBox").Grid_Column(3).Name("CoordYNameCon").Height(28).MinHeight(28)
+                .IsEditable("True").VerticalAlignment("Center").VerticalContentAlignment("Center").FontSize("11")
+                .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
+                .BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1")
         }
         btnRow := body.Add("StackPanel").Grid_Row(5).Grid_ColumnSpan(3).Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center")
         AddCmdOkBtn(btnRow, "BtnSure", "4,0")
@@ -370,6 +382,7 @@ class SearchProGui {
             , (*) => this.OnImageShotBtnClick(), (*) => this.SureColor())
         this.ui.BatchUpdate(CmdEditorF1Updates("area"))
         try this.ui.Update("BtnCmdTargeter", "ToolTip", GetLang("定位取色器"))
+        this.ui.OnEvent("BtnEditSearchText", "Click", XamlWin.BindCurrent(this, "OnEditSearchText"))
         this.ui.OnEvent("SearchTypeCon", "SelectionChanged", ObjBindMethod(this, "OnChangeType"))
         this.ui.OnEvent("BtnPreviewArea", "Click", ObjBindMethod(this, "OnClickPreviewArea"))
         this.ui.OnEvent("SearchCountCon", "LostFocus", ObjBindMethod(this, "OnChangeType"))
@@ -377,9 +390,6 @@ class SearchProGui {
         this.ui.OnEvent("SearchCountCon", "SelectionChanged", ObjBindMethod(this, "OnChangeType"))
         if (!this.IsAll)
             this.ui.OnEvent("MouseActionTypeCon", "SelectionChanged", ObjBindMethod(this, "OnChangeType"))
-        this.ui.OnEvent("ResultToggleCon", "Click", ObjBindMethod(this, "OnChangeType"))
-        if (!this.IsAll)
-            this.ui.OnEvent("CoordToogleCon", "Click", ObjBindMethod(this, "OnChangeType"))
         this.ui.OnEvent("HexColorCon", "TextChanged", ObjBindMethod(this, "OnHexColorChange"))
         this.ui.OnEvent("ImageShotBtn", "Click", ObjBindMethod(this, "OnImageShotBtnClick"))
         this.ui.OnEvent("ImageSelectBtn", "Click", ObjBindMethod(this, "OnClickSetPicBtn"))
@@ -398,19 +408,6 @@ class SearchProGui {
             this.ui.Update("MouseActionTypeCon", "SelectedIndex", "1")
     }
 
-    _AddSaveField(parent, name, kind, width, margin) {
-        field := parent.Add(kind).Name(name).Width(width).Height(28).MinHeight(28)
-            .VerticalAlignment("Center").VerticalContentAlignment("Center").FontSize("11")
-            .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
-            .BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1")
-        if (margin != "")
-            field.Margin(margin)
-        if (kind == "TextBox")
-            field.Padding("2,0").TextAlignment("Center")
-        else
-            field.IsEditable("True")
-    }
-
     _AddEditCombo(parent, name, row, col, width := "") {
         c := parent.Add("ComboBox").Grid_Row(row).Grid_Column(col).Name(name).Height(28).MinHeight(28)
             .VerticalAlignment("Center").VerticalContentAlignment("Center")
@@ -424,6 +421,7 @@ class SearchProGui {
     }
 
     _SetCombo(comboName, items, text) {
+        text := GetVariableComboText(items, text)
         if (!IsObject(this.ui))
             return
         this.ui.Update(comboName, "ClearItems", "")
@@ -459,40 +457,19 @@ class SearchProGui {
         return t == "窗口图片" || t == "窗口颜色" || t == "窗口文本"
     }
 
-    ; 鼠标动作下拉项（显示文案）。两种模式语义相同、措辞不同。
-    _MouseActItems(isWin) {
-        return isWin
-            ? GetLangArr(["无动作", "后台鼠标至目标点击", "后台鼠标至目标双击"])
-            : GetLangArr(["无动作", "移动至目标", "移动至目标点击"])
-    }
+    _MouseActItems(isWin) => GetLangArr(CmdEnumSearchMouseActItems(true))
 
-    ; 鼠标动作的存储值，与下拉项一一对应。
-    ;   屏幕：移动至目标 / 移动至目标点击1次（实际次数另由「点击次数」决定）
-    ;   窗口：移动至目标（= 后台点击一次，沿用旧值，执行侧按 0x201/0x202 处理） / 点击2次
-    _MouseActNames(isWin) {
-        return isWin
-            ? ["无动作", "移动至目标", "移动至目标点击2次"]
-            : ["无动作", "移动至目标", "移动至目标点击1次"]
-    }
+    _MouseActNames(isWin) => CmdEnumSearchMouseActValues(true)
 
-    ; 存储值 → 下拉序号。旧数据里可能是窗口专用的展示名或旧序号，一并认掉：
-    ; 交给枚举兜底的话认不出就折成「无动作」，用户再点确定就把动作写没了。
     _MouseActIndex(isWin, sel) {
-        raw := Trim(String(sel))
-        if (raw == "")
-            return 0
-        key := GetLangKey(raw)
-        if (key == "后台鼠标至目标点击")
-            return isWin ? 1 : 2
-        if (key == "后台鼠标至目标双击")
+        key := GetLangKey(Trim(String(sel)))
+        if (key == "后台鼠标至目标点击" || key == "后台鼠标至目标双击")
             return 2
-        act := CmdEnumMouseAct(raw)   ; 旧序号（1 起）/ 中文名 → 标准存储名
-        if (act == "无动作" || act == "移动至目标")
-            return act == "无动作" ? 0 : 1
-        ; 点击类：窗口模式区分单击/双击，屏幕模式统一落在第三项
-        if (!isWin)
+        act := CmdEnumMouseAct(sel)
+        ; 旧窗口搜索的「移动至目标」实际为后台左击，编辑时保留其动作。
+        if (isWin && act == "移动至目标")
             return 2
-        return act == "移动至目标点击2次" ? 2 : 1
+        return CmdEnumSearchMouseActIndex(act, true)
     }
 
     _SetImage(path) {
@@ -638,7 +615,6 @@ class SearchProGui {
         this._SetImage(this.Data.SearchImagePath)
         this._SetCombo("HexColorCon", GetGuiVarArr("color"), GetBuiltinVarName(this.Data.SearchColor, true))
         this._SetCombo("TextCon", GetGuiVarArr("text"), GetBuiltinVarName(this.Data.SearchText, true))
-        this.ui.Update("OcrEngineCon", "SelectedIndex", String(OcrEngineIndex(OcrEngineValue(this.Data))))
         this.ui.Update("StartPosXCon", "Text", GetLang(this.Data.StartPosX))
         this.ui.Update("StartPosYCon", "Text", GetLang(this.Data.StartPosY))
         this.ui.Update("EndPosXCon", "Text", GetLang(this.Data.EndPosX))
@@ -647,18 +623,14 @@ class SearchProGui {
         this.ui.Update("SearchIntervalCon", "Text", this.Data.SearchInterval)
         if (!this.IsAll) {
             this.ui.Update("SpeedCon", "Text", this.Data.Speed)
-            this.ui.Update("ClickCountCon", "Text", this.Data.ClickCount)
+            this.ui.Update("ClickCountCon", "Text", CmdEnumMouseAct(this.Data.MouseActionType) == "移动至目标点击2次" || GetLangKey(String(this.Data.MouseActionType)) == "后台鼠标至目标双击" ? 2 : this.Data.ClickCount)
         }
         this.ui.Update("TrueMacroCon", "Text", GetLangMacro(this.Data.TrueMacro, 1))
         this.ui.Update("FalseMacroCon", "Text", GetLangMacro(this.Data.FalseMacro, 1))
-        this.ui.Update("ResultToggleCon", "IsChecked", this._ToggleInt(this.Data.ResultToggle) ? "True" : "False")
-        this._SetCombo("ResultSaveNameCon", this.DLVariableArr, this.Data.ResultSaveName)
-        this.ui.Update("TrueValueCon", "Text", this.Data.TrueValue)
-        this.ui.Update("FalseValueCon", "Text", this.Data.FalseValue)
+        this._SetCombo("ResultSaveNameCon", this.DLVariableArr, cmd == "" ? "Res" : (this.Data.ResultToggle ? this.Data.ResultSaveName : ""))
         if (!this.IsAll) {
-            this.ui.Update("CoordToogleCon", "IsChecked", this._ToggleInt(this.Data.CoordToogle) ? "True" : "False")
-            this._SetCombo("CoordXNameCon", this.DLVariableArr, this.Data.CoordXName)
-            this._SetCombo("CoordYNameCon", this.DLVariableArr, this.Data.CoordYName)
+            this._SetCombo("CoordXNameCon", this.DLVariableArr, cmd == "" ? "ResX" : (this.Data.CoordToogle ? this.Data.CoordXName : ""))
+            this._SetCombo("CoordYNameCon", this.DLVariableArr, cmd == "" ? "ResY" : (this.Data.CoordToogle ? this.Data.CoordYName : ""))
 
             ; 建窗之前 Query 取不到 SearchTypeCon 的值，搜索模式按数据里的类型判断，
             ; 否则窗口类搜索会被当成屏幕模式，随后模式切换事件再把已保存的鼠标动作清成无动作。
@@ -693,7 +665,7 @@ class SearchProGui {
         this.ui.Update("MouseActionTypeCon", "ClearItems", "")
         for t in items
             this.ui.Update("MouseActionTypeCon", "AddItem", t)
-        idx := Max(0, Min(2, this._MouseActIndex(isWin, sel)))
+        idx := Max(0, Min(3, this._MouseActIndex(isWin, sel)))
         this.ui.Update("MouseActionTypeCon", "SelectedIndex", String(idx))
     }
 
@@ -758,10 +730,20 @@ class SearchProGui {
             RmtDialog.Info(GetLang("窗口绑定不能为空"))
             return false
         }
-        if (this._IsChecked("ResultToggleCon") && !CheckVarNameIfValid(this.ui.Query("ResultSaveNameCon")))
+        if ((Trim(this.ui.Query("ResultSaveNameCon")) != "") && !CheckVarNameIfValid(this.ui.Query("ResultSaveNameCon")))
             return false
 
         if (!this.IsAll) {
+            for field in ["CoordXNameCon", "CoordYNameCon"] {
+                if (Trim(this.ui.Query(field)) != "" && !CheckVarNameIfValid(this.ui.Query(field)))
+                    return false
+            }
+            hasX := Trim(this.ui.Query("CoordXNameCon")) != ""
+            hasY := Trim(this.ui.Query("CoordYNameCon")) != ""
+            if (hasX != hasY) {
+                RmtDialog.Info(GetLang("请同时填写 X、Y 坐标变量，或同时留空。"))
+                return false
+            }
             mIdx := this.ui.Query("MouseActionTypeCon>SelectedIndex")
             ma := CmdEnumFromIndex(mIdx, this._MouseActNames(isWin))
             if (ma != "无动作" && !isWin) {
@@ -780,7 +762,7 @@ class SearchProGui {
         data.SearchImagePath := this.ui.Query("ImagePathCon")
         data.Similar := (this._TypeIndex() == "屏幕颜色" || this._TypeIndex() == "窗口颜色") ? this.ui.Query("ColorSimilarCon") : this.ui.Query("SimilarCon")
         data.OCRType := 1
-        data.OcrEngine := OcrEngineFromIndex(this.ui.Query("OcrEngineCon>SelectedIndex"))
+        data.OcrEngine := ""
         data.SearchImageType := SearchImageDefaultType()
         data.ColorMatch := this._IsChecked("ColorMatchCon") ? 1 : 0
         data.MultiPointData := this.MultiPointData
@@ -810,14 +792,14 @@ class SearchProGui {
         }
         data.TrueMacro := GetLangMacro(this.ui.Query("TrueMacroCon"), 2)
         data.FalseMacro := GetLangMacro(this.ui.Query("FalseMacroCon"), 2)
-        data.ResultToggle := this._IsChecked("ResultToggleCon") ? 1 : 0
+        data.ResultToggle := (Trim(this.ui.Query("ResultSaveNameCon")) != "") ? 1 : 0
         data.ResultSaveName := GetVarName(this.ui.Query("ResultSaveNameCon"))
-        data.TrueValue := this.ui.Query("TrueValueCon")
-        data.FalseValue := this.ui.Query("FalseValueCon")
+        data.TrueValue := 1
+        data.FalseValue := 0
         if (!this.IsAll) {
-            data.CoordToogle := this._IsChecked("CoordToogleCon") ? 1 : 0
-            data.CoordXName := this.ui.Query("CoordXNameCon")
-            data.CoordYName := this.ui.Query("CoordYNameCon")
+            data.CoordToogle := Trim(this.ui.Query("CoordXNameCon")) != "" && Trim(this.ui.Query("CoordYNameCon")) != "" ? 1 : 0
+            data.CoordXName := GetVarName(this.ui.Query("CoordXNameCon"))
+            data.CoordYName := GetVarName(this.ui.Query("CoordYNameCon"))
         }
         data.SearchTargetArr := []
         if (data.ResultToggle)
@@ -905,7 +887,7 @@ class SearchProGui {
         if (isColor)
             this._ApplyColorSwatch()
         if (!this.IsAll && this.LastIsWin != "" && this.LastIsWin != isWin) {
-            ; 屏幕/窗口两套文案，切换时按「当前选中项」的语义值重建，不能清成无动作：
+            ; 屏幕/窗口切换时保留当前动作，避免重建列表后选择丢失：
             ; 打开窗口时这条晚于 Init 执行，清掉就等于把刚读出来的动作弄丢。
             prevIdx := this.ui.Query("MouseActionTypeCon>SelectedIndex")
             if (IsNumber(prevIdx))
@@ -918,13 +900,36 @@ class SearchProGui {
             mIdx := this.ui.Query("MouseActionTypeCon>SelectedIndex")
             ma := CmdEnumFromIndex(mIdx, this._MouseActNames(isWin))
             this.SetConArrState(this.MouseSpeedArr, false, ma != "无动作" && !isWin)
-            this.SetConArrState(this.MouseClickArr, false, ma == "移动至目标点击1次" && !isWin)
+            this.SetConArrState(this.MouseClickArr, false, (ma == "移动并左击" || ma == "移动至目标右键点击1次"))
         }
-        this.SetConArrState(this.ResultTogArr, true, this._IsChecked("ResultToggleCon"))
-        if (!this.IsAll)
-            this.SetConArrState(this.CoordTogArr, true, this._IsChecked("CoordToogleCon"))
+        if (this.IsAll)
+            this.ui.Update("AllSaveLabel", "ToolTip", GetLang(isWin
+                ? "保存为坐标数组，每项为 [X, Y]，使用窗口坐标。"
+                : "保存为坐标数组，每项为 [X, Y]，使用屏幕坐标。"))
+        else
+            this.ui.Update("CoordSaveLabel", "ToolTip", GetLang(isWin
+                ? "保存目标的窗口 X、Y 坐标；两项留空则不保存。"
+                : "保存目标的屏幕 X、Y 坐标；两项留空则不保存。"))
         this.LastIsWin := isWin
         this.RefreshPreviewArea()
+    }
+
+    _CloseTextBuilder() {
+        if (IsObject(this._textBuilder))
+            this._textBuilder._CloseWindow()
+        this._textBuilder := ""
+    }
+
+    OnEditSearchText(*) {
+        if (!IsObject(this.ui))
+            return
+        this._CloseTextBuilder()
+        owner := this.ui
+        builder := this._textBuilder := CharVarEditGui()
+        builder.OwnerHwnd := this.Hwnd()
+        builder.ParentTile := this.ParentTile
+        builder.SureBtnAction := (text) => this.ui == owner ? this.ui.Update("TextCon", "Text", text) : ""
+        builder.ShowGui(this.ui.Query("TextCon"))
     }
 
     OnHexColorChange(*) {
@@ -1339,6 +1344,7 @@ class SearchProGui {
     OnWindowClosing(windowToken, state, ctrl, event) {
         if (windowToken != this._windowToken)
             return
+        this._CloseTextBuilder()
         this.StopPreviewFollow()
         this.HidePreviewRect()
         this._ReleaseImageSource()
@@ -1355,6 +1361,7 @@ class SearchProGui {
     }
 
     _CloseWindow() {
+        this._CloseTextBuilder()
         this.StopPreviewFollow()
         this.HidePreviewRect()
         this._ReleaseImageSource()

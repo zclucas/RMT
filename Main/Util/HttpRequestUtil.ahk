@@ -27,7 +27,7 @@ HttpRequestValidate(data) {
         throw Error("请选择 GET、POST、PUT 或 DELETE。")
     if (Trim(data.Url) == "")
         throw Error("URL 不能为空。")
-    if (!IsInteger(data.TimeoutMs) || data.TimeoutMs < 1 || data.TimeoutMs > 3600000)
+    if (!TimeoutPolicy.ValidMs(data.TimeoutMs))
         throw Error("超时时间应为 1～3600000 毫秒。")
     if (TimeoutPolicy.Get(data) == "" && !RegExMatch(data.Retries, "^\{[^{}\r\n]+\}$"))
         HttpRequestRetryCount(data.Retries)
@@ -100,7 +100,11 @@ HttpRequestPrepare(data, resolve) {
 ; 不记录 URL/Header/Body 或 COM 异常原文，以免密钥进入日志。
 HttpRequestExecute(data, resolve, cancelled := () => false) {
     result := {Status: 0, Body: "", Error: "", TimedOut: false}
-    try prepared := HttpRequestPrepare(data, resolve)
+    try {
+        data := data.Clone()
+        data.TimeoutMs := TimeoutPolicy.ResolveMs(data.TimeoutMs, resolve)
+        prepared := HttpRequestPrepare(data, resolve)
+    }
     catch as e {
         result.Error := e.Message
         return result

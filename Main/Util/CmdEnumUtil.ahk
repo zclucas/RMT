@@ -82,6 +82,8 @@ CmdEnumCompareNames() => ["大于", "大于等于", "等于", "小于等于", "�
 CmdEnumCompareShowNames() => ["大于", "大于等于", "等于", "不等于", "小于等于", "小于", "字符包含", "变量存在", "正则匹配"]
 CmdEnumLogicNames() => ["且", "或"]
 CmdEnumOperaNames() => ["数值", "随机数值", "字符", "系统", "时间", "删除"]
+; 界面使用新类别；旧数值枚举顺序仍用于兼容读取。
+CmdEnumVariableNames() => ["赋值", "随机数值", "系统", "时间", "删除"]
 CmdEnumWaitNames() => ["等待变量值", "等待按键按下", "等待按键松开", "等待屏幕变化", "等待鼠标移动",
     "等待鼠标停止移动", "等待剪切板变化", "等待进程存在", "等待进程关闭", "等待窗口存在",
     "等待窗口激活", "等待窗口屏幕变化", "等待窗口大小变化", "等待窗口关闭", "等待窗口最小化",
@@ -103,7 +105,27 @@ CmdEnumWaitEditorLabels() {
     return labels
 }
 CmdEnumSearchNames() => ["屏幕图片", "屏幕颜色", "屏幕文本", "窗口图片", "窗口颜色", "窗口文本"]
-CmdEnumMouseActNames() => ["无动作", "移动至目标", "移动至目标点击1次", "移动至目标点击2次"]
+; 前四项保留旧序号；新存储值区分旧后台点击与明确的仅移动。
+CmdEnumMouseActNames() => ["无动作", "移动至目标", "移动至目标点击1次", "移动至目标点击2次", "移动至目标右键点击1次", "仅移动", "移动并左击"]
+
+CmdEnumSearchMouseActItems(variableCount := false) {
+    return variableCount ? ["无动作", "仅移动", "移动并左击", "移动并右击"]
+        : ["无动作", "仅移动", "移动并左击1次", "移动并左击2次", "移动并右击1次"]
+}
+
+CmdEnumSearchMouseActValues(variableCount := false) {
+    return variableCount ? ["无动作", "仅移动", "移动并左击", "移动至目标右键点击1次"]
+        : ["无动作", "仅移动", "移动并左击", "移动至目标点击2次", "移动至目标右键点击1次"]
+}
+
+CmdEnumSearchMouseActIndex(value, variableCount := false) {
+    act := CmdEnumMouseAct(value)
+    if (act == "移动至目标")
+        act := "仅移动"
+    if (act == "移动至目标点击1次" || (variableCount && act == "移动至目标点击2次"))
+        act := "移动并左击"
+    return CmdEnumIndex(act, CmdEnumSearchMouseActValues(variableCount))
+}
 CmdEnumMMActionNames() => ["移动", "移动后单击", "移动后双击", "A到B拖拽", "拖拽"]
 CmdEnumMoveModeNames() => ["绝对移动", "相对移动", "游戏视角"]
 CmdEnumRefNames() => ["屏幕", "窗口"]
@@ -128,6 +150,8 @@ CmdEnumCompare(value) => CmdEnumZh(value, CmdEnumCompareNames())
 CmdEnumLogic(value) => CmdEnumZh(value, CmdEnumLogicNames())
 
 CmdEnumOpera(value) {
+    if (GetConfigKey(String(value), ["赋值"]) == "赋值")
+        return "赋值"
     if (IsNumber(value) && Integer(value) == 7)
         return "时间"
     key := GetConfigKey(String(value), ["随机"])
@@ -168,7 +192,13 @@ CmdEnumRunOption(value) => CmdEnumZh(value, CmdEnumRunOptionNames(), 0)
 CmdEnumNameType(value) => CmdEnumZh(value, CmdEnumNameTypeNames(), 0)
 CmdEnumWait(value) => CmdEnumZh(value, CmdEnumWaitNames())
 CmdEnumSearch(value) => CmdEnumZh(value, CmdEnumSearchNames())
-CmdEnumMouseAct(value) => CmdEnumZh(value, CmdEnumMouseActNames())
+CmdEnumMouseAct(value) {
+    key := GetLangKey(String(value))
+    aliases := Map("移动并左击1次", "移动至目标点击1次", "移动并左击2次", "移动至目标点击2次",
+        "移动并右击1次", "移动至目标右键点击1次", "移动并右击", "移动至目标右键点击1次",
+        "移动至目标点击", "移动至目标点击1次")
+    return CmdEnumZh(aliases.Get(key, value), CmdEnumMouseActNames())
+}
 CmdEnumMMAction(value) => CmdEnumZh(value, CmdEnumMMActionNames())
 CmdEnumTimingType(value) {
     key := GetConfigKey(String(value), ["自定义"])

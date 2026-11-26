@@ -65,6 +65,7 @@ class FileIOGui {
 
     ; batching 中入队，_flushBatch 一次性 BatchUpdate（合并 Init 的多次 Update 为一次 IPC）
     _ComboPush(comboName, propertyName, value) {
+        CmdEditorForm.NormalizeComboItem(&propertyName, &value)
         if (this._batching)
             this._batch.Push({ControlName: comboName, PropertyName: propertyName, Value: value})
         else
@@ -238,6 +239,7 @@ class FileIOGui {
     }
 
     _SetCombo(comboName, items, text) {
+        text := GetVariableComboText(items, text)
         if (!IsObject(this.ui))
             return
         this._ComboPush(comboName, "ClearItems", "")
@@ -458,6 +460,7 @@ class FileIOGui {
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)
         owner := (this.Hwnd() ? this.Hwnd() : this.OwnerHwnd)
         this.ContentEditGui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", owner)
+        this.ContentEditGui._batchEditorRefresh := true
         this.ContentEditGui.xaml := StrReplace(this.ContentEditGui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="580" SizeToContent="Height"')
         this.ContentEditGui.xaml := StrReplace(this.ContentEditGui.xaml, 'FontFamily="Segoe UI Variable Display, Segoe UI, sans-serif"', 'FontFamily="' MainSoftData.FontType '"')
         this.ContentEditGui.xaml := StrReplace(this.ContentEditGui.xaml, '%resources%', '')

@@ -88,6 +88,10 @@ BrowserTargetRef(tableItem, index, data, resolve) {
 }
 
 _ExecuteBrowserAction(tableItem, index, data, actionType, resolve, selType) {
+    if (BrowserActions.UsesTimeout(actionType)) {
+        data := data.Clone()
+        data.TimeoutMs := TimeoutPolicy.ResolveMs(data.TimeoutMs, resolve, 2147483647)
+    }
     if (BrowserActions.UsesTarget(actionType)) {
         targetRef := BrowserTargetRef(tableItem, index, data, resolve)
         if (targetRef != "")

@@ -118,7 +118,8 @@ class MenuWheelGui {
             pt := Buffer(8, 0)
             NumPut("Int", mx, pt, 0)
             NumPut("Int", my, pt, 4)
-            hwndMon := DllCall("user32\MonitorFromPoint", "Ptr", pt, "UInt", 2, "Ptr")
+            ; POINT 按值传递，x86/x64 均为 8 字节，不能传缓冲区指针。
+            hwndMon := DllCall("user32\MonitorFromPoint", "Int64", NumGet(pt, 0, "Int64"), "UInt", 2, "Ptr")
             monInfo := Buffer(40, 0)
             NumPut("UInt", 40, monInfo, 0)
             DllCall("user32\GetMonitorInfo", "Ptr", hwndMon, "Ptr", monInfo)
@@ -253,7 +254,7 @@ class MenuWheelGui {
         ptDpi := Buffer(8, 0)
         NumPut("Int", finalX, ptDpi, 0)
         NumPut("Int", finalY, ptDpi, 4)
-        hwndMon := DllCall("user32\MonitorFromPoint", "Ptr", ptDpi, "UInt", 2, "Ptr")
+        hwndMon := DllCall("user32\MonitorFromPoint", "Int64", NumGet(ptDpi, 0, "Int64"), "UInt", 2, "Ptr")
         dpiX := 0, dpiY := 0
         try DllCall("shcore\GetDpiForMonitor", "Ptr", hwndMon, "Int", 0, "UInt*", &dpiX, "UInt*", &dpiY)
         this.dpiScale := (dpiX > 0) ? (dpiX / 96.0) : (A_ScreenDPI / 96.0)

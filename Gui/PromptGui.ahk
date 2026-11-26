@@ -100,13 +100,13 @@ class PromptGui {
         clipboardSource := this.data.PasteTextSource == "剪贴板图文" ? "剪贴板图文" : "剪贴板"
         this.AddField(right, "PasteTextSource", "内容来源", ["直接填写", clipboardSource])
         this.AddField(right, "ImageSource", "内容来源", ["文件", "剪贴板"])
-        this.AddField(right, "Monitors", "屏幕编号").ToolTip(GetLang("多个屏幕编号用逗号分隔"))
+        this.AddField(right, "Monitors", "屏幕编号", , , GetLang("多个屏幕编号用逗号分隔"))
         this.AddField(right, "Param2", "计时方式", ["时长", "时刻", "时间戳"])
-        this.AddField(right, "RegionName", "名称", , "name").ToolTip(GetLang("同名框选会替换，关闭时留空则关闭最后一个"))
+        this.AddField(right, "RegionName", "名称", , "name", GetLang("同名框选会替换，关闭时留空则关闭最后一个"))
 
         this.AddPair(body, &left, &right)
         this.AddField(left, "AudioWait", "播放时", ["不等待", "等待结束"])
-        this.AddField(left, "PasteName", "名称", , "name").ToolTip(GetLang("同名贴片会替换，关闭时留空则关闭最后一张"))
+        this.AddField(left, "PasteName", "名称", , "name", GetLang("同名贴片会替换，关闭时留空则关闭最后一张"))
         this.AddField(left, "CountDownName", "名称", , "name")
         this.AddField(right, "PastePosition", "位置模式", ["鼠标位置", "固定位置"])
         this.AddField(left, "Duration", "显示时长", , , GetLang("内容在屏幕上停留的毫秒数。"))
@@ -167,10 +167,6 @@ class PromptGui {
             this.ui.Update(name, "Text", String(value))
             this.ui.OnEvent(name, "LostFocus", this.RefreshAreaPreview.Bind(this))
         }
-        if (this.RegionEnd(this.data, "X", "Width") == "")
-            this.ui.Update("RegionEndX", "ToolTip", GetLang("区域宽度（像素）") ": " this.data.Width)
-        if (this.RegionEnd(this.data, "Y", "Height") == "")
-            this.ui.Update("RegionEndY", "ToolTip", GetLang("区域高度（像素）") ": " this.data.Height)
         this.ui.OnEvent("InsertKind", "SelectionChanged", this.RefreshInsertNames.Bind(this))
         this.ui.OnEvent("AddName", "Click", this.AppendSelection.Bind(this, false))
         this.ui.OnEvent("AddValue", "Click", this.AppendSelection.Bind(this, true))
@@ -189,7 +185,7 @@ class PromptGui {
                 this.ui.Update(name, "Text", name == "Remark" ? this.remark
                     : name == "Text" ? GetLangStr(this.data.Text, 1)
                     : field.kind == "name" ? TranslateBuiltinVarReferences(this.data.%name%, true)
-                    : name == "Param1" ? (this.data.Param2 == "时间戳" ? GetLang(this.data.Param1) : "")
+                    : name == "Param1" ? (this.data.Param2 == "时间戳" ? GetVariableComboText(GetGuiVarArr("timeVars", "timestamp"), this.data.Param1) : "")
                     : String(this.data.%name%))
         }
         for prefix in ["CountDownDuration", "CountDownClock"]
@@ -230,7 +226,7 @@ class PromptGui {
         for field in [["RegionStartX", 0, 2, "起始X："], ["RegionStartY", 0, 4, "起始Y："]
             , ["RegionEndX", 1, 2, "终止X："], ["RegionEndY", 1, 4, "终止Y："]] {
             area.Add("TextBox").Name(field[1]).Grid_Row(field[2]).Grid_Column(field[3])
-                .Margin("0,2").Padding("1.5,2").ToolTip(GetLang(field[4]))
+                .Margin("0,2").Padding("1.5,2")
                 .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
                 .BorderBrush("{DynamicResource InputStroke}")
         }
@@ -301,7 +297,7 @@ class PromptGui {
     AddEditableCombo(parent, name, items) {
         combo := parent.Add("ComboBox").Name(name).MinHeight(28).IsEditable("True").MaxDropDownHeight(260)
         for item in items
-            combo.Add("ComboBoxItem").Content(item)
+            CmdEditorForm.ComboItem(combo, item)
         return combo
     }
 
@@ -344,7 +340,7 @@ class PromptGui {
             value := values[i]
             if (IsInteger(value) && !(prefix == "CountDownClock" && i == 1 && this.legacyClock != ""))
                 value := Format("{:02}", Integer(value))
-            this.AddEditableCombo(row, prefix part, items).Grid_Column(col).SetProp("Text", GetLang(value))
+            this.AddEditableCombo(row, prefix part, items).Grid_Column(col).SetProp("Text", GetVariableComboText(items, GetLang(value)))
                 .ToolTip(GetLang(["时", "分", "秒"][i]))
         }
     }

@@ -108,11 +108,11 @@ class MainWin {
         this._useVirtualBuilt := true
     }
 
-    ; 按钮 hover/按下交互片段（hover=ControlBorder，按下=BtnPressBg 略深于 hover）
+    ; 按钮 hover/按下交互片段（hover=EditHoverBg，按下=BtnPressBg）
     _RmtBtnInteractionTriggers(bd := "Bd", line := "") {
         hoverLine := line != "" ? '<Setter TargetName="' line '" Property="Fill" Value="{DynamicResource Accent}"/>' : ""
         return '<Trigger Property="IsMouseOver" Value="True">'
-            . '<Setter TargetName="' bd '" Property="Background" Value="{DynamicResource ControlBorder}"/>'
+            . '<Setter TargetName="' bd '" Property="Background" Value="{DynamicResource EditHoverBg}"/>'
             . '<Setter TargetName="' bd '" Property="BorderBrush" Value="{DynamicResource Accent}"/>'
             . hoverLine
             . '</Trigger>'
@@ -162,7 +162,7 @@ class MainWin {
         dragInner.Add("Image").Name("TitleIcon").Width(20).Height(20).Margin("14,0,10,0").HorizontalAlignment("Left").VerticalAlignment("Center").Source(StrReplace(A_WorkingDir "\Images\Soft\rabit.png", "\", "/"))
         dragInner.Add("TextBlock").Text(title).Foreground("{DynamicResource TitleBarForeground}").FontSize(XAMLHost.TitleFontSize()).FontWeight("Bold").VerticalAlignment("Center").Margin("44,0,0,0").Padding("0")
         btnGroup := tb.Add("StackPanel").Grid_Column(1).Orientation("Horizontal").VerticalAlignment("Stretch")
-        chromeFlat := '<Style TargetType="Button"><Setter Property="VerticalAlignment" Value="Stretch"/><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button"><Border x:Name="border" Background="{TemplateBinding Background}" CornerRadius="0" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="border" Property="Background" Value="{DynamicResource ControlBorder}"/></Trigger><Trigger Property="IsPressed" Value="True"><Setter TargetName="border" Property="Background" Value="{DynamicResource BtnPressBg}"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>'
+        chromeFlat := '<Style TargetType="Button"><Setter Property="VerticalAlignment" Value="Stretch"/><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button"><Border x:Name="border" Background="{TemplateBinding Background}" CornerRadius="0" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="border" Property="Background" Value="{DynamicResource EditHoverBg}"/></Trigger><Trigger Property="IsPressed" Value="True"><Setter TargetName="border" Property="Background" Value="{DynamicResource BtnPressBg}"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>'
         minBtn := btnGroup.Add("Button").Name("BtnMinimize").Style("{StaticResource TitleBarCloseButton}").WindowChrome_IsHitTestVisibleInChrome("True").Width(46).Height(titleHeight).MinHeight(titleHeight).Padding("0").VerticalAlignment("Stretch").Background("Transparent").Foreground("{DynamicResource TitleBarForeground}").BorderThickness(0)
         minBtn.InjectResources(chromeFlat)
         minBtn.Add("TextBlock").Text(Chr(0xE921)).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets").FontSize(10).VerticalAlignment("Center").HorizontalAlignment("Center")
@@ -349,7 +349,7 @@ class MainWin {
             . '</ControlTemplate.Triggers>'
             . '</ControlTemplate></Setter.Value></Setter>'
             . '</Style>'
-        ; 主窗口默认按钮：hover=ControlBorder，按下=BtnPressBg（略深于 hover）
+        ; 主窗口默认按钮：hover=EditHoverBg，按下=BtnPressBg
         defaultBtnStyle := '<Style TargetType="Button">'
             . '<Setter Property="Foreground" Value="{DynamicResource TextMain}"/>'
             . '<Setter Property="Background" Value="{DynamicResource ControlBg}"/>'
@@ -368,7 +368,7 @@ class MainWin {
             . '</Style>'
         ; 侧栏按钮别名（与默认按钮交互一致，便于显式引用）
         sidebarBtnStyle := '<Style x:Key="RmtSidebarBtn" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}"/>'
-        ; 图标按钮：透明底 + ControlBorder 悬停 / BtnPressBg 按下
+        ; 图标按钮：透明底 + EditHoverBg 悬停 / BtnPressBg 按下
         iconBtnStyle := '<Style x:Key="RmtIconBtn" TargetType="Button">'
             . '<Setter Property="Background" Value="Transparent"/>'
             . '<Setter Property="BorderBrush" Value="Transparent"/>'
@@ -381,7 +381,7 @@ class MainWin {
             . '<ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>'
             . '</Border>'
             . '<ControlTemplate.Triggers>'
-            . '<Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Bd" Property="Background" Value="{DynamicResource ControlBorder}"/><Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource Accent}"/></Trigger>'
+            . '<Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Bd" Property="Background" Value="{DynamicResource EditHoverBg}"/><Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource Accent}"/></Trigger>'
             . '<Trigger Property="IsPressed" Value="True"><Setter TargetName="Bd" Property="Background" Value="{DynamicResource BtnPressBg}"/><Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource Accent}"/></Trigger>'
             . '</ControlTemplate.Triggers>'
             . '</ControlTemplate></Setter.Value></Setter>'
@@ -390,7 +390,7 @@ class MainWin {
         ; 主窗口页签样式（隐式 Style，只作用于本窗口）：
         ; - 固定宽 80，高度随标题内容变化，页签间用垂直线分割
         ; - 选中态：整块主题强调色低透明度背景（TabSelBg，各主题自动适配）+ 右上角 Accent 小圆点
-        ; - 悬停：ControlBorder（TabItem 无 IsPressed，按下态无法用 Storyboard+DynamicResource，故仅做 hover）
+        ; - 悬停：EditHoverBg，与按钮一致（TabItem 无 IsPressed，按下态无法用 Storyboard+DynamicResource，故仅做 hover）
         ; - 圆角：仅第一个页签左侧（4,0,0,4）、最后一个页签右侧（0,4,4,0）适配页签条圆角，其余页签直角
         tabItemStyle := '<Style TargetType="TabItem">'
             . '<Setter Property="Width" Value="80"/>'
@@ -410,7 +410,7 @@ class MainWin {
             . '<Condition Property="IsMouseOver" Value="True"/>'
             . '<Condition Property="IsSelected" Value="False"/>'
             . '</MultiTrigger.Conditions>'
-            . '<Setter TargetName="Bd" Property="Background" Value="{DynamicResource ControlBorder}"/>'
+            . '<Setter TargetName="Bd" Property="Background" Value="{DynamicResource EditHoverBg}"/>'
             . '<Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource Accent}"/>'
             . '</MultiTrigger>'
             . '<Trigger Property="IsSelected" Value="True">'

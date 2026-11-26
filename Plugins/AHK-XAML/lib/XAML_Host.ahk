@@ -425,6 +425,53 @@ class XAMLHost {
         return buf
     }
 
+    ; 指令编辑器事件统一合并刷新。独立于初始化与显式收集，嵌套回调沿用外层区间。
+    RunEditorRefresh(callback, args*) {
+        if (!this.wpfHwnd || this.Collecting())
+            return callback.Call(args*)
+        this.BeginCollect()
+        this._editorRefreshActive := true
+        try return callback.Call(args*)
+        finally {
+            this._editorRefreshActive := false
+            this.SendRaw(this.EndCollect())
+        }
+    }
+
+    ; 读取刚更新的值前，先同步数据操作；显隐、尺寸等留到回调结束，避免中间布局闪现。
+    ; 明确查询布局属性或全部状态时须完整同步，保持 Query 的写后读语义。
+    _FlushEditorRefresh(names*) {
+        if (!this.HasOwnProp("_editorRefreshActive") || !this._editorRefreshActive || !this.Collecting() || this._collectBuf == "")
+            return
+        flushLayout := false
+        for name in names {
+            parts := StrSplit(name, ">", , 2)
+            if (name == "*" || (parts.Length == 2 && (this._IsEditorVisualProperty(parts[2])
+                || RegExMatch(parts[2], "^(Actual|Desired|Render)"))))
+                flushLayout := true
+        }
+        pending := this._collectBuf
+        this._collectBuf := ""
+        data := ""
+        for line in StrSplit(pending, "`n") {
+            parts := StrSplit(line, "|", , 3)
+            if (!flushLayout && parts.Length >= 2 && this._IsEditorVisualProperty(parts[2]))
+                this._collectBuf .= (this._collectBuf == "" ? "" : "`n") line
+            else
+                data .= (data == "" ? "" : "`n") line
+        }
+        if (data != "")
+            this.SendRaw(data)
+    }
+
+    _IsEditorVisualProperty(property) {
+        return RegExMatch(property, "i)^(Visibility|(?:Min|Max)?(?:Width|Height)|Margin|Padding|HorizontalAlignment|VerticalAlignment|Opacity|Background|Foreground|BorderBrush|BorderThickness|FontSize|FontWeight|IsEnabled)$")
+    }
+
+    _RunEditorCallback(callback, state, control, event) {
+        return this.RunEditorRefresh(callback, state, control, event)
+    }
+
     ; 直接发送已拼装的多行指令（收集模式的产物）
     SendRaw(text) {
         if (!this.wpfHwnd || text == "")
@@ -3352,6 +3399,10 @@ class XAMLHost {
                         SetTimer(ObjBindMethod(instance, "_RunLoadedCallback", cb, stateMap), -1, evtObj.Priority)
                     else if (extraArg != "")
                         SetTimer(cb.Bind(stateMap, ctrlName, { Key: extraArg }), -1, evtObj.Priority)
+                    else if (instance.HasOwnProp("_batchEditorRefresh") && instance._batchEditorRefresh
+                        && (baseEventName == "SelectionChanged" || baseEventName == "Checked"
+                            || baseEventName == "Unchecked" || baseEventName == "Click" || baseEventName == "TextChanged"))
+                        SetTimer(ObjBindMethod(instance, "_RunEditorCallback", cb, stateMap, ctrlName, baseEventName), -1, evtObj.Priority)
                     else
                         SetTimer(cb.Bind(stateMap, ctrlName, baseEventName), -1, evtObj.Priority)
                 }
@@ -3435,6 +3486,7 @@ class XAMLHost {
             return Map()
         if (!this.wpfHwnd)
             return this._QueryQueued(names*)
+        this._FlushEditorRefresh(names*)
         ; 异步更新可能还在队列里：先发完再查，否则读到的是改动前的旧值
         this.FlushAsync()
 

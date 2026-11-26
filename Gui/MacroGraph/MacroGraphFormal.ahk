@@ -149,7 +149,7 @@ class MacroGraphFormalMixin {
     }
 
     _FormalVarOpTypes() {
-        return GetLangArr(CmdEnumOperaNames())
+        return GetLangArr(CmdEnumVariableNames())
     }
 
     _FormalSubMacroTargets(id, macroType, targetID) {
@@ -512,8 +512,8 @@ class MacroGraphFormalMixin {
     }
 
     ; 变量槽（对齐「变量编辑器」：开关 + 变量名 + 变量类型 + 选择/输入 / 最小 / 最大）。
-    ; 变量类型：1数值 2随机数值 3字符 4系统 5删除。
-    ;   - 数值/字符：显示「选择/输入」行（CopyRow）
+    ; 变量类型：赋值、随机数值、系统、时间、删除。
+    ;   - 赋值：显示字面内容或变量引用输入行（CopyRow）
     ;   - 系统：显示系统变量下拉（SysRow）
     ;   - 随机数值：显示「最小/最大」两行
     ;   - 删除：仅变量名
@@ -523,14 +523,13 @@ class MacroGraphFormalMixin {
         p := "VarS" slot
         toggled := d.HasOwnProp("toggle" slot) ? d["toggle" slot] : (slot == 1 ? 1 : 0)
         on := this._FormalVarSlotOn(toggled)
-        ot := CmdEnumOpera(d.HasOwnProp("operaType" slot) ? d["operaType" slot] : "数值")
+        ot := CmdEnumOpera(d.HasOwnProp("operaType" slot) ? d["operaType" slot] : "赋值")
         vn := d.HasOwnProp("variable" slot) ? d["variable" slot] : "Data" slot
         cv := d.HasOwnProp("copyVar" slot) ? d["copyVar" slot] : "0"
         minv := d.HasOwnProp("minVar" slot) ? d["minVar" slot] : "0"
         maxv := d.HasOwnProp("maxVar" slot) ? d["maxVar" slot] : "10"
         opTypes := this._FormalVarOpTypes()
-        showNum := on && ot == "数值"
-        showChar := on && ot == "字符"
+        showNum := on && ot == "赋值"
         showSys := on && ot == "系统"
         showMinMax := on && ot == "随机数值"
         ; 逐级展开：仅勾选上一变量后才显示本槽；分割线分隔，不挤占左右区域
@@ -539,17 +538,17 @@ class MacroGraphFormalMixin {
             block.Visibility("Collapsed")
         block.Add("Border").Height("1").Margin("0,6,0,4").BorderThickness("0").Background("{DynamicResource ControlBorder}").IsHitTestVisible("False")
         this._AddCheckRow(block, p "TogRow_" id, p "Tog_" id, GetLang("变量") slot, on, true)
-        this._AddEditableComboRow(block, p "NameRow_" id, GetLang("变量名："), p "Name_" id, GetGuiVarArr(), vn, on, lw, cw)
-        this._AddComboRow(block, p "OpRow_" id, GetLang("类型："), p "OpCmb_" id, opTypes, CmdEnumIndex(ot, CmdEnumOperaNames()), on, true, lw, cw)
-        ; 数值：可下拉选变量或手输数字；字符：纯文本输入框（无下拉）。两行各自固定标签、按类型显隐切换。
-        this._AddEditableComboRow(block, p "CopyRow_" id, GetLang("数值："), p "Copy_" id, GetGuiVarArr("number"), GetLang(cv), showNum, lw, cw)
-        this._AddFieldRow(block, p "CharRow_" id, GetLang("字符："), p "CopyTxt_" id, cv, showChar, true, "", "", "", lw, cw)
+        fieldW := ot == "随机数值" ? cw : Max(Number(cw), 180)
+        this._AddEditableComboRow(block, p "NameRow_" id, GetLang("变量名："), p "Name_" id, GetGuiVarArr(), vn, on, lw, fieldW)
+        this._AddComboRow(block, p "OpRow_" id, GetLang("类型："), p "OpCmb_" id, opTypes, CmdEnumIndex(ot, CmdEnumVariableNames()), on, true, lw, cw)
+        ; 赋值统一支持字面内容与 {变量} 引用，非随机类型扩展名称和值输入框。
+        this._AddEditableComboRow(block, p "CopyRow_" id, GetLang("值："), p "Copy_" id, GetGuiVarReferences("all"), TranslateBuiltinVarReferences(cv, true), showNum, lw, fieldW)
         sysItems := GetSystemVarArr()
         sysIdx := this._IndexInLangArr(sysItems, GetLang(cv))
-        this._AddComboRow(block, p "SysRow_" id, GetLang("系统："), p "SysCmb_" id, sysItems, sysIdx, showSys, true, lw, cw)
+        this._AddComboRow(block, p "SysRow_" id, GetLang("系统："), p "SysCmb_" id, sysItems, sysIdx, showSys, true, lw, fieldW)
         timeItems := GetTimeCategoryVarArr()
         timeIdx := this._IndexInLangArr(timeItems, GetLang(cv))
-        this._AddComboRow(block, p "TimeRow_" id, GetLang("时间："), p "TimeCmb_" id, timeItems, timeIdx, on && ot == "时间", true, lw, cw)
+        this._AddComboRow(block, p "TimeRow_" id, GetLang("时间："), p "TimeCmb_" id, timeItems, timeIdx, on && ot == "时间", true, lw, fieldW)
         this._AddEditableComboRow(block, p "MinRow_" id, GetLang("最小值："), p "Min_" id, GetGuiVarArr("number"), GetLang(minv), showMinMax, lw, cw)
         this._AddEditableComboRow(block, p "MaxRow_" id, GetLang("最大值："), p "Max_" id, GetGuiVarArr("number"), GetLang(maxv), showMinMax, lw, cw)
     }
@@ -603,7 +602,7 @@ class MacroGraphFormalMixin {
     _VarSummaryRowInfo(d, slot) {
         toggled := d.HasOwnProp("toggle" slot) ? d["toggle" slot] : (slot == 1 ? 1 : 0)
         on := this._FormalVarSlotOn(toggled)
-        ot := CmdEnumOpera(d.HasOwnProp("operaType" slot) ? d["operaType" slot] : "数值")
+        ot := CmdEnumOpera(d.HasOwnProp("operaType" slot) ? d["operaType" slot] : "赋值")
         vn := d.HasOwnProp("variable" slot) ? d["variable" slot] : "Data" slot
         cv := d.HasOwnProp("copyVar" slot) ? d["copyVar" slot] : "0"
         minv := d.HasOwnProp("minVar" slot) ? d["minVar" slot] : "0"
@@ -1251,9 +1250,9 @@ class MacroGraphFormalMixin {
         on := (slot == 1) ? true : (d.HasOwnProp("ifTog" slot) && (d["ifTog" slot] == 1 || d["ifTog" slot] == "1"))
         if (slot == 1 && d.HasOwnProp("ifTog1"))
             on := d["ifTog1"] == 1 || d["ifTog1"] == "1"
-        nm := d.HasOwnProp("ifName" slot) ? d["ifName" slot] : "Value" slot
+        nm := d.HasOwnProp("ifName" slot) ? d["ifName" slot] : "{Value" slot "}"
         cmp := d.HasOwnProp("ifCmp" slot) ? d["ifCmp" slot] : 1
-        vr := d.HasOwnProp("ifVar" slot) ? d["ifVar" slot] : "Target" slot
+        vr := d.HasOwnProp("ifVar" slot) ? d["ifVar" slot] : "{Target" slot "}"
         cmpTypes := this._IfCmpTypes()
         showRow := showCard && on
         showVal := showRow && !IsCompareExistVar(cmp)
@@ -1262,9 +1261,9 @@ class MacroGraphFormalMixin {
             block.Visibility("Collapsed")
         block.Add("Border").Name(p "Sep_" id).Height("1").Margin("0,6,0,4").BorderThickness("0").Background("{DynamicResource ControlBorder}").IsHitTestVisible("False")
         this._AddCheckRow(block, p "TogChkRow_" id, p "Tog_" id, GetLang("条件") slot, on, true)
-        this._AddEditableComboRow(block, p "NameRow_" id, GetLang("变量："), p "Name_" id, GetCompareGuiVarArr(cmp), GetLang(nm), showRow, lw, cw)
+        this._AddEditableComboRow(block, p "NameRow_" id, GetLang("变量："), p "Name_" id, GetCompareGuiVarArr(cmp), TranslateBuiltinVarReferences(nm, true), showRow, lw, cw)
         this._AddComboRow(block, p "CmpRow_" id, GetLang("比较："), p "Cmp_" id, cmpTypes, CompareTypeToComboIndex(cmp), showRow, true, lw, cw)
-        this._AddEditableComboRow(block, p "VarRow_" id, GetLang("值："), p "Var_" id, GetCompareGuiVarArr(cmp), GetLang(vr), showVal, lw, cw)
+        this._AddEditableComboRow(block, p "VarRow_" id, GetLang("值："), p "Var_" id, GetCompareGuiVarArr(cmp), TranslateBuiltinVarReferences(vr, true), showVal, lw, cw)
     }
 
     ; 如果条件收起态简要：{on, text}
@@ -1503,9 +1502,9 @@ class MacroGraphFormalMixin {
         lw := this._FormalLW(), cw := this._FormalCW()
         p := "LoopC" slot
         on := d.HasOwnProp("loopTog" slot) && (d["loopTog" slot] == 1 || d["loopTog" slot] == "1")
-        nm := d.HasOwnProp("loopName" slot) ? d["loopName" slot] : "Value" slot
+        nm := d.HasOwnProp("loopName" slot) ? d["loopName" slot] : "{Value" slot "}"
         cmp := d.HasOwnProp("loopCmp" slot) ? d["loopCmp" slot] : 1
-        vr := d.HasOwnProp("loopVar" slot) ? d["loopVar" slot] : "Target" slot
+        vr := d.HasOwnProp("loopVar" slot) ? d["loopVar" slot] : "{Target" slot "}"
         cmpTypes := this._LoopCmpTypes()
         showRow := showCard && on
         showVal := showRow && !IsCompareExistVar(cmp)
@@ -1515,9 +1514,9 @@ class MacroGraphFormalMixin {
         ; 顶部分隔线：与上方字段 / 上一条件分割
         block.Add("Border").Name(p "Sep_" id).Height("1").Margin("0,6,0,4").BorderThickness("0").Background("{DynamicResource ControlBorder}").IsHitTestVisible("False")
         this._AddCheckRow(block, p "TogChkRow_" id, p "Tog_" id, GetLang("条件") slot, on, true)
-        this._AddEditableComboRow(block, p "NameRow_" id, GetLang("变量："), p "Name_" id, GetCompareGuiVarArr(cmp), GetLang(nm), showRow, lw, cw)
+        this._AddEditableComboRow(block, p "NameRow_" id, GetLang("变量："), p "Name_" id, GetCompareGuiVarArr(cmp), TranslateBuiltinVarReferences(nm, true), showRow, lw, cw)
         this._AddComboRow(block, p "CmpRow_" id, GetLang("比较："), p "Cmp_" id, cmpTypes, CompareTypeToComboIndex(cmp), showRow, true, lw, cw)
-        this._AddEditableComboRow(block, p "VarRow_" id, GetLang("值："), p "Var_" id, GetCompareGuiVarArr(cmp), GetLang(vr), showVal, lw, cw)
+        this._AddEditableComboRow(block, p "VarRow_" id, GetLang("值："), p "Var_" id, GetCompareGuiVarArr(cmp), TranslateBuiltinVarReferences(vr, true), showVal, lw, cw)
     }
 
     ; 循环节点收起态摘要信息：循环次数 / 循环条件类型 / 逻辑关系。
@@ -1619,6 +1618,7 @@ class MacroGraphFormalMixin {
     }
 
     _IndexInLangArr(arr, target) {
+        target := GetVariableComboText(arr, target)
         loop arr.Length {
             if (arr[A_Index] == target)
                 return A_Index - 1

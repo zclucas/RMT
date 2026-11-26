@@ -251,11 +251,11 @@ class PromptEdgeFlash extends PromptOutline {
         NumPut("Float", insetX, "Float", insetY, "Float", right, "Float", insetY,
             "Float", right, "Float", bottom, "Float", insetX, "Float", bottom, points)
 
-        gradient := 0, border := 0
+        gradient := 0, border := 0, colorCount := 1
         try {
             if (DllCall("gdiplus\GdipCreatePathGradient", "Ptr", points, "Int", 4, "Int", 4, "Ptr*", &gradient)
                 || DllCall("gdiplus\GdipSetPathGradientCenterColor", "Ptr", gradient, "UInt", rgb)
-                || DllCall("gdiplus\GdipSetPathGradientSurroundColorsWithCount", "Ptr", gradient, "UInt*", opaque, "Int*", 1)
+                || DllCall("gdiplus\GdipSetPathGradientSurroundColorsWithCount", "Ptr", gradient, "UInt*", &opaque, "Int*", &colorCount)
                 || DllCall("gdiplus\GdipSetPathGradientFocusScales", "Ptr", gradient,
                     "Float", w * 0.8 / innerWidth, "Float", h * 0.8 / innerHeight))
                 throw Error("Could not create the screen flash gradient")

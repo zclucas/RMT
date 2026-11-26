@@ -472,14 +472,15 @@ class CMDTipGui {
         hwnd := (IsObject(this.ui) && this.ui.HasProp("wpfHwnd")) ? this.ui.wpfHwnd : 0
         if (!hwnd)
             return
-        ex := DllCall("user32\GetWindowLongPtrW", "Ptr", hwnd, "Int", -20, "Ptr")
+        ; GWL_EXSTYLE 始终为 32 位，直接使用两种位数均导出的 Long API。
+        ex := DllCall("user32\GetWindowLongW", "Ptr", hwnd, "Int", -20, "UInt")
         ; WS_EX_TOPMOST 0x8：XAML 里写了 Topmost="True"，引擎建窗时通常已经设过
         if (!(ex & 0x8))
             try WinSetAlwaysOnTop(1, "ahk_id " hwnd)
         ; WS_EX_TRANSPARENT 0x20 | WS_EX_TOOLWINDOW 0x80 | WS_EX_NOACTIVATE 0x08000000
         want := ex | 0x20 | 0x80 | 0x08000000
         if (ex != want)
-            try DllCall("user32\SetWindowLongPtrW", "Ptr", hwnd, "Int", -20, "Ptr", want)
+            try DllCall("user32\SetWindowLongW", "Ptr", hwnd, "Int", -20, "UInt", want, "UInt")
     }
 
     ; 窗口就绪后：补主题（建窗时推迟，以避免 Show 阻塞百余毫秒）、

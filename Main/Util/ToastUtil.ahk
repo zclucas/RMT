@@ -344,7 +344,8 @@ class Toast {
             pt := Buffer(8, 0)
             NumPut("Int", x, pt, 0)
             NumPut("Int", y, pt, 4)
-            hMon := DllCall("user32\MonitorFromPoint", "Ptr", pt, "UInt", 2, "Ptr")
+            ; POINT 按值传递，x86/x64 均为 8 字节，不能传缓冲区指针。
+            hMon := DllCall("user32\MonitorFromPoint", "Int64", NumGet(pt, 0, "Int64"), "UInt", 2, "Ptr")
             dpiX := 0, dpiY := 0
             try DllCall("shcore\GetDpiForMonitor", "Ptr", hMon, "Int", 0, "UInt*", &dpiX, "UInt*", &dpiY)
             return (dpiX > 0) ? (dpiX / 96.0) : (A_ScreenDPI / 96.0)

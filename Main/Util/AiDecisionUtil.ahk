@@ -9,7 +9,7 @@ class AiDecisionData {
     WinInfo := "{宏设置窗口绑定}"
     Options := ""
     ResultVar := "AiRes"
-    TimeoutMs := 30000
+    TimeoutMs := TimeoutPolicy.DefaultMs
     TimeoutAction := TimeoutPolicy.DefaultAction
     TimeoutStatusVar := TimeoutPolicy.DefaultStatusVar
 }
@@ -167,7 +167,7 @@ class AiDecision {
         request.Method := "POST"
         request.Url := baseUrl "/chat/completions"
         request.Headers := "Content-Type: application/json; charset=utf-8`nAuthorization: Bearer " key
-        request.TimeoutMs := Integer(data.TimeoutMs)
+        request.TimeoutMs := TimeoutPolicy.ResolveMs(data.TimeoutMs, resolve)
         request.TimeoutAction := TimeoutPolicy.Get(data)
         request.Retries := 0
         prompt := "Choose exactly one option for the question using the supplied context. The weekday number is 1 for Sunday through 7 for Saturday. "
@@ -236,12 +236,12 @@ RegisterCommandResultVars(data) {
         && WindowControl.NormalizeAction(data.ActionType) == "检测控件存在") {
         if (!MySoftData.HasOwnProp("ControlVarMap"))
             MySoftData.ControlVarMap := Map()
-        MySoftData.ControlVarMap[data.ControlVar] := true
+        MySoftData.ControlVarMap[data.ControlVar] := data.Selector
         MySoftData.GlobalVariMap[data.ControlVar] := true
     }
     errorVar := data.HasOwnProp("ErrorVar") ? data.ErrorVar : ""
     names := [data.ResultVar, errorVar]
-    for field in ["TypeVar", "ClassVar"]
+    for field in ["TypeVar", "ClassVar", "HwndVar", "XVar", "YVar", "WindowXVar", "WindowYVar", "WidthVar", "HeightVar"]
         if (data.HasOwnProp(field))
             names.Push(data.%field%)
     for name in names
