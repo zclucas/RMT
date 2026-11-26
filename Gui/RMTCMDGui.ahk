@@ -1,7 +1,7 @@
 #Requires AutoHotkey v2.0
 
 ; =====================================================================
-; RMT指令编辑器 —— XAML 迁移版（分类展开清单 + 搜索框样式）
+; RMT指令编辑器 —— 类别、指令与按需参数的紧凑表单
 ; 公开接口保持：ShowGui(cmd) / SureBtnAction / OwnerHwnd / ParentTile
 ; =====================================================================
 
@@ -17,54 +17,52 @@ class RMTCMDGui {
         this._batching := false
         this._cmdType := ""
         this._category := ""
-        this._selectedBtnName := ""
+        this._filterCategory := "全部"
+        this._categoryKeys := ["全部"]
+        this._commandKeys := []
+        this._tabIDs := []
+        this._foldTab := ""
 
-        ; 分类结构定义：分类名、图标 Glyph (Segoe Fluent Icons)、该分类下的指令列表（中文）
-        ; 删除了「全部」，直接展示各分类
+        ; 保留当前指令集合；「全部」只用于筛选，实际保存指令所属分类。
         this.CategoryDefs := [
             {
                 name: "图文",
-                icon: Chr(0xE721),
                 cmds: ["截图", "截图提取文本"]
             },
             {
                 name: "输入控制",
-                icon: Chr(0xE765),
                 cmds: ["启用鼠标", "启用键盘", "启用键鼠", "禁用鼠标", "禁用键盘", "禁用键鼠", "启用鼠标加速", "禁用鼠标加速"]
             },
             {
                 name: "宏控制",
-                icon: Chr(0xE713),
                 cmds: ["显示菜单", "关闭菜单", "打开界面窗口", "关闭界面窗口", "禁用模块", "取消禁用模块", "暂停所有宏", "恢复所有宏", "终止所有宏"]
             },
             {
                 name: "调试",
-                icon: Chr(0xEBE8),
                 cmds: ["开启变量监视", "关闭变量监视", "开启指令显示", "关闭指令显示"]
             },
             {
                 name: "软件自身",
-                icon: Chr(0xE770),
                 cmds: ["关闭软件", "休眠", "重载"]
             }
         ]
 
         ; 兼容保持 CategoriesArr 与 CategoriesMap（对外及宏逻辑读取）
-        this.CategoriesArr := []
+        this.CategoriesArr := [GetLang("全部")]
+        allCommands := []
         this.CategoriesMap := Map()
         for cat in this.CategoryDefs {
             catLang := GetLang(cat.name)
             this.CategoriesArr.Push(catLang)
+            this._categoryKeys.Push(cat.name)
             cmdList := []
             for cmd in cat.cmds
                 cmdList.Push(GetLang(cmd))
             this.CategoriesMap[catLang] := cmdList
+            allCommands.Push(cmdList*)
         }
 
-        ; 分类展开状态（默认全部展开）
-        this._catExpand := Map()
-        for cat in this.CategoryDefs
-            this._catExpand[cat.name] := true
+        this.CategoriesMap[GetLang("全部")] := allCommands
     }
 
     ShowGui(cmd) {
@@ -109,206 +107,54 @@ class RMTCMDGui {
         }
     }
 
-    ; 获取指令行按鈕的唯一控件 Name
-    _CmdBtnName(catIdx, cmdIdx) => "CmdBtn_" catIdx "_" cmdIdx
+    ; 五个中文字加全角冒号；按主题实际字号计算，所有参数共用同一起点。
+    _AddChoiceRow(parent, label, rowName, controlName, visible := true) {
+        row := parent.Add("Grid").Name(rowName).Margin("0,5")
+        row.Visibility(visible ? "Visible" : "Collapsed")
+        row.Cols(String(6 * XAMLHost.ScaleFontSize(XAMLHost.FontSize())), "*")
+        CmdEditorForm.Label(row, label).Name(rowName "Label").Grid_Column(0).Margin("0")
+        return CmdEditorForm.Combo(row, controlName).Grid_Column(1)
+            .Height(30).MinHeight(30).HorizontalAlignment("Stretch")
+    }
 
-    ; XAML 样式资源注入
-    _BuildStyles() {
-        bodyFs := XAMLHost.MacroBodyFontSize()
-        sbThumb := '<ControlTemplate x:Key="RmtSbThumb" TargetType="Thumb">'
-            . '<Border x:Name="bd" Background="{DynamicResource ControlBorder}" CornerRadius="3" Opacity="0.9" Margin="1"/>'
-            . '<ControlTemplate.Triggers>'
-            . '<Trigger Property="IsMouseOver" Value="True"><Setter TargetName="bd" Property="Background" Value="{DynamicResource Accent}"/><Setter TargetName="bd" Property="Opacity" Value="1"/></Trigger>'
-            . '</ControlTemplate.Triggers></ControlTemplate>'
-        sbV := '<Style x:Key="RmtSbVertical" TargetType="ScrollBar">'
-            . '<Setter Property="OverridesDefaultStyle" Value="True"/>'
-            . '<Setter Property="Background" Value="Transparent"/>'
-            . '<Setter Property="Width" Value="6"/><Setter Property="MinWidth" Value="0"/>'
-            . '<Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ScrollBar">'
-            . '<Grid Background="Transparent"><Track x:Name="PART_Track" IsDirectionReversed="true">'
-            . '<Track.Thumb><Thumb Template="{StaticResource RmtSbThumb}"/></Track.Thumb>'
-            . '</Track></Grid></ControlTemplate></Setter.Value></Setter></Style>'
-        sbH := '<Style x:Key="RmtSbHorizontal" TargetType="ScrollBar">'
-            . '<Setter Property="OverridesDefaultStyle" Value="True"/>'
-            . '<Setter Property="Background" Value="Transparent"/>'
-            . '<Setter Property="Height" Value="6"/><Setter Property="MinHeight" Value="0"/>'
-            . '<Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ScrollBar">'
-            . '<Grid Background="Transparent"><Track x:Name="PART_Track" IsDirectionReversed="false">'
-            . '<Track.Thumb><Thumb Template="{StaticResource RmtSbThumb}"/></Track.Thumb>'
-            . '</Track></Grid></ControlTemplate></Setter.Value></Setter></Style>'
-        svStyle := '<Style x:Key="RmtThemedScrollViewer" TargetType="ScrollViewer">'
-            . '<Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ScrollViewer"><Grid>'
-            . '<Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>'
-            . '<Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>'
-            . '<ScrollContentPresenter x:Name="PART_ScrollContentPresenter" Grid.Column="0" Grid.Row="0" Margin="{TemplateBinding Padding}" Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}" CanContentScroll="{TemplateBinding CanContentScroll}"/>'
-            . '<ScrollBar x:Name="PART_VerticalScrollBar" Width="6" MinWidth="0" Grid.Column="1" Grid.Row="0" Value="{TemplateBinding VerticalOffset}" Maximum="{TemplateBinding ScrollableHeight}" ViewportSize="{TemplateBinding ViewportHeight}" Visibility="{TemplateBinding ComputedVerticalScrollBarVisibility}" Style="{StaticResource RmtSbVertical}"/>'
-            . '<ScrollBar x:Name="PART_HorizontalScrollBar" Height="6" MinHeight="0" Orientation="Horizontal" Grid.Column="0" Grid.Row="1" Value="{TemplateBinding HorizontalOffset}" Maximum="{TemplateBinding ScrollableWidth}" ViewportSize="{TemplateBinding ViewportWidth}" Visibility="{TemplateBinding ComputedHorizontalScrollBarVisibility}" Style="{StaticResource RmtSbHorizontal}"/>'
-            . '</Grid></ControlTemplate></Setter.Value></Setter></Style>'
-        cmdRow := '<Style x:Key="RmtCmdRowBtn" TargetType="Button">'
-            . '<Setter Property="Background" Value="Transparent"/><Setter Property="BorderThickness" Value="0"/>'
-            . '<Setter Property="HorizontalContentAlignment" Value="Left"/>'
-            . '<Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">'
-            . '<Border x:Name="Bd" Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}" CornerRadius="3">'
-            . '<ContentPresenter HorizontalAlignment="Left" VerticalAlignment="Center"/>'
-            . '</Border><ControlTemplate.Triggers>'
-            . '<Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Bd" Property="Background" Value="{DynamicResource EditHoverBg}"/></Trigger>'
-            . '<Trigger Property="IsPressed" Value="True"><Setter TargetName="Bd" Property="Background" Value="{DynamicResource ControlBorder}"/></Trigger>'
-            . '</ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>'
-        catHead := '<Style x:Key="RmtCatHeadBtn" TargetType="Button">'
-            . '<Setter Property="Background" Value="Transparent"/><Setter Property="BorderThickness" Value="0"/>'
-            . '<Setter Property="HorizontalContentAlignment" Value="Stretch"/>'
-            . '<Setter Property="Padding" Value="6,0,4,0"/>'
-            . '<Setter Property="ClipToBounds" Value="False"/>'
-            . '<Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">'
-            . '<Grid Background="Transparent" ClipToBounds="False">'
-            . '<Border Background="{TemplateBinding Background}" CornerRadius="3" Opacity="0.13" IsHitTestVisible="False"/>'
-            . '<Border x:Name="Hover" BorderThickness="1" CornerRadius="3" IsHitTestVisible="False"/>'
-            . '<ContentPresenter Margin="{TemplateBinding Padding}" HorizontalAlignment="Stretch" VerticalAlignment="Center" ClipToBounds="False"/>'
-            . '</Grid><ControlTemplate.Triggers>'
-            . '<Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Hover" Property="BorderBrush" Value="{DynamicResource OutlineStroke}"/></Trigger>'
-            . '</ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>'
-        return sbThumb sbV sbH svStyle cmdRow catHead
+    _BuildForm(parent) {
+        body := parent.Add("StackPanel").Margin("16,10,16,14")
+        category := this._AddChoiceRow(body, "类别：", "CategoryRow", "CategoryCombo")
+        for label in this.CategoriesArr
+            this._DecorateChoice(category.Add("ComboBoxItem").Tag("{}" label).Content(label), label)
+        this._AddChoiceRow(body, "指令：", "CommandRow", "CmdTypeCombo").MaxDropDownHeight(360)
+        this._AddChoiceRow(body, "菜单序号：", "MenuRow", "MenuDLCombo", false)
+        this._AddChoiceRow(body, "页签：", "TabRow", "TabCombo", false)
+        this._AddChoiceRow(body, "模块：", "FoldRow", "FoldCombo", false)
+        buttons := body.Add("StackPanel").Orientation("Horizontal").HorizontalAlignment("Center").Margin("0,14,0,0")
+        AddCmdOkBtn(buttons)
+        return body
     }
 
     _BuildAndShow() {
-        global MySoftData
         this._closed := false
-        this._filterExpand := ""
         title := this.ParentTile GetLang("RMT指令编辑器")
         this._title := title
         titleHeight := XAMLHost.CmdTitleBarHeight()
-
         main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(XAMLHost.FontSize())
-        main.Rows(titleHeight, "*")
+        main.Rows(titleHeight, "Auto")
+        XAMLHost.AddCmdTitleBar(main, title, titleHeight)
+        this._BuildForm(main).Grid_Row(1)
 
-        ; === 标题栏 ===
-        chrome := XAMLHost.AddCmdTitleBar(main, title, titleHeight)
+        template := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)
+        this.ui := XAMLHost(StrReplace(template, "%app%", main.ToString()), "", this.OwnerHwnd)
+        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"',
+            'Title="' this._EscapeXml(title) '" Width="400" SizeToContent="Height"')
+        this.ui.xaml := StrReplace(this.ui.xaml, 'FontFamily="Segoe UI Variable Display, Segoe UI, sans-serif"',
+            'FontFamily="' MainSoftData.FontType '"')
+        this.ui.xaml := StrReplace(this.ui.xaml, '%resources%', '')
 
-        ; === 主内容区：上下布局 ===
-        ; 行0: 搜索过滤框 (Height: Auto)
-        ; 行1: 分类指令展开列表 (Height: *)
-        ; 行2: 动态参数行 (MenuRow / TabRow / FoldRow) (Height: Auto)
-        ; 行3: 底部确定按钮 (Height: Auto)
-        body := main.Add("Grid").Grid_Row(1).Margin("14,8,14,12")
-        body.Rows("Auto", "*", "Auto", "Auto")
-
-        ; --- 搜索框 ---
-        filterHost := body.Add("Grid").Grid_Row(0).Margin("0,0,0,8")
-        filterHost.Add("TextBox").Name("CmdFilter").Height(28).MinHeight(28)
-            .VerticalContentAlignment("Center").Padding("8,0")
-            .FontSize(XAMLHost.FontSize())
-            .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
-            .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
-        filterHost.Add("TextBlock").Name("CmdFilterHint").Text(GetLang("筛选指令"))
-            .IsHitTestVisible("False").VerticalAlignment("Center").Margin("10,0,0,0")
-            .Foreground("{DynamicResource TextSub}").FontSize(XAMLHost.FontSize())
-
-        ; --- 分类指令列表 (带滚动条，默认全部展开) ---
-        sv := body.Add("ScrollViewer").Grid_Row(1).VerticalScrollBarVisibility("Auto")
-            .HorizontalScrollBarVisibility("Disabled").Padding("0").Margin("0,0,0,8")
-            .Style("{StaticResource RmtThemedScrollViewer}")
-        panel := sv.Add("StackPanel").Margin("0,0,4,4")
-
-        cPadL := 6
-        cArrowW := 18
-        cIconW := 18
-        cGap := 6
-        rowPadLeft := cPadL + cArrowW + cGap
-
-        for catIdx, cat in this.CategoryDefs {
-            expanded := this._catExpand.Get(cat.name, true)
-            ; 分类头部按钮
-            headBtn := panel.Add("Button").Name("CatToggle_" catIdx).Style("{StaticResource RmtCatHeadBtn}")
-                .HorizontalAlignment("Stretch").Height(30).MinHeight(30).Cursor("Hand")
-                .HorizontalContentAlignment("Left").Margin("0,2,0,2").ClipToBounds("False")
-                .Background("{DynamicResource Accent}")
-            gHead := headBtn.Add("Grid").HorizontalAlignment("Stretch").ClipToBounds("False")
-            gHead.Cols(String(cArrowW), String(cGap), String(cIconW), String(cGap), "*", "Auto")
-
-            iconFs := XAMLHost.FormatFontSize(XAMLHost.FontSize() + 1)
-            gHead.Add("TextBlock").Name("CatArrow_" catIdx).Grid_Column(0).Text(expanded ? Chr(0xE70D) : Chr(0xE76C))
-                .FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets").FontSize(iconFs)
-                .Width(cArrowW).Height(cArrowW)
-                .VerticalAlignment("Center").HorizontalAlignment("Center").TextAlignment("Center")
-                .Padding("0").Margin("0").Foreground("{DynamicResource TextMain}")
-            gHead.Add("TextBlock").Grid_Column(2).Text(cat.icon)
-                .FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets").FontSize(iconFs)
-                .Width(cIconW).Height(cIconW)
-                .VerticalAlignment("Center").HorizontalAlignment("Center").TextAlignment("Center")
-                .Padding("0").Margin("0").Foreground("{DynamicResource TextMain}")
-            gHead.Add("TextBlock").Grid_Column(4).Text(GetLang(cat.name)).FontSize(XAMLHost.FontSize()).FontWeight("SemiBold")
-                .VerticalAlignment("Center").Foreground("{DynamicResource TextMain}")
-                .TextTrimming("CharacterEllipsis")
-            gHead.Add("TextBlock").Name("CatCount_" catIdx).Grid_Column(5).Text(String(cat.cmds.Length)).FontSize(10)
-                .VerticalAlignment("Center").Margin("8,0,4,0").Foreground("{DynamicResource TextSub}")
-
-            ; 分类下的指令列表容器
-            catPanel := panel.Add("StackPanel").Name("CatPanel_" catIdx).Visibility(expanded ? "Visible" : "Collapsed")
-            for cmdIdx, cmdName in cat.cmds {
-                btnName := this._CmdBtnName(catIdx, cmdIdx)
-                row := catPanel.Add("Grid").Name("CmdRow_" catIdx "_" cmdIdx).HorizontalAlignment("Stretch")
-                b := row.Add("Button").Name(btnName).Height(28).MinHeight(28).Margin("0,1")
-                    .HorizontalAlignment("Stretch").Cursor("Hand")
-                    .Style("{StaticResource RmtCmdRowBtn}")
-                    .Padding(rowPadLeft ",0,6,0")
-                    .HorizontalContentAlignment("Left").VerticalContentAlignment("Center")
-                sp := b.Add("StackPanel").Orientation("Horizontal").VerticalAlignment("Center")
-                sp.Add("TextBlock").Text(GetLang(cmdName)).FontSize(XAMLHost.FontSize()).VerticalAlignment("Center")
-                    .TextTrimming("CharacterEllipsis").Foreground("{DynamicResource TextMain}")
-            }
-        }
-
-        ; --- 动态参数区 ---
-        paramArea := body.Add("StackPanel").Grid_Row(2).Margin("0,2,0,8")
-
-        ; 显示菜单参数：菜单序号
-        menuRow := paramArea.Add("Grid").Name("MenuRow").Margin("0,3").Visibility("Collapsed")
-        menuRow.Cols("76", "*")
-        menuRow.Add("TextBlock").Grid_Column(0).Text(GetLang("菜单序号：")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
-        menuRow.Add("ComboBox").Grid_Column(1).Name("MenuDLCombo").Height(26).MinHeight(26).HorizontalAlignment("Stretch").VerticalAlignment("Center")
-            .VerticalContentAlignment("Center").FontSize("11").Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
-
-        ; 禁用模块参数：页签与模块
-        tabRow := paramArea.Add("Grid").Name("TabRow").Margin("0,3").Visibility("Collapsed")
-        tabRow.Cols("76", "*")
-        tabRow.Add("TextBlock").Grid_Column(0).Text(GetLang("页签：")).ToolTip(GetLang("选择页签后，再选择其中的模块。")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
-        tabRow.Add("ComboBox").Grid_Column(1).Name("TabCombo").Height(26).MinHeight(26).HorizontalAlignment("Stretch").VerticalAlignment("Center")
-            .VerticalContentAlignment("Center").FontSize("11").Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
-
-        foldRow := paramArea.Add("Grid").Name("FoldRow").Margin("0,3").Visibility("Collapsed")
-        foldRow.Cols("76", "*")
-        foldRow.Add("TextBlock").Grid_Column(0).Text(GetLang("模块：")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
-        foldRow.Add("ComboBox").Grid_Column(1).Name("FoldCombo").Height(26).MinHeight(26).HorizontalAlignment("Stretch").VerticalAlignment("Center")
-            .VerticalContentAlignment("Center").FontSize("11").Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
-
-        ; --- 底部确定按钮 ---
-        btnRow := body.Add("StackPanel").Grid_Row(3).Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center").Margin("0,2,0,0")
-        AddCmdOkBtn(btnRow)
-
-        ; === 创建 XAMLHost ===
-        tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)
-        this.ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", this.OwnerHwnd)
-        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="360" Height="480"')
-        this.ui.xaml := StrReplace(this.ui.xaml, 'FontFamily="Segoe UI Variable Display, Segoe UI, sans-serif"', 'FontFamily="' MainSoftData.FontType '"')
-        this.ui.xaml := StrReplace(this.ui.xaml, '%resources%', this._BuildStyles())
-
-        ; === 事件绑定 ===
         this.ui.OnEvent("Window", "Closing", this.OnWindowClosing.Bind(this, this.ui.id))
         this.ui.OnEvent("Window", "LoadedHwnd", this.OnWindowLoad.Bind(this, this.ui.id))
         this.ui.OnEvent("BtnClosePanel", "Click", XamlWin.BindCurrent(this, "OnCancelClick"))
         BindCmdEditorChrome(this.ui, "#指令手册/20-RMT指令", ObjBindMethod(this, "TriggerMacro"), "!l")
-
-        ; 搜索框与折叠
-        this.ui.OnEvent("CmdFilter", "TextChanged", ObjBindMethod(this, "_OnCmdFilterChanged"))
-        this.ui.Track("CmdFilter")
-        for catIdx, cat in this.CategoryDefs {
-            this.ui.OnEvent("CatToggle_" catIdx, "Click", this._OnToggleCat.Bind(this, catIdx))
-            for cmdIdx, cmdName in cat.cmds {
-                btnName := this._CmdBtnName(catIdx, cmdIdx)
-                this.ui.OnEvent(btnName, "Click", this._OnCmdRowClick.Bind(this, cat.name, cmdName, btnName))
-            }
-        }
-
+        this.ui.OnEvent("CategoryCombo", "SelectionChanged", ObjBindMethod(this, "OnCategoryChange"))
+        this.ui.OnEvent("CmdTypeCombo", "SelectionChanged", ObjBindMethod(this, "OnCmdChange"))
         this.ui.OnEvent("TabCombo", "SelectionChanged", ObjBindMethod(this, "OnTabComboChange"))
         this.ui.OnEvent("BtnOk", "Click", XamlWin.BindCurrent(this, "OnSureBtnClick"))
     }
@@ -316,7 +162,6 @@ class RMTCMDGui {
     OnWindowLoad(id, *) {
         if (IsObject(this.ui) && this.ui.id == id) {
             XamlWin.OnLoadTheme(this.ui)
-            this.ui.Update(this._selectedBtnName, "BringIntoView", "")
         }
     }
 
@@ -354,7 +199,10 @@ class RMTCMDGui {
         for it in items {
             if (it == "")
                 continue
-            this._ComboPush(comboName, "AddItem", it)
+            if (comboName == "CategoryCombo" || comboName == "CmdTypeCombo")
+                this._ComboPush(comboName, "AddXamlItem", this._ChoiceItemXml(it))
+            else
+                this._ComboPush(comboName, "AddItem", it)
         }
         for i, it in items {
             if (it == text) {
@@ -362,87 +210,80 @@ class RMTCMDGui {
                 return
             }
         }
-        this._ComboPush(comboName, "SelectedIndex", "0")
+        this._ComboPush(comboName, "SelectedIndex", items.Length ? "0" : "-1")
     }
 
-    ; 点击分类标题折叠/展开
-    _OnToggleCat(catIdx, state := "", ctrl := "", event := "") {
-        if (!IsObject(this.ui) || catIdx < 1 || catIdx > this.CategoryDefs.Length)
-            return
-        cat := this.CategoryDefs[catIdx]
-        expandState := IsObject(this._filterExpand) ? this._filterExpand : this._catExpand
-        expanded := !expandState.Get(cat.name, true)
-        expandState[cat.name] := expanded
-        this._UpdateCatDisplay(catIdx, expanded)
+    _DecorateChoice(item, label) {
+        key := GetLangKey(label)
+        static glyphs := Map(
+            "全部", 0xE71D, "图文", 0xE91B, "输入控制", 0xE765,
+            "宏控制", 0xE768, "调试", 0xE890, "软件自身", 0xE713,
+            "截图", 0xE722, "截图提取文本", 0xE8A5,
+            "启用鼠标", 0xE962, "禁用鼠标", 0xE962,
+            "启用键盘", 0xE765, "禁用键盘", 0xE765,
+            "启用键鼠", 0xE961, "禁用键鼠", 0xE961,
+            "启用鼠标加速", 0xE945, "禁用鼠标加速", 0xE945,
+            "显示菜单", 0xE700, "关闭菜单", 0xE700,
+            "打开界面窗口", 0xE737, "关闭界面窗口", 0xE737,
+            "禁用模块", 0xE8A9, "取消禁用模块", 0xE8A9,
+            "暂停所有宏", 0xE769, "恢复所有宏", 0xE768, "终止所有宏", 0xE71A,
+            "开启变量监视", 0xE890, "关闭变量监视", 0xE890,
+            "开启指令显示", 0xE756, "关闭指令显示", 0xE756,
+            "关闭软件", 0xE7E8, "休眠", 0xE708, "重载", 0xE72C)
+        if (!glyphs.Has(key))
+            return item
+        negated := InStr(key, "禁用") == 1 || (InStr(key, "关闭") == 1 && key != "关闭软件")
+        item.Tag("{}" label).TextSearch_Text("{}" label)
+        ; 复用下拉项专用模板：右侧灰色图标，收起后仍只显示文字。
+        CmdEditorForm.DecorateCompareItem(item, label, label, Chr(glyphs[key]), negated)
+        return item
     }
 
-    _UpdateCatDisplay(catIdx, expanded, visible := true) {
-        try this.ui.Update("CatPanel_" catIdx, "Visibility", visible && expanded ? "Visible" : "Collapsed")
-        try this.ui.Update("CatArrow_" catIdx, "Text", expanded ? Chr(0xE70D) : Chr(0xE76C))
+    _ChoiceItemXml(label) {
+        item := XAML_Generator("ComboBoxItem").SetProp("xmlns", "http://schemas.microsoft.com/winfx/2006/xaml/presentation")
+            .Tag("{}" label).Content(label)
+        return this._DecorateChoice(item, label).ToString()
     }
 
-    ; 点击具体的指令行
-    _OnCmdRowClick(catName, cmdName, btnName, state := "", ctrl := "", event := "") {
-        if (!IsObject(this.ui))
-            return
-        this._SelectCmd(catName, cmdName, btnName)
+    _CommandCategory(command) {
+        for category in this.CategoryDefs
+            for key in category.cmds
+                if (key == command)
+                    return category.name
+        return ""
     }
 
-    ; 选中指令并高亮该指令行
-    _SelectCmd(catName, cmdName, btnName) {
-        if (this._selectedBtnName != "" && this._selectedBtnName != btnName) {
-            try this.ui.Update(this._selectedBtnName, "Background", "Transparent")
+    _SetCommandChoices(categoryKey, preferredCommand := "") {
+        commands := [], labels := []
+        for category in this.CategoryDefs {
+            if (categoryKey != "全部" && categoryKey != category.name)
+                continue
+            for command in category.cmds {
+                commands.Push(command)
+                labels.Push(GetLang(command))
+            }
         }
-        this._selectedBtnName := btnName
-        this._category := catName
-        this._cmdType := cmdName
-        if (btnName != "") {
-            try this.ui.Update(btnName, "Background", "{DynamicResource EditHoverBg}")
-        }
+        selectedCommand := commands[1]
+        for command in commands
+            if (command == preferredCommand) {
+                selectedCommand := command
+                break
+            }
+        this._filterCategory := categoryKey
+        this._commandKeys := commands
+        this._cmdType := selectedCommand
+        this._category := this._CommandCategory(selectedCommand)
+        this._SetDDL("CmdTypeCombo", labels, GetLang(selectedCommand))
         this.OnCmdChange()
     }
 
-    ; 搜索过滤框变化事件
-    _OnCmdFilterChanged(state, ctrl := "", event := "") {
-        q := ""
-        if (IsObject(state) && state.Has("CmdFilter"))
-            q := state["CmdFilter"]
-        else if (IsObject(this.ui))
-            q := this.ui.Query("CmdFilter")
-        this._ApplyCmdFilter(q)
-    }
-
-    _CmdFilterMatch(name, q) {
-        if (q == "")
-            return true
-        return InStr(name, q) || InStr(GetLang(name), q)
-    }
-
-    ; 执行指令筛选
-    _ApplyCmdFilter(q := unset) {
-        if (!IsObject(this.ui))
+    OnCategoryChange(*) {
+        if (!IsObject(this.ui) || this._batching)
             return
-        if (!IsSet(q))
-            q := this.ui.Query("CmdFilter")
-        q := Trim(String(q))
-        ; 筛选时展开匹配分类，清空后恢复原有折叠状态。
-        this._filterExpand := q == "" ? "" : Map()
-        expandState := IsObject(this._filterExpand) ? this._filterExpand : this._catExpand
-        try this.ui.Update("CmdFilterHint", "Visibility", q == "" ? "Visible" : "Collapsed")
-
-        for catIdx, cat in this.CategoryDefs {
-            cnt := 0
-            for cmdIdx, cmdName in cat.cmds {
-                match := this._CmdFilterMatch(cmdName, q)
-                if (match)
-                    cnt++
-                try this.ui.Update("CmdRow_" catIdx "_" cmdIdx, "Visibility", match ? "Visible" : "Collapsed")
-            }
-            showCat := cnt > 0
-            try this.ui.Update("CatToggle_" catIdx, "Visibility", showCat ? "Visible" : "Collapsed")
-            this._UpdateCatDisplay(catIdx, expandState.Get(cat.name, true), showCat)
-            try this.ui.Update("CatCount_" catIdx, "Text", String(cnt))
-        }
+        category := GetConfigKey(this.ui.Query("CategoryCombo"), this._categoryKeys)
+        if (!this.CategoriesMap.Has(GetLang(category)))
+            return
+        this._SetCommandChoices(category, this._cmdType)
     }
 
     Init(cmd) {
@@ -463,68 +304,22 @@ class RMTCMDGui {
             cmdStr := RmtCommandActionKey(cmdArr[3])
             menuDLIndex := (cmdStr == "显示菜单" || cmdStr == GetLang("显示菜单")) && cmdArr.Length >= 4 ? Integer(cmdArr[4]) : 1
         } else {
-            cmdCategory := "图文"
+            cmdCategory := "全部"
             cmdStr := "截图"
             menuDLIndex := 1
         }
 
-        ; 如果类别是旧版的「全部」或为空，则自动纠正为第一条指令对应的分类
-        if (cmdCategory == "" || cmdCategory == "全部" || cmdCategory == GetLang("全部")) {
-            for cat in this.CategoryDefs {
-                for c in cat.cmds {
-                    if (c == cmdStr || GetLang(c) == cmdStr) {
-                        cmdCategory := cat.name
-                        break 2
-                    }
-                }
-            }
-            if (cmdCategory == "" || cmdCategory == "全部" || cmdCategory == GetLang("全部"))
-                cmdCategory := "图文"
+        cmdStr := RmtCommandActionKey(cmdStr)
+        actualCategory := this._CommandCategory(cmdStr)
+        if (actualCategory == "") {
+            cmdStr := "截图"
+            actualCategory := "图文"
         }
-
-        ; 找到匹配的分类与指令，设置选中与高亮
-        foundCatName := ""
-        foundCmdName := ""
-        foundBtnName := ""
-        foundCatIdx := 1
-        for catIdx, cat in this.CategoryDefs {
-            if (cat.name == cmdCategory || GetLang(cat.name) == cmdCategory) {
-                for cmdIdx, c in cat.cmds {
-                    if (c == cmdStr || GetLang(c) == cmdStr) {
-                        foundCatIdx := catIdx
-                        foundCatName := cat.name
-                        foundCmdName := c
-                        foundBtnName := this._CmdBtnName(catIdx, cmdIdx)
-                        break 2
-                    }
-                }
-            }
-        }
-        ; 若未精准匹配，兜底在所有分类中查找 cmdStr
-        if (foundBtnName == "") {
-            for catIdx, cat in this.CategoryDefs {
-                for cmdIdx, c in cat.cmds {
-                    if (c == cmdStr || GetLang(c) == cmdStr) {
-                        foundCatIdx := catIdx
-                        foundCatName := cat.name
-                        foundCmdName := c
-                        foundBtnName := this._CmdBtnName(catIdx, cmdIdx)
-                        break 2
-                    }
-                }
-            }
-        }
-        if (foundBtnName == "") {
-            foundCatName := this.CategoryDefs[1].name
-            foundCmdName := this.CategoryDefs[1].cmds[1]
-            foundBtnName := this._CmdBtnName(1, 1)
-        }
-
-        if (!this._catExpand.Get(foundCatName, true)) {
-            this._catExpand[foundCatName] := true
-            this._UpdateCatDisplay(foundCatIdx, true)
-        }
-        this._SelectCmd(foundCatName, foundCmdName, foundBtnName)
+        categoryKey := GetConfigKey(cmdCategory, this._categoryKeys)
+        if (categoryKey != "全部" && categoryKey != actualCategory)
+            categoryKey := actualCategory
+        this._SetDDL("CategoryCombo", this.CategoriesArr, GetLang(categoryKey))
+        this._SetCommandChoices(categoryKey, cmdStr)
 
         ; 轮盘菜单下拉选项
         tableItem := GetTableBySymbol("Menu")
@@ -534,10 +329,10 @@ class RMTCMDGui {
                 DropDownArr.Push(f ". " fold.Remark)
             }
         }
-        this.ui.Update("MenuDLCombo", "ClearItems", "")
+        this._ComboPush("MenuDLCombo", "ClearItems", "")
         for it in DropDownArr
-            this.ui.Update("MenuDLCombo", "AddItem", it)
-        this.ui.Update("MenuDLCombo", "SelectedIndex", String(menuDLIndex - 1))
+            this._ComboPush("MenuDLCombo", "AddItem", it)
+        this._ComboPush("MenuDLCombo", "SelectedIndex", String(menuDLIndex - 1))
 
         ; 禁用模块/取消禁用模块：页签+模块 回显
         this._tabIDs := this._FoldTabIDs()
@@ -557,8 +352,9 @@ class RMTCMDGui {
             selectedIndex := 1
         this._foldTab := selectedIndex ? this._tabIDs[selectedIndex] : ""
         selTable := GetTableByID(this._foldTab)
+        ; 选项和选中项使用同一批更新，避免默认项覆盖原先页签。
         this._SetDDL("TabCombo", tabItems, "")
-        this.ui.Update("TabCombo", "SelectedIndex", String(selectedIndex - 1))
+        this._ComboPush("TabCombo", "SelectedIndex", String(selectedIndex - 1))
         foldItems := []
         if (selTable) {
             for f, fold in selTable.Folds
@@ -580,6 +376,14 @@ class RMTCMDGui {
     OnCmdChange(state := "", ctrl := "", event := "") {
         if (!IsObject(this.ui))
             return
+        if (ctrl == "CmdTypeCombo" && !this._batching) {
+            command := GetConfigKey(this.ui.Query("CmdTypeCombo"), this._commandKeys)
+            category := this._CommandCategory(command)
+            if (category != "") {
+                this._cmdType := command
+                this._category := category
+            }
+        }
         CmdStr := this._cmdType
         IsShowMenuDL := (CmdStr == "显示菜单" || CmdStr == GetLang("显示菜单"))
         this.ui.Update("MenuRow", "Visibility", IsShowMenuDL ? "Visible" : "Collapsed")
@@ -593,7 +397,7 @@ class RMTCMDGui {
 
     ; 页签下拉切换：刷新模块下拉为该页签下的模块列表
     OnTabComboChange(state := "", ctrl := "", event := "") {
-        if (!IsObject(this.ui) || !IsObject(this._tabIDs))
+        if (!IsObject(this.ui) || this._batching || !IsObject(this._tabIDs))
             return
         tabIdx := Integer(this.ui.Query("TabCombo>SelectedIndex")) + 1
         if (tabIdx < 1 || tabIdx > this._tabIDs.Length)

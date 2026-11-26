@@ -1938,7 +1938,7 @@ public partial class AhkWpfEngine
         // Capture the opening monitor before Show changes the foreground window.
         IntPtr openingOwner = new WindowInteropHelper(win).Owner;
         IntPtr openingMonitor = MonitorFromWindow(openingOwner != IntPtr.Zero ? openingOwner : GetForegroundWindow(), 2);
-        Action placeEditor = () => CenterMacroEditor(openingMonitor);
+        Action placeEditor = () => CenterEditor(openingMonitor);
         try
         {
             firstFrame = new RmtFirstFrame(win, waitForInitialUpdates, startHidden, placeEditor);
@@ -1974,9 +1974,10 @@ public partial class AhkWpfEngine
         }
     }
 
-    private void CenterMacroEditor(IntPtr monitor)
+    private void CenterEditor(IntPtr monitor)
     {
-        if (win.WindowState != WindowState.Normal || win.FindName("MacroEditorTitle") == null
+        if (win.WindowState != WindowState.Normal
+            || (win.FindName("MacroEditorTitle") == null && win.FindName("CmdEditorTitle") == null)
             || win.WindowStartupLocation != WindowStartupLocation.CenterScreen) return;
         var source = PresentationSource.FromVisual(win);
         if (source == null || source.CompositionTarget == null) return;
@@ -1989,8 +1990,14 @@ public partial class AhkWpfEngine
         // Final UI/font scaling has settled. Keep the entire Viewbox inside the work area.
         win.MinWidth = Math.Min(win.MinWidth, width);
         win.MinHeight = Math.Min(win.MinHeight, height);
-        win.Width = Math.Min(win.ActualWidth, width);
-        win.Height = Math.Min(win.ActualHeight, height);
+        win.MaxWidth = Math.Min(win.MaxWidth, width);
+        win.MaxHeight = Math.Min(win.MaxHeight, height);
+        // Browser actions show different rows. Preserve SizeToContent so switching actions
+        // can still change the height after the initial placement has completed.
+        if (win.SizeToContent == SizeToContent.Manual || win.SizeToContent == SizeToContent.Height)
+            win.Width = Math.Min(win.ActualWidth, width);
+        if (win.SizeToContent == SizeToContent.Manual || win.SizeToContent == SizeToContent.Width)
+            win.Height = Math.Min(win.ActualHeight, height);
         win.UpdateLayout();
         win.Left = info.rcWork.left / dpi.M11 + Math.Max(0, (width - win.ActualWidth) / 2);
         win.Top = info.rcWork.top / dpi.M22 + Math.Max(0, (height - win.ActualHeight) / 2);

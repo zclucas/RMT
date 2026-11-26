@@ -620,16 +620,17 @@ class CmdEditorForm {
     }
 
     ; 图标属于下拉项模板，收起后的比较框只显示文字，避免挤占比较符宽度。
-    static DecorateCompareItem(item, label, value, glyph) {
+    static DecorateCompareItem(item, label, value, glyph, negated := false) {
+        semanticSymbol := InStr("|字符包含|包含|不包含|为空|不为空|", "|" GetLangKey(value) "|")
         item.Content(label).HorizontalContentAlignment("Stretch")
         template := item.Add("ComboBoxItem.Template").Add("ControlTemplate").TargetType("ComboBoxItem")
         grid := template.Add("Border").Name("CompareItemBg").Padding("6,4").CornerRadius(3)
             .Background("Transparent").Add("Grid").Cols("*", "Auto")
         grid.Add("ContentPresenter").VerticalAlignment("Center")
         icon := grid.Add("Grid").Grid_Column(1).Margin("12,0,0,0").VerticalAlignment("Center").Opacity("0.65")
-        icon.Add("TextBlock").Text(glyph).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets")
+        icon.Add("TextBlock").Text(glyph).FontFamily(semanticSymbol ? "Segoe UI Symbol" : "Segoe Fluent Icons, Segoe MDL2 Assets")
             .Foreground("{DynamicResource TextSub}")
-        if (GetLangKey(value) == "不等于")
+        if (GetLangKey(value) == "不等于" || negated)
             icon.Add("Line").X1(0).Y1(12).X2(12).Y2(0).Width(12).Height(12)
                 .HorizontalAlignment("Center").VerticalAlignment("Center")
                 .Stroke("{DynamicResource TextSub}").StrokeThickness(1)

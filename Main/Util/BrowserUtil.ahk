@@ -147,7 +147,25 @@ class BrowserUtil {
         return list
     }
 
+    static GetDefaultBrowserPath() {
+        ; 查询 HTTPS 协议的当前关联程序，跟随系统默认浏览器设置。
+        chars := 0
+        DllCall("Shlwapi\AssocQueryStringW", "UInt", 0, "UInt", 2, "Str", "https", "Str", "open", "Ptr", 0, "UInt*", &chars, "Int")
+        if (!chars)
+            throw Error("无法获取系统默认浏览器路径")
+        path := Buffer(chars * 2, 0)
+        result := DllCall("Shlwapi\AssocQueryStringW", "UInt", 0, "UInt", 2, "Str", "https", "Str", "open", "Ptr", path.Ptr, "UInt*", &chars, "Int")
+        executable := StrGet(path, "UTF-16")
+        if (result != 0 || executable == "" || !FileExist(executable))
+            throw Error("无法获取系统默认浏览器路径")
+        return executable
+    }
+
     static Launch(browserType := "Chrome", browserPath := "", headless := 0, userDataDir := "", port := 9222) {
+        if (GetLangKey(browserType) == "系统默认浏览器") {
+            browserPath := this.GetDefaultBrowserPath()
+            browserType := "自定义路径"
+        }
         if (!this.InitDll())
             throw Error("RMT_Browser.dll 未找到或加载失败")
         res := DllCall("RMT_Browser\Browser_Launch", "Ptr", this._Utf8(browserType), "Ptr", this._Utf8(browserPath), "Int", headless, "Ptr", this._Utf8(userDataDir), "Int", port, "Cdecl Int")

@@ -115,7 +115,13 @@ GetCompareOperatorIcon(value) {
         case "等于", "不等于": return Chr(0xE94E)
         case "小于等于": return Chr(0xE76B) Chr(0xE94E)
         case "小于": return Chr(0xE76B)
-        case "字符包含", "包含": return Chr(0xE721)
+        ; 使用包含关系和空集符号，避免放大镜、复选框造成语义混淆。
+        case "字符包含", "包含": return "⊇"
+        case "不包含": return "⊉"
+        case "开头是": return Chr(0xE8E4)
+        case "结尾是": return Chr(0xE8E2)
+        case "为空": return "∅"
+        case "不为空": return "∀"
         case "正则匹配": return Chr(0xE943)
         case "变量存在": return Chr(0xE73E)
         case "变量不存在": return Chr(0xE711)

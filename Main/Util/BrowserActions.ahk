@@ -37,6 +37,17 @@ class BrowserActions {
 
     static IsCloseAction(action) => action == "关闭" || action == "关闭浏览器"
 
+    static IsTabAction(action) {
+        for group in this.Groups {
+            if (group.name != "页签")
+                continue
+            for name in group.actions
+                if (name == action)
+                    return true
+        }
+        return false
+    }
+
     static UsesTimeout(action) {
         static actions := Map(
             "打开网址", true, "当前页跳转", true, "等待元素", true, "等待文字", true, "等待加载", true,

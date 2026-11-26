@@ -15,6 +15,8 @@ class BrowserGui extends CommentGui {
     _textEditor := ""
     _picking := false
     _updatingActions := false
+    _playHotkeys := []
+    _testRunning := false
 
     _BuildAndShow() {
         this._closed := false
@@ -30,23 +32,25 @@ class BrowserGui extends CommentGui {
 
         actions := body.Add("Grid")
         actions.Cols("*", 16, "*")
-        category := CmdEditorForm.Row(actions, "类别：")
-        operation := CmdEditorForm.Row(actions, "操作：", "", "CommandRightLabel").Grid_Column(2)
+        category := this._Row(actions, "类别：")
+        operation := this._Row(actions, "操作：").Grid_Column(2)
         groupNames := []
         for group in BrowserActions.Groups
             groupNames.Push(group.name)
         this._Choice(category, "ActionGroup", groupNames).Grid_Column(1)
         this._Choice(operation, "ActionType", BrowserActions.Groups[1].actions).Grid_Column(1)
 
-        this._Choice(this._Row(body, "浏览器：", "BrowserRow"), "BrowserType", []).Grid_Column(1)
-        this._Choice(this._Row(body, "浏览器：", "CloseBrowserRow"), "CloseBrowserType", BrowserActions.CloseBrowserTypes).Grid_Column(1)
+        browserGrid := body.Add("Grid").Cols("*", 16, "*")
+        this._Choice(this._Row(browserGrid, "浏览器：", "BrowserRow"), "BrowserType", []).Grid_Column(1)
+        this._Choice(this._Row(browserGrid, "浏览器：", "CloseBrowserRow"), "CloseBrowserType", BrowserActions.CloseBrowserTypes).Grid_Column(1)
         this._Field(body, "浏览器路径：", "BrowserPath", false, 26, "BrowserPathRow")
         this._Choice(this._Row(body, "页签范围：", "CloseScopeRow"), "CloseScope", BrowserActions.CloseScopes).Grid_Column(1)
         targetRefRow := this._Row(body, "目标分页：", "TargetRefRow", , GetLang("支持直接输入索引(1开始)、TargetID、标题/URL关键词，或选择变量 {变量名}"))
         CmdEditorForm.Combo(targetRefRow, "TargetRef", true).Grid_Column(1)
         urlRow := this._Row(body, "网址：", "UrlRow")
-        this._TextBox(urlRow, "Url").Grid_Column(1).TextWrapping("NoWrap")
-            .ScrollViewer_HorizontalScrollBarVisibility("Hidden")
+        urlInput := urlRow.Add("Grid").Grid_Column(1).Cols("*", 6, "Auto")
+        CmdEditorForm.Combo(urlInput, "Url", true)
+        CmdEditorForm.IconButton(urlInput, "BtnEditUrl", 0xE70F, "文本构造").Grid_Column(2)
 
         selector := this._Row(body, "网页元素：", "SelectorRow", ,
             GetLang("左侧选择类型，右侧填写选择器。")).Add("Grid").Grid_Column(1)
@@ -77,7 +81,7 @@ class BrowserGui extends CommentGui {
         }
 
         ; 坐标行 (X, Y)
-        coordRow := this._Row(body, "坐标 (X, Y)：", "CoordRow", "CoordLabel")
+        coordRow := this._Row(body, "坐标：", "CoordRow", "CoordLabel", GetLang("从左到右填写 X、Y。"))
         coordGrid := coordRow.Add("Grid").Grid_Column(1)
         coordGrid.Cols("*", 8, "*")
         this._TextBox(coordGrid, "CoordX").Grid_Column(0)
@@ -93,7 +97,7 @@ class BrowserGui extends CommentGui {
 
         saveRow := this._Row(body, "结果变量：", "SaveVarRow", , GetLang("留空时不保存结果"))
         CmdEditorForm.Combo(saveRow, "SaveVar", true).Grid_Column(1)
-        CommandTimeoutFields.Add(body)
+        CommandTimeoutFields.Add(body, false, , , 6 * XAMLHost.ScaleFontSize(XAMLHost.FontSize()))
         CmdEditorForm.Footer(body)
 
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", height)
@@ -107,6 +111,7 @@ class BrowserGui extends CommentGui {
         this.ui.OnEvent("BtnClosePanel", "Click", XamlWin.BindCurrent(this, "OnCancelClick"))
         this.ui.OnEvent("BtnOk", "Click", XamlWin.BindCurrent(this, "OnClickSureBtn"))
         this.ui.OnEvent("BtnEditJsCode", "Click", ObjBindMethod(this, "_QueueTextEditor", "JsCode"))
+        this.ui.OnEvent("BtnEditUrl", "Click", ObjBindMethod(this, "_QueueTextEditor", "Url"))
         this.ui.OnEvent("ActionGroup", "SelectionChanged", XamlWin.BindCurrent(this, "OnActionGroupChanged"))
         this.ui.OnEvent("ActionType", "SelectionChanged", XamlWin.BindCurrent(this, "OnActionTypeChanged"))
         for name in ["BrowserType", "CloseBrowserType"]
@@ -114,11 +119,41 @@ class BrowserGui extends CommentGui {
         this.ui.OnEvent("BtnPickSelector", "Click", (*) => SetTimer(this._PickSelector.Bind(this, this.ui), -1))
         this.ui.OnEvent("BtnPickKey", "Click", (*) => SetTimer(this._OpenKeyPicker.Bind(this), -1))
 
-        BindCmdEditorChrome(this.ui, "#指令手册/浏览器")
+        BindCmdEditorChrome(this.ui, "#指令手册/浏览器", XamlWin.BindCurrent(this, "TriggerMacro"), "!l")
+    }
+
+    OnWindowLoad(state, ctrl, event) {
+        super.OnWindowLoad(state, ctrl, event)
+        this._playHotkeys := WinHotkey.Register(["!l"], XamlWin.BindCurrent(this, "TriggerMacro"), this.Hwnd())
+    }
+
+    TriggerMacro(*) {
+        if (this._testRunning || !this.CheckIfValid())
+            return
+        this._testRunning := true
+        try {
+            this.SaveData()
+            RunEditorMacroPreview(this.GetCommandStr())
+        } finally {
+            this._testRunning := false
+        }
+    }
+
+    _UnregisterPlayHotkeys() {
+        WinHotkey.UnregisterAll(this._playHotkeys)
+        this._playHotkeys := []
     }
 
     _Row(body, label, rowName := "", labelName := "", labelTip := "") {
-        return CmdEditorForm.Row(body, label, rowName, "CommandLabel", "Center", labelName, labelTip)
+        row := body.Add("Grid").Margin("0,4").Cols(6 * XAMLHost.ScaleFontSize(XAMLHost.FontSize()), "*")
+        if (rowName != "")
+            row.Name(rowName)
+        caption := CmdEditorForm.Label(row, label).Margin("0")
+        if (labelName != "")
+            caption.Name(labelName)
+        if (labelTip != "")
+            caption.ToolTip(labelTip)
+        return row
     }
 
     _Field(body, label, name, multiline, height := 26, rowName := "") {
@@ -203,16 +238,17 @@ class BrowserGui extends CommentGui {
             "等待文字", GetLang("匹配文字："),
             "选择下拉", GetLang("选项值："),
             "按键输入", GetLang("按键名称："),
-            "Cookie操作", GetLang("操作 (get/set/clear)："),
-            "Storage操作", GetLang("操作 (get/set)：")
+            "Cookie操作", GetLang("操作："),
+            "Storage操作", GetLang("操作：")
         )
         attrLabels := Map(
             "提取属性", GetLang("属性名称："),
             "Cookie操作", GetLang("Cookie名称："),
-            "Storage操作", GetLang("键名 (Key)：")
+            "Storage操作", GetLang("键名：")
         )
         isOpen := action == "打开网址"
         isClose := action == "关闭"
+        isTab := BrowserActions.IsTabAction(action)
         isMouseCoord := action == "鼠标移动" || action == "鼠标点击" || action == "鼠标滚轮"
         hasSelector := BrowserActions.UsesSelector(action)
         rows := Map(
@@ -230,8 +266,8 @@ class BrowserGui extends CommentGui {
             "StorageTypeRow", action == "Storage操作",
             "JsCodeRow", action == "执行JS" || action == "Cookie操作" || action == "Storage操作",
             "AttrNameRow", attrLabels.Has(action),
-            "SavePathRow", action == "网页截图", "CommandTimeoutRow", BrowserActions.UsesTimeout(action),
-            "SaveVarRow", !BrowserActions.IsCloseAction(action))
+            "SavePathRow", action == "网页截图", "CommandTimeoutRow", !isTab && BrowserActions.UsesTimeout(action),
+            "SaveVarRow", !isTab && !BrowserActions.IsCloseAction(action))
         for name, visible in rows
             this._ComboPush(name, "Visibility", visible ? "Visible" : "Collapsed")
         if (attrLabels.Has(action))
@@ -239,10 +275,13 @@ class BrowserGui extends CommentGui {
         this._ComboPush("JsCodeLabel", "Text", action == "执行JS" ? GetLang("JS 脚本：") : GetLang("值："))
         if (textLabels.Has(action))
             this._ComboPush("TextLabel", "Text", textLabels[action])
+        this._ComboPush("TextLabel", "ToolTip", action == "Cookie操作" ? GetLang("支持 get、set、clear。")
+            : action == "Storage操作" ? GetLang("支持 get、set。") : "")
         this._ComboPush("BtnPickKey", "Visibility", action == "按键输入" ? "Visible" : "Collapsed")
         if (isMouseCoord) {
-            coordLabel := (action == "鼠标滚轮") ? GetLang("滚轮增量 (dX, dY)：") : GetLang("坐标 (X, Y)：")
+            coordLabel := (action == "鼠标滚轮") ? GetLang("滚轮增量：") : GetLang("坐标：")
             this._ComboPush("CoordLabel", "Text", coordLabel)
+            this._ComboPush("CoordLabel", "ToolTip", GetLang(action == "鼠标滚轮" ? "从左到右填写 dX、dY。" : "从左到右填写 X、Y。"))
         }
     }
 
@@ -370,12 +409,14 @@ class BrowserGui extends CommentGui {
     }
 
     OnWindowClosing(state, ctrl, event) {
+        this._UnregisterPlayHotkeys()
         if (this._picking)
             this._FinishPicker()
         super.OnWindowClosing(state, ctrl, event)
     }
 
     _CloseWindow() {
+        this._UnregisterPlayHotkeys()
         if (this._picking)
             this._FinishPicker()
         super._CloseWindow()
@@ -396,15 +437,15 @@ class BrowserGui extends CommentGui {
         if (actionType == "关闭标签")
             actionType := "关闭分页"
 
-        this._browserNames := []
-        seen := Map()
+        this._browserNames := ["系统默认浏览器"]
+        seen := Map("系统默认浏览器", true)
         for browser in BrowserUtil.GetInstalledBrowsers() {
             if (!seen.Has(browser.name))
                 this._browserNames.Push(browser.name)
             seen[browser.name] := true
         }
-        if (!this._browserNames.Length) {
-            this._browserNames := ["Chrome", "Edge"]
+        if (this._browserNames.Length == 1) {
+            this._browserNames.Push("Chrome", "Edge")
             seen["Chrome"] := seen["Edge"] := true
         }
         browserType := GetLangKey(this.Data.BrowserType)
@@ -421,6 +462,7 @@ class BrowserGui extends CommentGui {
             if (varName != "") {
                 this._ComboPush("SaveVar", "AddItem", varName)
                 this._ComboPush("TargetRef", "AddItem", "{" varName "}")
+                this._ComboPush("Url", "AddItem", "{" varName "}")
             }
         }
         for name in ["Url", "TargetRef", "Selector", "JsCode", "AttrName", "BrowserPath", "CoordX", "CoordY"]
@@ -483,7 +525,13 @@ class BrowserGui extends CommentGui {
         for name, values in Map("SelectorType", BrowserGui.SelectorTypes, "Condition", BrowserGui.Conditions,
             "LoadState", BrowserGui.LoadStates, "BrowserType", this._browserNames, "MouseBtn", BrowserGui.MouseButtons, "StorageType", BrowserGui.StorageTypes)
             data.%name% := CmdEnumZh(state[name], values)
-        if (BrowserActions.UsesTimeout(data.ActionType))
+        isTab := BrowserActions.IsTabAction(data.ActionType)
+        if (isTab) {
+            ; 页签操作不读取隐藏的输出、超时参数，使用内置等待策略。
+            data.TimeoutMs := TimeoutPolicy.DefaultMs
+            data.TimeoutAction := TimeoutPolicy.DefaultAction
+            data.TimeoutStatusVar := ""
+        } else if (BrowserActions.UsesTimeout(data.ActionType))
             CommandTimeoutFields.Read(this.ui, data)
         for name in ["Url", "TargetRef", "Selector", "JsCode", "AttrName", "BrowserPath", "CoordX", "CoordY"]
             data.%name% := state[name]
@@ -492,7 +540,7 @@ class BrowserGui extends CommentGui {
         data.Checked := state["Checked"] == "True"
         data.Incognito := state["Incognito"] == "True"
         data.OuterHtml := state[data.ActionType == "网页截图" ? "FullPage" : "IncludeTag"] == "True"
-        data.SaveVar := GetVarName(Trim(state["SaveVar"]))
+        data.SaveVar := isTab ? "" : GetVarName(Trim(state["SaveVar"]))
         return data
     }
 

@@ -1582,7 +1582,7 @@ class BrowserData {
     __New() {
         this.SerialStr := ""
         this.ActionType := "打开网址"
-        this.BrowserType := "Chrome" ; Chrome/Edge/Chromium/自定义路径
+        this.BrowserType := "系统默认浏览器" ; 系统默认浏览器/Chrome/Edge/Chromium/自定义路径
         this.CloseScope := "所有页签"
         this.Url := "https://www.google.com"
         this.TargetRef := "" ; 留空操作当前分页，否则按索引、ID或关键词定位
