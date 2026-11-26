@@ -141,39 +141,39 @@ class HudGui {
         global MyHudSlotMap
         if (!IsSet(MyHudSlotMap) || !MyHudSlotMap.Has(this.serialStr))
             return
-        p := MyHudSlotMap[this.serialStr]
-        if (!p)
+        slotPtr := MyHudSlotMap[this.serialStr]
+        if (!slotPtr)
             return
-        try key := Integer(this.serialStr)
+        try commandId := Integer(this.serialStr)
         catch
             return
-        count := NumGet(p, 65024, "UInt")
-        if (count > 35)
-            count := 35
+        count := NumGet(slotPtr, WorkerIpcLayout.HudHandleCountOffset, "UInt")
+        if (count > WorkerIpcLayout.HudMaxHandles)
+            count := WorkerIpcLayout.HudMaxHandles
         loop count {
-            off := 65032 + (A_Index - 1) * 16
-            if (NumGet(p, off, "UInt") != key)
+            entryOffset := WorkerIpcLayout.HudHandleTableOffset + (A_Index - 1) * WorkerIpcLayout.HudHandleEntryBytes
+            if (NumGet(slotPtr, entryOffset, "UInt") != commandId)
                 continue
             if (hwnd) {
-                NumPut("Ptr", hwnd, p, off + 8)
+                NumPut("Ptr", hwnd, slotPtr, entryOffset + WorkerIpcLayout.HudHandleValueOffset)
             } else {
                 ; 摘除：末项前移补位，避免项数只增不减
-                last := 65032 + (count - 1) * 16
-                if (off != last) {
-                    NumPut("UInt", NumGet(p, last, "UInt"), p, off)
-                    NumPut("Ptr", NumGet(p, last + 8, "Ptr"), p, off + 8)
+                lastEntryOffset := WorkerIpcLayout.HudHandleTableOffset + (count - 1) * WorkerIpcLayout.HudHandleEntryBytes
+                if (entryOffset != lastEntryOffset) {
+                    NumPut("UInt", NumGet(slotPtr, lastEntryOffset, "UInt"), slotPtr, entryOffset)
+                    NumPut("Ptr", NumGet(slotPtr, lastEntryOffset + WorkerIpcLayout.HudHandleValueOffset, "Ptr"), slotPtr, entryOffset + WorkerIpcLayout.HudHandleValueOffset)
                 }
-                NumPut("UInt", count - 1, p, 65024)
+                NumPut("UInt", count - 1, slotPtr, WorkerIpcLayout.HudHandleCountOffset)
             }
             return
         }
-        if (!hwnd)
+        if (!hwnd || count >= WorkerIpcLayout.HudMaxHandles)
             return
-        off := 65032 + count * 16
-        NumPut("UInt", key, p, off)
-        NumPut("UInt", 0, p, off + 4)
-        NumPut("Ptr", hwnd, p, off + 8)
-        NumPut("UInt", count + 1, p, 65024)
+        entryOffset := WorkerIpcLayout.HudHandleTableOffset + count * WorkerIpcLayout.HudHandleEntryBytes
+        NumPut("UInt", commandId, slotPtr, entryOffset)
+        NumPut("UInt", 0, slotPtr, entryOffset + 4)
+        NumPut("Ptr", hwnd, slotPtr, entryOffset + WorkerIpcLayout.HudHandleValueOffset)
+        NumPut("UInt", count + 1, slotPtr, WorkerIpcLayout.HudHandleCountOffset)
     }
 
     _Open(item) {

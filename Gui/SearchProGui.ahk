@@ -590,7 +590,7 @@ class SearchProGui {
 
     Init(cmd) {
         cmdArr := cmd != "" ? StrSplit(cmd, "_") : []
-        this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : GetCMDSerialStr(this.CommandName)
+        this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : AllocateCommandSerial(this.CommandName)
         this.ui.Update("RemarkCon", "Text", cmdArr.Length >= 2 ? cmdArr[2] : "")
         this.Data := GetMacroCMDData(this.SerialStr)
         this.DLVariableArr := GetGuiVarArr()
@@ -839,7 +839,7 @@ class SearchProGui {
             CoordMode("Mouse", "Screen")
             MouseGetPos &mouseX, &mouseY
             if (this._TypeIndex() == "窗口图片" || this._TypeIndex() == "窗口颜色" || this._TypeIndex() == "窗口文本") {
-                PosArr := GetCurWinPos()
+                PosArr := GetMouseWindowClientPosition()
                 this.ui.Update("MousePosCon", "Text", Format("{},{}", PosArr[1], PosArr[2]))
             }
             else
@@ -1172,7 +1172,7 @@ class SearchProGui {
         this.SaveSearchData()
         command := this.GetCommandStr()
         if (!showImageTime) {
-            OnTriggerSepcialItemMacro(command, false, this.WindowBindingContext)
+            RunEditorMacroPreview(command, false, this.WindowBindingContext)
             return
         }
 
@@ -1185,7 +1185,7 @@ class SearchProGui {
         tableItem.ImageSearchTestTiming := timing
         this._imageTestRunning := true
         try {
-            OnTriggerSepcialItemMacro(command, false, this.WindowBindingContext)
+            RunEditorMacroPreview(command, false, this.WindowBindingContext)
         } finally {
             this._imageTestRunning := false
             if (hadTiming)
@@ -1208,8 +1208,8 @@ class SearchProGui {
         targetHwnd := isWin ? this.FindSearchTargetWindow() : 0
         if (isWin && !targetHwnd)
             return
-        Point1 := isWin ? GetWinPos(x1, y1, targetHwnd) : [x1, y1]
-        Point2 := isWin ? GetWinPos(x2, y2, targetHwnd) : [x2, y2]
+        Point1 := isWin ? ScreenPointToWindowClient(x1, y1, targetHwnd) : [x1, y1]
+        Point2 := isWin ? ScreenPointToWindowClient(x2, y2, targetHwnd) : [x2, y2]
         this.OnSetSearchArea(Point1[1], Point1[2], Point2[1], Point2[2])
     }
 
@@ -1232,7 +1232,7 @@ class SearchProGui {
                 RmtDialog.Info(GetLang("取色未找到目标窗口。"))
                 return
             }
-            point := GetWinPos(mouseX, mouseY, hwnd)
+            point := ScreenPointToWindowClient(mouseX, mouseY, hwnd)
             mouseX := point[1], mouseY := point[2]
         }
         this.OnSureTarget(mouseX, mouseY, Color)

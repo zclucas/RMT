@@ -19,8 +19,8 @@ class LegacyTextProcess {
         ValueArr := []
 
         ; 处理文本
-        switch Integer(Data.ProcessType) {
-            case 1: ; 文本分割
+        switch RuntimeChoice.Key("LegacyTextProcessType", Data.ProcessType) {
+            case "文本分割":
                 parts := this.ProcessTextSplitWithParams(sourceText, Data)
                 partIndex := 1
                 loop Data.ToggleArr.Length {
@@ -31,43 +31,43 @@ class LegacyTextProcess {
                     }
                 }
 
-            case 2: ; 文本替换
+            case "文本替换":
                 processedText := this.ProcessTextReplace(sourceText, Data.SearchText, Data.ReplaceText, Data.CaseSensitive, Data.UseRegex)
                 this.SaveSingleResultMacro(Data, tableItem, index, &NameArr, &ValueArr, processedText)
 
-            case 3: ; 数字提取
+            case "数字提取":
                 extractedText := this.ExtractDigits(sourceText)
                 this.SaveSingleResultMacro(Data, tableItem, index, &NameArr, &ValueArr, extractedText)
 
-            case 4: ; 字母提取
+            case "字母提取":
                 extractedText := this.ExtractAlphabets(sourceText)
                 this.SaveSingleResultMacro(Data, tableItem, index, &NameArr, &ValueArr, extractedText)
 
-            case 5: ; 中文提取
+            case "中文提取":
                 extractedText := this.ExtractChineseChars(sourceText)
                 this.SaveSingleResultMacro(Data, tableItem, index, &NameArr, &ValueArr, extractedText)
 
-            case 6: ; 去空格处理
+            case "去空格处理":
                 processedText := this.ProcessWhitespace(sourceText, Data.SplitParam)
                 this.SaveSingleResultMacro(Data, tableItem, index, &NameArr, &ValueArr, processedText)
 
-            case 7: ; 大小写转换
+            case "大小写转换":
                 processedText := this.ProcessCaseConversion(sourceText, Data.SplitParam)
                 this.SaveSingleResultMacro(Data, tableItem, index, &NameArr, &ValueArr, processedText)
 
-            case 8: ; URL编解码
+            case "URL编解码":
                 processedText := this.ProcessURLEncode(sourceText, Data.SplitParam)
                 this.SaveSingleResultMacro(Data, tableItem, index, &NameArr, &ValueArr, processedText)
 
-            case 9: ; Base64编解码
+            case "Base64编解码":
                 processedText := this.ProcessBase64(sourceText, Data.SplitParam)
                 this.SaveSingleResultMacro(Data, tableItem, index, &NameArr, &ValueArr, processedText)
 
-            case 10: ; 文本统计
+            case "文本统计":
                 statsText := this.GetTextStatistics(sourceText, Data.SplitParam)
                 this.SaveSingleResultMacro(Data, tableItem, index, &NameArr, &ValueArr, statsText)
 
-            case 11: ; 固定长度分割
+            case "固定长度分割":
                 length := Data.SplitParam ? Integer(Data.SplitParam) : 10
                 maxCount := Data.MaxSplitCount ? Integer(Data.MaxSplitCount) : 0
                 parts := this.SplitByLength(sourceText, length, maxCount)
@@ -80,7 +80,7 @@ class LegacyTextProcess {
                     }
                 }
 
-            case 12: ; 多字符分割
+            case "多字符分割":
                 delimiters := Data.SplitParam ? Data.SplitParam : ",|;"
                 maxCount := Data.MaxSplitCount ? Integer(Data.MaxSplitCount) : 0
                 parts := this.SplitByMultipleDelimiters(sourceText, delimiters, maxCount)
@@ -93,24 +93,24 @@ class LegacyTextProcess {
                     }
                 }
 
-            case 13: ; 行过滤
+            case "行过滤":
                 filteredText := this.FilterLines(sourceText, Data.SearchText)
                 this.SaveSingleResultMacro(Data, tableItem, index, &NameArr, &ValueArr, filteredText)
 
-            case 14: ; 去重处理
+            case "去重处理":
                 processedText := this.RemoveDuplicates(sourceText)
                 this.SaveSingleResultMacro(Data, tableItem, index, &NameArr, &ValueArr, processedText)
 
-            case 15: ; 排序处理
+            case "排序处理":
                 processedText := this.SortText(sourceText, Data.ReverseProcess)
                 this.SaveSingleResultMacro(Data, tableItem, index, &NameArr, &ValueArr, processedText)
 
-            case 16: ; 随机文本
+            case "随机文本":
                 length := Data.SplitParam ? Integer(Data.SplitParam) : 10
                 randomText := this.GenerateRandomText(length)
                 this.SaveSingleResultMacro(Data, tableItem, index, &NameArr, &ValueArr, randomText)
 
-            case 17: ; 日期时间
+            case "日期时间":
                 format := Data.SplitParam ? Data.SplitParam : "yyyy-MM-dd HH:mm:ss"
                 dateTimeText := this.GetDateTime(format)
                 this.SaveSingleResultMacro(Data, tableItem, index, &NameArr, &ValueArr, dateTimeText)
@@ -163,12 +163,12 @@ class LegacyTextProcess {
 
     static ApplyResultAction(originalValue, newValue, action) {
         ; 应用结果处理方式
-        switch Integer(action) {
-            case 1: ; 覆盖变量
+        switch RuntimeChoice.Key("LegacyTextResultAction", action) {
+            case "覆盖变量":
                 return newValue
-            case 2: ; 追加结果
+            case "追加结果":
                 return originalValue . newValue
-            case 3: ; 前置结果
+            case "前置结果":
                 return newValue . originalValue
             default:
                 return newValue
@@ -246,12 +246,12 @@ class LegacyTextProcess {
 
     static ProcessWhitespace(text, mode) {
         ; 处理空格
-        switch mode {
-            case "1": ; 去除前后空格
+        switch RuntimeChoice.Key("LegacyWhitespace", mode) {
+            case "去除前后空格":
                 return Trim(text)
-            case "2": ; 去除所有空格
+            case "去除所有空格":
                 return StrReplace(text, " ", "")
-            case "3": ; 去除多余空格
+            case "去除多余空格":
                 return RegExReplace(text, "\s+", " ")
             default:
                 return Trim(text)
@@ -260,12 +260,12 @@ class LegacyTextProcess {
 
     static ProcessCaseConversion(text, mode) {
         ; 大小写转换
-        switch mode {
-            case "1": ; 全部大写
+        switch RuntimeChoice.Key("LegacyCaseConversion", mode) {
+            case "全部大写":
                 return StrUpper(text)
-            case "2": ; 全部小写
+            case "全部小写":
                 return StrLower(text)
-            case "3": ; 首字母大写
+            case "首字母大写":
                 return StrUpper(SubStr(text, 1, 1)) . StrLower(SubStr(text, 2))
             default:
                 return text
@@ -274,8 +274,8 @@ class LegacyTextProcess {
 
     static ProcessURLEncode(text, mode) {
         ; URL编解码
-        switch mode {
-            case "1": ; URL编码
+        switch RuntimeChoice.Key("LegacyUrlCodec", mode) {
+            case "URL编码":
                 encoded := ""
                 for char in StrSplit(text, "") {
                     code := Ord(char)
@@ -286,7 +286,7 @@ class LegacyTextProcess {
                     }
                 }
                 return encoded
-            case "2": ; URL解码
+            case "URL解码":
                 decoded := ""
                 i := 1
                 while (i <= StrLen(text)) {
@@ -308,10 +308,10 @@ class LegacyTextProcess {
 
     static ProcessBase64(text, mode) {
         ; Base64编解码（简化实现）
-        switch mode {
-            case "1": ; Base64编码
+        switch RuntimeChoice.Key("LegacyBase64Codec", mode) {
+            case "Base64编码":
                 return this.Base64Encode(text)
-            case "2": ; Base64解码
+            case "Base64解码":
                 return this.Base64Decode(text)
             default:
                 return text
@@ -374,10 +374,10 @@ class LegacyTextProcess {
 
     static GetTextStatistics(text, mode) {
         ; 文本统计
-        switch mode {
-            case "1": ; 字符数
+        switch RuntimeChoice.Key("LegacyTextStatistics", mode) {
+            case "字符数":
                 return StrLen(text)
-            case "2": ; 单词数
+            case "单词数":
                 words := StrSplit(text, [" ", "`t", "`n", "`r"])
                 count := 0
                 for word in words {
@@ -386,10 +386,10 @@ class LegacyTextProcess {
                     }
                 }
                 return count
-            case "3": ; 行数
+            case "行数":
                 lines := StrSplit(text, ["`n", "`r"])
                 return lines.Length
-            case "4": ; 中文字符数
+            case "中文字符数":
                 count := 0
                 for char in StrSplit(text, "") {
                     if (this.IsChineseChar(char)) {

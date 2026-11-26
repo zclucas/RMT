@@ -115,51 +115,50 @@ IncrementTextNumber(str) {
     }
 }
 
-; macroState 为 1 时判断本轮开始提示，为 2 时判断本轮结束提示。
-; 播放策略 3 只在宏的首轮开始或末轮结束播放。
-PlayMacroIterationCue(tableItem, itemIndex, macroState, isFirst, isLast) {
+; phase 区分开始/结束；循环提示策略只在首轮开始或末轮结束播放。
+PlayMacroIterationCue(tableItem, itemIndex, phase, isFirst, isLast) {
     item := tableItem.Items[itemIndex]
     if (!item)
         return
-    if (macroState == 1) {
-        if (item.StartTipSound == 1)
+    if (phase == "开始") {
+        if (RuntimeChoice.Key("StartTipSound", item.StartTipSound) == "无")
             return
 
-        if (item.StartTipSound == 2) {
-            PlayTipSound(1)
+        if (RuntimeChoice.Key("StartTipSound", item.StartTipSound) == "触发提示") {
+            PlayTipSound("开始")
             return
         }
 
-        if (item.StartTipSound == 3 && isFirst) {
-            PlayTipSound(1)
+        if (RuntimeChoice.Key("StartTipSound", item.StartTipSound) == "循环首次提示" && isFirst) {
+            PlayTipSound("开始")
             return
         }
     }
 
-    if (macroState == 2) {
-        if (item.EndTipSound == 1)
+    if (phase == "结束") {
+        if (RuntimeChoice.Key("EndTipSound", item.EndTipSound) == "无")
             return
 
-        if (item.EndTipSound == 2) {
-            PlayTipSound(2)
+        if (RuntimeChoice.Key("EndTipSound", item.EndTipSound) == "结束提示") {
+            PlayTipSound("结束")
             return
         }
 
-        if (item.EndTipSound == 3 && isLast) {
-            PlayTipSound(2)
+        if (RuntimeChoice.Key("EndTipSound", item.EndTipSound) == "循环结束提示" && isLast) {
+            PlayTipSound("结束")
             return
         }
     }
 }
 
-; type 为 1 开始、2 结束、3 终止。未配置独立终止音时沿用结束音。
-PlayTipSound(type) {
+; phase 为开始、结束、终止。未配置独立终止音时沿用结束音。
+PlayTipSound(phase) {
     startPath := (IsSet(MainSoftData) && MainSoftData.StartTipAudio != "" && FileExist(MainSoftData.StartTipAudio)) ? MainSoftData.StartTipAudio : StartTipAudio
     endPath := (IsSet(MainSoftData) && MainSoftData.EndTipAudio != "" && FileExist(MainSoftData.EndTipAudio)) ? MainSoftData.EndTipAudio : EndTipAudio
     stopPath := (IsSet(MainSoftData) && MainSoftData.StopTipAudio != "" && FileExist(MainSoftData.StopTipAudio)) ? MainSoftData.StopTipAudio : endPath
-    audioPathMap := Map(1, startPath, 2, endPath, 3, stopPath)
-    if (audioPathMap.Has(type) && FileExist(audioPathMap[type])) {
-        SoundPlay(audioPathMap[type])
+    audioPathMap := Map("开始", startPath, "结束", endPath, "终止", stopPath)
+    if (audioPathMap.Has(phase) && FileExist(audioPathMap[phase])) {
+        SoundPlay(audioPathMap[phase])
     }
 }
 

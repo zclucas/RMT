@@ -1,6 +1,8 @@
 #Requires AutoHotkey v2.0
 
 class TimeoutPolicy {
+    static RetryDelayMs := 500
+    static RetryPollMs := 25
     static DefaultMs := 5000
     static DefaultAction := "重试1次"
     static DefaultStatusVar := "OverState"
@@ -58,10 +60,10 @@ class TimeoutPolicy {
     }
 
     static WaitBeforeRetry(cancelled) {
-        loop 20 {
+        loop Ceil(this.RetryDelayMs / this.RetryPollMs) {
             if (cancelled())
                 return false
-            Sleep(25)
+            Sleep(this.RetryPollMs)
         }
         return !cancelled()
     }

@@ -205,10 +205,8 @@ CMDLogMovedInstallRel(abs) {
 ; 按日志文件的修改时间清理。每天 = 不是今天写的就删；每周 = 不是本周写的就删。
 ; 旧实现只清空屏幕上的指令，而且把「上次清理」记成今天、只放在内存里，重启后永远不会再清。
 CMDLogTryAutoClear(filePath, mode) {
-    if (!IsNumber(mode))
-        return false
-    mode := Integer(mode)
-    if (mode != 1 && mode != 2)
+    mode := RuntimeChoice.Key("CMDLogAutoClear", mode)
+    if (mode == "从不")
         return false
     if (filePath == "" || !FileExist(filePath))
         return false
@@ -216,7 +214,7 @@ CMDLogTryAutoClear(filePath, mode) {
     catch
         return false
     due := false
-    if (mode == 1)
+    if (mode == "每天")
         due := SubStr(fileTime, 1, 8) != SubStr(A_Now, 1, 8)
     else
         due := CMDLogWeekKey(fileTime) != CMDLogWeekKey(A_Now)

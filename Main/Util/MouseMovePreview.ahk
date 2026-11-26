@@ -26,21 +26,20 @@ PreviewMousePath(ui, kind) => MouseMovePreview.TogglePath(ui, kind)
 ; while the user is in the middle of typing a coordinate.
 ReadMousePreview(ui, kind, cx, cy, notify := false) {
     fields := kind == "delta" ? ["DeltaXCon", "DeltaYCon", "CountCon"]
-        : (kind == "pro" ? ["MouseMoveModeCombo>SelectedIndex", "ActionTypeCombo>SelectedIndex", "PosVarX", "PosVarY", "EndPosVarX", "EndPosVarY", "RefCombo>SelectedIndex", "WinInfoCon", "HumanMouseTog", "SpeedCon"]
-        : ["MouseMoveModeCombo>SelectedIndex", "PosXCon", "PosYCon"])
+        : (kind == "pro" ? ["MouseMoveModeCombo", "ActionTypeCombo", "PosVarX", "PosVarY", "EndPosVarX", "EndPosVarY", "RefCombo", "WinInfoCon", "HumanMouseTog", "SpeedCon"]
+        : ["MouseMoveModeCombo", "PosXCon", "PosYCon"])
     state := ui.Query(fields*)
-    mode := 1, action := 1, endX := 0, endY := 0, count := 1, wx := 0, wy := 0
+    mode := "相对移动", action := "移动", endX := 0, endY := 0, count := 1, wx := 0, wy := 0
     if (kind == "delta") {
         x := state.Get("DeltaXCon", ""), y := state.Get("DeltaYCon", ""), count := state.Get("CountCon", "")
     } else {
-        mode := state.Get("MouseMoveModeCombo>SelectedIndex", 0)
+        mode := CmdEnumMoveMode(state.Get("MouseMoveModeCombo", "绝对移动"))
         if (kind == "pro") {
             x := state.Get("PosVarX", ""), y := state.Get("PosVarY", "")
-            actionIdx := state.Get("ActionTypeCombo>SelectedIndex", 0)
-            action := (mode == 0 && actionIdx == 3) ? 5 : ((mode == 0 && actionIdx == 4) ? 4 : actionIdx + 1)
-            if (action == 4 && mode == 0)
+            action := CmdEnumZh(state.Get("ActionTypeCombo", "移动"), CmdEnumMMActionNames())
+            if (action == "A到B拖拽" && mode == "绝对移动")
                 endX := state.Get("EndPosVarX", ""), endY := state.Get("EndPosVarY", "")
-            if (mode == 0 && state.Get("RefCombo>SelectedIndex", 0) == 1) {
+            if (mode == "绝对移动" && CmdEnumRef(state.Get("RefCombo", "屏幕")) == "窗口") {
                 hwnds := GetHwndList(GetLangKey(state.Get("WinInfoCon", "")))
                 if (!IsObject(hwnds) || hwnds.Length == 0) {
                     if (notify)
@@ -73,18 +72,20 @@ ReadMousePreview(ui, kind, cx, cy, notify := false) {
 }
 
 ; Numeric geometry follows the executor: relative moves truncate, absolute moves round.
-MousePreviewPoints(kind, x, y, cx, cy, mode := 0, action := 1, endX := 0, endY := 0, count := 1, wx := 0, wy := 0) {
+MousePreviewPoints(kind, x, y, cx, cy, mode := "绝对移动", action := "移动", endX := 0, endY := 0, count := 1, wx := 0, wy := 0) {
     if (kind == "delta") {
         steps := Max(1, Integer(count)), dx := Integer(x), dy := Integer(y)
         ; 增量值表示本次总偏移，次数只决定分成多少个等量步骤。
         stepX := dx / steps, stepY := dy / steps
         return {X1: cx, Y1: cy, X2: cx + dx, Y2: cy + dy, StepX: stepX, StepY: stepY, Steps: steps}
     }
-    if (mode == 1)
+    mode := CmdEnumMoveMode(mode)
+    action := CmdEnumZh(action, CmdEnumMMActionNames())
+    if (mode == "相对移动")
         return {X1: cx, Y1: cy, X2: cx + Integer(x), Y2: cy + Integer(y)}
-    if (kind == "pro" && action == 4)
+    if (kind == "pro" && action == "A到B拖拽")
         return {X1: Round(wx + x), Y1: Round(wy + y), X2: Round(wx + endX), Y2: Round(wy + endY)}
-    if (kind == "pro" && action == 5)
+    if (kind == "pro" && action == "拖拽")
         return {X1: cx, Y1: cy, X2: Round(wx + x), Y2: Round(wy + y)}
     return {X1: cx, Y1: cy, X2: Round(wx + x), Y2: Round(wy + y)}
 }
@@ -254,7 +255,7 @@ class MouseMovePreview {
             return
         ; Query 会等待界面进程，期间按钮/关闭事件可能清空或切换预览。
         ; 保留本轮编辑器引用，返回后核对代次，过期回调不得继续写回或重绘。
-        state := editor.Query("CountCon", "MouseMoveModeCombo>SelectedIndex", "ActionTypeCombo>SelectedIndex", "RefCombo>SelectedIndex", "WinInfoCon")
+        state := editor.Query("CountCon", "MouseMoveModeCombo", "ActionTypeCombo", "RefCombo", "WinInfoCon")
         if (!this.IsCurrentEdit(editor, revision))
             return
         updates := []
@@ -267,15 +268,15 @@ class MouseMovePreview {
             preview.StepX := (p2.x - p1.x) / count
             preview.StepY := (p2.y - p1.y) / count
         } else {
-            mode := state.Get("MouseMoveModeCombo>SelectedIndex", 0)
+            mode := CmdEnumMoveMode(state.Get("MouseMoveModeCombo", "绝对移动"))
             if (kind == "move") {
-                updates.Push({ControlName: "PosXCon", PropertyName: "Text", Value: String(Round(mode == 1 ? p2.x - p1.x : p2.x))},
-                    {ControlName: "PosYCon", PropertyName: "Text", Value: String(Round(mode == 1 ? p2.y - p1.y : p2.y))})
-            } else if (mode == 1) {
+                updates.Push({ControlName: "PosXCon", PropertyName: "Text", Value: String(Round(mode == "相对移动" ? p2.x - p1.x : p2.x))},
+                    {ControlName: "PosYCon", PropertyName: "Text", Value: String(Round(mode == "相对移动" ? p2.y - p1.y : p2.y))})
+            } else if (mode == "相对移动") {
                 updates.Push({ControlName: "PosVarX", PropertyName: "Text", Value: String(Round(p2.x - p1.x))}, {ControlName: "PosVarY", PropertyName: "Text", Value: String(Round(p2.y - p1.y))})
             } else {
                 ox := 0, oy := 0
-                if (state.Get("RefCombo>SelectedIndex", 0) == 1) {
+                if (CmdEnumRef(state.Get("RefCombo", "屏幕")) == "窗口") {
                     try {
                         hwnds := GetHwndList(GetLangKey(state.Get("WinInfoCon", "")))
                         if (IsObject(hwnds) && hwnds.Length)
@@ -283,7 +284,7 @@ class MouseMovePreview {
                     }
                 }
                 ; 普通绝对移动/拖拽只写目标点；A 到 B 拖拽同时写入起点。
-                start := state.Get("ActionTypeCombo>SelectedIndex", 0) == 4 ? p1 : p2
+                start := CmdEnumZh(state.Get("ActionTypeCombo", "移动"), CmdEnumMMActionNames()) == "A到B拖拽" ? p1 : p2
                 updates.Push({ControlName: "PosVarX", PropertyName: "Text", Value: String(Round(start.x - ox))}, {ControlName: "PosVarY", PropertyName: "Text", Value: String(Round(start.y - oy))},
                     {ControlName: "EndPosVarX", PropertyName: "Text", Value: String(Round(p2.x - ox))}, {ControlName: "EndPosVarY", PropertyName: "Text", Value: String(Round(p2.y - oy))})
             }

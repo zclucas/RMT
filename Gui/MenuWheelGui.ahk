@@ -205,7 +205,7 @@ class MenuWheelGui {
             {ControlName: "Resource", PropertyName: "WheelNormalText", Value: this.normalText},
             {ControlName: "Resource", PropertyName: "WheelHoverText", Value: this.hoverText}
         ]
-        if (this.selectMode == 2)
+        if (RuntimeChoice.Key("MenuWheelSelectMode", this.selectMode) == "划线选择")
             updates.Push({ControlName: "SwipeLine", PropertyName: "Stroke", Value: this.swipeLineColor})
         try this.ui.BatchUpdate(updates)
     }
@@ -481,7 +481,7 @@ class MenuWheelGui {
         }
 
         ; 划线模式：在主轮盘 Canvas 上添加划线（不创建独立窗口，避免遮挡事件）
-        if (this.selectMode == 2) {
+        if (RuntimeChoice.Key("MenuWheelSelectMode", this.selectMode) == "划线选择") {
             swipeLine := canvas.Add("Line").Name("SwipeLine")
             swipeLine.X1(cx).Y1(cy).X2(cx).Y2(cy)
             swipeLine.Stroke(this.swipeLineColor).StrokeThickness(3).StrokeDashArray("4,2")
@@ -499,7 +499,7 @@ class MenuWheelGui {
             this.ui.OnEvent("Wedge_" idx, "PreviewMouseLeftButtonDown", h.Select)
             this.ui.OnEvent("IconBg_" idx, "PreviewMouseLeftButtonDown", h.Select)
             ; 划线模式需要悬停触发选中；MouseMove 限 30fps（leading+trailing，末帧必到）
-            if (this.selectMode == 2) {
+            if (RuntimeChoice.Key("MenuWheelSelectMode", this.selectMode) == "划线选择") {
                 this.ui.OnEvent("Wedge_" idx, "MouseMove", h.Hover).Limit(30)
                 this.ui.OnEvent("IconBg_" idx, "MouseMove", h.Hover).Limit(30)
                 this.ui.OnEvent("Wedge_" idx, "MouseLeave", h.Leave)
@@ -547,7 +547,7 @@ class MenuWheelGui {
             }
         }
         ; 光标跟随由引擎处理，与初始状态点合并为一次更新。
-        if (this.selectMode == 2)
+        if (RuntimeChoice.Key("MenuWheelSelectMode", this.selectMode) == "划线选择")
             updates.Push({ControlName: "SwipeLine", PropertyName: "FollowCursor", Value: "1"})
         if (updates.Length)
             ui.BatchUpdate(updates)
@@ -598,7 +598,7 @@ class MenuWheelGui {
         if (!this.isOpen || this.closed)
             return
         this.hoveredIdx := idx
-        if (this.selectMode == 2 && !this.swipeTriggered)
+        if (RuntimeChoice.Key("MenuWheelSelectMode", this.selectMode) == "划线选择" && !this.swipeTriggered)
             this.DoSelect(idx, "")
     }
 

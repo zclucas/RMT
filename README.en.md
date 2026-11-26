@@ -1,8 +1,8 @@
 <h1 align="center">🐇 RMT (RuoMengTu)</h1>
 
 <p align="center">
-  <b>A Free & Open-Source Macro Automation Tool Based on AutoHotkey v2</b><br>
-  Let the code do the boring work — I have more meaningful things to do.
+  <b>A Visual Automation Tool Based on AutoHotkey v2</b><br>
+  Let macros do the boring work — so you can do something more meaningful.
 </p>
 
 <p align="center">
@@ -19,14 +19,21 @@
 
 ## 🧩 Introduction
 
-**RMT (RuoMengTu)** is a **free and open-source macro automation tool** based on **AutoHotkey v2**,  
-designed to help users easily create and run various automation tasks through simple configuration.
+**RMT (RuoMengTu) is a free and open-source visual automation tool for Windows. Use recordings, commands, and flowcharts to combine keyboard and mouse actions, image recognition, browser interactions, and office tasks into repeatable automated workflows.**
+
+Built on **AutoHotkey v2**, RMT lets you create, run, and share automated workflows through configuration interfaces and visual editors.
 
 ✨ **Key Features:**
-- ⌨️ Record and play **keyboard / mouse / gamepad macros**
-- 🔍 **Image recognition, color detection, and OCR (text recognition)**
-- ⚙️ **Logic control, conditional branching, and multithreaded execution**
-- 💡 Perfect for **gaming assistance, office automation, and custom scripting**
+
+- ⌨️ **Action recording and execution:** Record, edit, and run keyboard, mouse, and gamepad actions.
+- 🧩 **Visual workflow editing:** Combine variables, conditions, loops, branches, and macro calls using commands and flowcharts, with support for multithreaded execution.
+- 🎯 **Multiple trigger methods:** Use hotkeys, hotstrings, schedules, gestures, radial menus, and custom macro panels.
+- 🔍 **Visual recognition:** Detect images, colors, text with OCR, and objects with YOLO, then act on the results.
+- 🪟 **Desktop and window automation:** Manage windows, pick and interact with controls, and perform background operations on specified windows.
+- 🌐 **Browser automation:** Pick web elements, click and enter text, extract data, manage tabs, and execute JavaScript.
+- 📊 **Office and data processing:** Read and write Excel files, work with files, process text and arrays, and send network requests.
+- 🤖 **AI assistance:** Edit macro parameters with AI assistance and make decisions based on screen text, screenshots, or questions.
+- 🛠️ **Debugging and configuration sharing:** Use breakpoints, variable monitoring, execution logs, and error diagnostics; import, export, and share configurations with the community.
 
 > 💬 Whether it's repetitive clicks or complex workflows, RMT lets your computer *work automatically*.
 

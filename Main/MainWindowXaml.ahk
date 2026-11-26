@@ -28,7 +28,7 @@ class MainWin {
         this._useVirtual := Map()
         this._useVirtualBuilt := false
         this.aiAssistOpen := false
-        this.sidePanelMode := 1
+        this.sidePanelMode := "逻辑树"
         this.aiPanelW := this._AiPanelDefaultW()
         this._aiDrag := false
         this._aiDragStartW := 0

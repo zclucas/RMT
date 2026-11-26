@@ -303,7 +303,7 @@ class BGKeyGui {
 
     Init(cmd) {
         cmdArr := cmd != "" ? StrSplit(cmd, "_") : []
-        this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : GetCMDSerialStr("后台按键")
+        this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : AllocateCommandSerial("后台按键")
         this.Data := GetMacroCMDData(this.SerialStr)
         this._autoRemark := ReadCommandAutoRemark(this.Data, GenerateCommandAutoRemark)
 
@@ -388,7 +388,7 @@ class BGKeyGui {
             return
 
         this.SaveBGKeyData()
-        OnTriggerSepcialItemMacro(this.GetCommandStr())
+        RunEditorMacroPreview(this.GetCommandStr())
     }
 
     ToggleFunc(state) {

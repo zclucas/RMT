@@ -185,7 +185,7 @@ class TranslateGui {
 
     Init(cmd) {
         parts := cmd != "" ? StrSplit(cmd, "_") : []
-        this.SerialStr := parts.Length ? parts[1] : GetCMDSerialStr("翻译")
+        this.SerialStr := parts.Length ? parts[1] : AllocateCommandSerial("翻译")
         this.Data := GetMacroCMDData(this.SerialStr)
         this._ComboPush("Remark", "Text", parts.Length >= 2 ? parts[2] : "")
 

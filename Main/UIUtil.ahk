@@ -931,7 +931,7 @@ class ScreenAreaPreview {
                 this.Hide()
                 return
             }
-            start := GetWinPos(rect[1], rect[2], hwnd), end := GetWinPos(rect[3], rect[4], hwnd)
+            start := ScreenPointToWindowClient(rect[1], rect[2], hwnd), end := ScreenPointToWindowClient(rect[3], rect[4], hwnd)
             rect := [start[1], start[2], end[1], end[2]]
         }
         Critical("Off")

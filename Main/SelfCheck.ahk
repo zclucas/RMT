@@ -421,7 +421,7 @@ RuntimePrepareAsset(name, hint, expectSize := 0) {
     result := ""
     try {
         url := RmtAssetsBaseUrl("Patch") name
-        result := RmtDownloadManager.DownloadBlocking(url, path, 3600, pg)
+        result := DownloadResourceWithRetry(url, path, 3600, pg)
     } finally pg.Close()
 
     if (result = "ok")
@@ -687,7 +687,8 @@ SelfCheckMissingFiles() {
     }
 }
 
-DownloadAsync(url, savePath, timeoutSec, pg) {
+; 等待下载结束并处理进度/取消；返回 ok、cancel 或 fail，并非异步任务句柄。
+DownloadResourceWithRetry(url, savePath, timeoutSec, pg) {
     maxRetry := 3
     ; Win7 走网络基本必然失败（TLS 1.2 默认未启用 + 缺 GitHub/CDN 的根证书），
     ; 按原来的 3 轮长超时会把界面挂住十几分钟。这里压到 1 轮、最长 120 秒，
@@ -707,7 +708,7 @@ DownloadAsync(url, savePath, timeoutSec, pg) {
         if (A_Index > 1)
             pg.Report(Format("重试 ({}/{})...", A_Index - 1, maxRetry - 1), pg.percent)
 
-        result := DownloadOnce(A_Index > 1 && alternative != "" ? alternative : url, savePath, timeoutSec, pg)
+        result := DownloadResourceOnce(A_Index > 1 && alternative != "" ? alternative : url, savePath, timeoutSec, pg)
         if (result == "ok")
             return "ok"
         if (result == "cancel")
@@ -721,11 +722,11 @@ DownloadAsync(url, savePath, timeoutSec, pg) {
     return "fail"
 }
 
-DownloadOnce(url, savePath, timeoutSec, pg) {
+DownloadResourceOnce(url, savePath, timeoutSec, pg) {
     systemDir := A_PtrSize == 4 && A_Is64bitOS ? "\Sysnative" : "\System32"
     curl := A_WinDir systemDir "\curl.exe"
     if (FileExist(curl) && (RmtIsAssetUrl(url) || HasMethod(pg, "SetDownloadAlternative")))
-        return DownloadWithProgress(curl, url, savePath, timeoutSec, pg)
+        return DownloadResourceWithCurl(curl, url, savePath, timeoutSec, pg)
 
     try {
         req := ComObject("Msxml2.XMLHTTP")
@@ -767,7 +768,7 @@ DownloadOnce(url, savePath, timeoutSec, pg) {
     }
 }
 
-DownloadWithProgress(curl, url, savePath, timeoutSec, pg) {
+DownloadResourceWithCurl(curl, url, savePath, timeoutSec, pg) {
     headers := savePath ".headers"
     cmd := Format('"{}" -q -L --fail -s -S --suppress-connect-headers --max-time {} -D "{}" -o "{}" "{}"',
         curl, timeoutSec, headers, savePath, url)
@@ -826,7 +827,7 @@ DownloadRmtAssetBundle(url, files, pg) {
     try {
         DirCreate(stage)
         payload := stage "\download.zip"
-        result := RmtDownloadManager.DownloadBlocking(url, payload, 120, pg)
+        result := DownloadResourceWithRetry(url, payload, 120, pg)
         if (result != "ok")
             return result
         return RmtExtractAssetBundle(payload, files, pg, stage)
@@ -947,7 +948,7 @@ VcRuntimeInstallRedist() {
                 pg := RmtProgress("RMT 运行库修复", "正在下载官方 VC++ 运行库…", XamlWin.ActiveOwner(), "取消下载")
                 pg.Show()
                 try {
-                    result := RmtDownloadManager.DownloadBlocking(url, exePath, 600, pg)
+                    result := DownloadResourceWithRetry(url, exePath, 600, pg)
                 } finally pg.Close()
                 if (result = "ok" || result = "cancel")
                     break
@@ -1077,12 +1078,12 @@ DirectXInstallFromRedist() {
         if (offline != "") {
             FileCopy(offline, redist, true)
         } else {
-            ; 约 95 MB，超时给足；DownloadAsync 自带 3 次重试
+            ; 约 95 MB，超时给足；DownloadResourceWithRetry 自带 3 次重试
             pg := RmtProgress("RMT 手柄组件修复", "正在下载官方 DirectX 运行库…", XamlWin.ActiveOwner(), "取消下载")
             pg.Show()
             result := ""
             try {
-                result := RmtDownloadManager.DownloadBlocking(DirectXAssetUrl(), redist, 1800, pg)
+                result := DownloadResourceWithRetry(DirectXAssetUrl(), redist, 1800, pg)
             } finally pg.Close()
             if (result != "ok")
                 return false
@@ -1246,7 +1247,7 @@ IconFontStartupCheck() {
         pg := NativeProgress("RMT 图标字体", "正在补齐图标字体…")
         pg.Show()
         try {
-            result := RmtDownloadManager.DownloadBlocking(IconFontAssetUrl(), cache ".download", 20, pg)
+            result := DownloadResourceWithRetry(IconFontAssetUrl(), cache ".download", 20, pg)
         } finally pg.Close()
         if (result == "ok") {
             FileMove(cache ".download", cache, true)

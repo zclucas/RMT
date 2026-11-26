@@ -1,14 +1,13 @@
 #Requires AutoHotkey v2.0
 
 class RmtDownloadManager {
+    static PollIntervalMs := 500
+    static ExitGraceMs := 5000 ; 给下载子进程收尾时间，单位毫秒。
+    static StillActiveExitCode := 259 ; Win32 STILL_ACTIVE，不能当作下载结果。
     static jobs := Map()
     static queue := []
     static activeId := ""
     static timer := ""
-
-    static DownloadBlocking(url, targetPath, timeoutSec, progress) {
-        return DownloadAsync(url, targetPath, timeoutSec, progress)
-    }
 
     static Enqueue(name, urls, targetPath, minBytes := 0, timeoutSec := 7200, onComplete := 0) {
         if (!IsObject(urls))
@@ -197,7 +196,7 @@ class RmtDownloadManager {
         }
         if (this.activeId != "" && this.timer == "") {
             this.timer := ObjBindMethod(this, "_Poll")
-            SetTimer(this.timer, 500)
+            SetTimer(this.timer, this.PollIntervalMs)
         } else if (this.activeId == "" && this.timer != "") {
             SetTimer(this.timer, 0)
             this.timer := ""
@@ -242,7 +241,7 @@ class RmtDownloadManager {
         if (!job.expectedBytes)
             job.expectedBytes := RmtDownloadContentLength(job.headersPath)
 
-        if (A_TickCount - job.startedAt > job.timeoutSec * 1000 + 5000) {
+        if (A_TickCount - job.startedAt > job.timeoutSec * 1000 + this.ExitGraceMs) {
             if (job.pid && ProcessExist(job.pid))
                 try ProcessClose(job.pid)
             this._CloseProcessHandle(job)
@@ -250,11 +249,11 @@ class RmtDownloadManager {
             return
         }
 
-        exitCode := 259
+        exitCode := this.StillActiveExitCode
         hasExitCode := job.processHandle
             ? DllCall("GetExitCodeProcess", "Ptr", job.processHandle, "UInt*", &exitCode, "Int")
             : false
-        if (hasExitCode && exitCode == 259)
+        if (hasExitCode && exitCode == this.StillActiveExitCode)
             return
         if (!hasExitCode && job.pid && ProcessExist(job.pid))
             return

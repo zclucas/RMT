@@ -272,7 +272,7 @@ class ExVariableGui {
 
     Init(cmd) {
         cmdArr := cmd != "" ? StrSplit(cmd, "_") : []
-        this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : GetCMDSerialStr("变量提取")
+        this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : AllocateCommandSerial("变量提取")
         this.ui.Update("RemarkCon", "Text", cmdArr.Length >= 2 ? cmdArr[2] : "")
         this.Data := GetMacroCMDData(this.SerialStr)
         this._autoRemark := ReadCommandAutoRemark(this.Data, GenerateCommandAutoRemark)
@@ -598,7 +598,7 @@ class ExVariableGui {
         tableItem := MySoftData.SpecialTableItem
         if (tableItem.Items.Length == 0) {
             item := MacroItem()
-            item.ID := GetCMDSerialStr("Item")
+            item.ID := AllocateCommandSerial("Item")
             tableItem.Items.Push(item)
             tableItem.RebuildIndex()
         }

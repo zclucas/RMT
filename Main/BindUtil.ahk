@@ -184,7 +184,7 @@ OnFoldSwitchHotkey(tableIndex, foldIndex, *) {
     HotReloadPublish(tableIndex, 0)
     tip := (fold.ForbidState ? GetLang("模块已禁用：") : GetLang("模块已启用：")) (fold.Remark == "" ? fold.ID : fold.Remark)
     if (MySoftData.CMDTip)
-        MyCMDReportAciton(tip)
+        CommandReportHandler(tip)
     ; 同步主界面折叠行「禁用」按钮态
     try {
         if (IsSet(MyMainWin) && IsObject(MyMainWin) && IsObject(MyMainWin.ui)) {
@@ -266,7 +266,7 @@ OnSuspendHotkey(*) {
     UIControls.SuspendToggle.Value := MainSoftData.IsSuspend
     tipStr := MainSoftData.IsSuspend ? GetLang("软件休眠") : GetLang("取消软件休眠")
     if (MySoftData.CMDTip)
-        MyCMDReportAciton(tipStr)
+        CommandReportHandler(tipStr)
 }
 
 OnPauseHotKey(args*) {
@@ -294,7 +294,7 @@ OnPauseHotKey(args*) {
 
     tipStr := MainSoftData.IsPause ? GetLang("暂停所有宏") : GetLang("取消所有暂停")
     if (MySoftData.CMDTip)
-        MyCMDReportAciton(tipStr)
+        CommandReportHandler(tipStr)
 
     if (MySoftData.SpecialTableItem.Items.Length >= 1)
         MySoftData.SpecialTableItem.Items[1].Pause := MainSoftData.IsPause
@@ -333,7 +333,7 @@ OnKillAllMacro(args*) {
         for tableItem in MySoftData.TableInfo {
             for index, item in tableItem.Items {
                 if (item.ColorState == 1 || item.ColorState == 2) {
-                    if (item.StopTipSound == 2)
+                    if (RuntimeChoice.Key("StopTipSound", item.StopTipSound) == "终止提示")
                         shouldPlayStopTip := true
                     MyStopMacro(tableItem, index)
                 }
@@ -346,11 +346,11 @@ OnKillAllMacro(args*) {
     }
 
     if (shouldPlayStopTip)
-        PlayTipSound(3)
+        PlayTipSound("终止")
 
     tipStr := GetLang("终止所有宏")
     if (MySoftData.CMDTip)
-        MyCMDReportAciton(tipStr)
+        CommandReportHandler(tipStr)
 }
 
 OnToolCheckHotkey(*) {
@@ -398,7 +398,7 @@ SetToolCheckInfo() {
         MainSoftData.Color := StrReplace(PixelGetColor(mouseX, mouseY, "Slow"), "0x", "")
 
         ; 窗口位置/尺寸用于描述外框，鼠标窗口坐标使用客户区原点。
-        WinPosArr := GetWinPos(mouseX, mouseY, winId)
+        WinPosArr := ScreenPointToWindowClient(mouseX, mouseY, winId)
         MainSoftData.WinPosStr := WinPosArr[1] . "," . WinPosArr[2]
     }
     RefreshToolUI()
@@ -433,12 +433,12 @@ OnClickCMDTipToggle(*) {
 }
 
 OnToolTextFilterScreenShot(*) {
-    if (MainSoftData.ScreenShotType == 1) {
+    if (RuntimeChoice.Key("ScreenShotType", MainSoftData.ScreenShotType) == "微软截图") {
         SetClipboard("")
         Run("ms-screenclip:")
         SetTimer(OnToolTextCheckScreenShot, 500)
     }
-    else if (MainSoftData.ScreenShotType == 3) {
+    else if (RuntimeChoice.Key("ScreenShotType", MainSoftData.ScreenShotType) == "SC截图") {
         RunScreenCapture(OnToolTextCheckScreenShot)
     }
     else {
@@ -447,10 +447,10 @@ OnToolTextFilterScreenShot(*) {
 }
 
 OnToolScreenShot(*) {
-    if (MainSoftData.ScreenShotType == 1) {
+    if (RuntimeChoice.Key("ScreenShotType", MainSoftData.ScreenShotType) == "微软截图") {
         Run("ms-screenclip:")
     }
-    else if (MainSoftData.ScreenShotType == 3) {
+    else if (RuntimeChoice.Key("ScreenShotType", MainSoftData.ScreenShotType) == "SC截图") {
         scPath := A_WorkingDir "\Plugins\ScreenCapture\ScreenCapture.exe"
         if !FileExist(scPath)
             return
@@ -779,7 +779,7 @@ BindMenuHotKey() {
 
 ; 界面宏模块级触发键：走 TriggerKeyMap 统一分发（与菜单宏一致）
 ; 不可单独 Hotkey→TogglePanel：与按键宏共用同一键时会被 BindTabHotKey 覆盖，
-; 且旧逻辑在 TriggerKeyInfo 里误把 macroType=3 当成菜单宏打开轮盘。
+; 且旧逻辑在 TriggerKeyInfo 里误把 targetKind=3 当成菜单宏打开轮盘。
 BindUIPanelHotKey() {
     tableItem := GetTableBySymbol("UI")
     if (!tableItem)
@@ -985,7 +985,7 @@ InitTriggerKeyMap() {
                 MySoftData.TriggerKeyMap[key] := TriggerKeyData(key)
             }
             info := TriggerKeyInfo()
-            info.macroType := 1
+            info.targetKind := "条目宏"
             info.tableID := tableItem.ID
             info.itemID := item.ID
             MySoftData.TriggerKeyMap[key].AddData(info)
@@ -1017,7 +1017,7 @@ InitTriggerKeyMap() {
             }
             info := TriggerKeyInfo()
             info.tableID := tableItem.ID
-            info.macroType := 2
+            info.targetKind := "菜单模块"
             info.foldID := fold.ID
             MySoftData.TriggerKeyMap[key].AddData(info)
 
@@ -1048,7 +1048,7 @@ InitTriggerKeyMap() {
             }
             info := TriggerKeyInfo()
             info.tableID := tableItem.ID
-            info.macroType := 3  ; 界面宏面板类型
+            info.targetKind := "界面模块"  ; 界面宏面板类型
             info.foldID := fold.ID
             MySoftData.TriggerKeyMap[key].AddData(info)
         }

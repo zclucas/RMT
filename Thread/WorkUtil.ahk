@@ -7,10 +7,10 @@
             ExitApp(1)
         global workIndex := Integer(A_Args[2])
         global parentHwnd := Integer(A_Args[3])
-        global shmTx := SharedMemory(1048576 + 192, Integer(A_Args[4]))
-        global shmRx := SharedMemory(1048576 + 192, Integer(A_Args[5]))
-        global tx := RingBuffer(shmTx.ptr, 1048576)
-        global rx := RingBuffer(shmRx.ptr, 1048576)
+        global shmTx := SharedMemory(WorkerIpcLayout.RingMappingBytes(), Integer(A_Args[4]))
+        global shmRx := SharedMemory(WorkerIpcLayout.RingMappingBytes(), Integer(A_Args[5]))
+        global tx := RingBuffer(shmTx.ptr, WorkerIpcLayout.ChannelCapacityBytes)
+        global rx := RingBuffer(shmRx.ptr, WorkerIpcLayout.ChannelCapacityBytes)
 
         ; 变量同步合并缓冲，见 QueueVariSync
         global VariSyncPending := Map()
@@ -21,7 +21,7 @@
         global CmdReportScheduled := false
 
         ; 悬浮窗最新帧单槽，见 WorkHudOutput：不进事件队列，写入即覆盖
-        global shmHud := SharedMemory(65536 + 64, Integer(A_Args[6]))
+        global shmHud := SharedMemory(WorkerIpcLayout.HudMappingBytes(), Integer(A_Args[6]))
         global hudSlotPtr := shmHud.ptr
         global hudSlotSeq := NumGet(hudSlotPtr, 4, "UInt")
         global hudPostTick := 0
@@ -497,8 +497,8 @@ WorkDelGlobalVariable(names) {
         item := GetItemByIndex(tableItem, itemIndex)
         tID := IsObject(tableItem) ? tableItem.ID : String(tableItem)
         iID := WorkResolveItemID(tableItem, itemIndex)
-        if (playStopTip && IsObject(item) && item.StopTipSound == 2)
-            PlayTipSound(3)
+        if (playStopTip && IsObject(item) && RuntimeChoice.Key("StopTipSound", item.StopTipSound) == "终止提示")
+            PlayTipSound("终止")
         if (workerTask && workerTask.item && workerTask.table.ID == tID && workerTask.item.ID == iID) {
             workerTask.stopped := true
             KillTableItemMacro(workerTask.table, workerTask.index)
@@ -639,16 +639,16 @@ WorkDelGlobalVariable(names) {
         ; 槽格式：serial \x01 tID \x01 iID \x01 content
         payload := serialStr Chr(1) tID Chr(1) iID Chr(1) content
         size := StrPut(payload, "UTF-8")
-        if (size <= 1 || size > 65000)
+        if (size <= 1 || size > WorkerIpcLayout.HudMaxPayloadBytes)
             return
         buf := Buffer(size)
         StrPut(payload, buf, "UTF-8")
 
         ; 先写内容，再写长度与序号：主进程读到的必为完整帧
-        DllCall("RtlMoveMemory", "Ptr", hudSlotPtr + 16, "Ptr", buf.Ptr, "Ptr", size)
-        NumPut("UInt", size - 1, hudSlotPtr, 8)
+        DllCall("RtlMoveMemory", "Ptr", hudSlotPtr + WorkerIpcLayout.HudPayloadOffset, "Ptr", buf.Ptr, "Ptr", size)
+        NumPut("UInt", size - 1, hudSlotPtr, WorkerIpcLayout.HudLengthOffset)
         hudSlotSeq += 1
-        NumPut("UInt", hudSlotSeq, hudSlotPtr, 4)
+        NumPut("UInt", hudSlotSeq, hudSlotPtr, WorkerIpcLayout.HudSequenceOffset)
 
         ; 上一帧未被取走时不再通知：天然合并，最多保留一条未处理通知。
         ;
@@ -656,13 +656,13 @@ WorkDelGlobalVariable(names) {
         ; 避免紧循环中每帧重复失败。数据已写入槽，主进程读取时仍为最新值，
         ; 丢失的仅是唤醒动作。
         now := A_TickCount
-        if (NumGet(hudSlotPtr, 0, "UInt") == 0) {
+        if (NumGet(hudSlotPtr, WorkerIpcLayout.HudPendingOffset, "UInt") == 0) {
             if (now - hudFailTick >= 300) {
-                NumPut("UInt", 1, hudSlotPtr, 0)
+                NumPut("UInt", 1, hudSlotPtr, WorkerIpcLayout.HudPendingOffset)
                 if (MsgPostHandler(WM_WORKER_TO_MASTER, workIndex, 0)) {
                     hudPostTick := now
                 } else {
-                    NumPut("UInt", 0, hudSlotPtr, 0)
+                    NumPut("UInt", 0, hudSlotPtr, WorkerIpcLayout.HudPendingOffset)
                     hudFailTick := now
                 }
             }
@@ -671,7 +671,7 @@ WorkDelGlobalVariable(names) {
             if (MsgPostHandler(WM_WORKER_TO_MASTER, workIndex, 0)) {
                 hudPostTick := now
             } else {
-                NumPut("UInt", 0, hudSlotPtr, 0)
+                NumPut("UInt", 0, hudSlotPtr, WorkerIpcLayout.HudPendingOffset)
                 hudFailTick := now
             }
         }
@@ -711,16 +711,16 @@ WorkDelGlobalVariable(names) {
     ; 在槽尾句柄表中查找 serial 对应的引擎窗口句柄，未登记返回 0
     WorkHudFindHwnd(serialStr) {
         global hudSlotPtr
-        try key := Integer(serialStr)
+        try commandId := Integer(serialStr)
         catch
             return 0
-        count := NumGet(hudSlotPtr, 65024, "UInt")
-        if (count > 35)
+        count := NumGet(hudSlotPtr, WorkerIpcLayout.HudHandleCountOffset, "UInt")
+        if (count > WorkerIpcLayout.HudMaxHandles)
             return 0
         loop count {
-            off := 65032 + (A_Index - 1) * 16
-            if (NumGet(hudSlotPtr, off, "UInt") == key)
-                return NumGet(hudSlotPtr, off + 8, "Ptr")
+            entryOffset := WorkerIpcLayout.HudHandleTableOffset + (A_Index - 1) * WorkerIpcLayout.HudHandleEntryBytes
+            if (NumGet(hudSlotPtr, entryOffset, "UInt") == commandId)
+                return NumGet(hudSlotPtr, entryOffset + WorkerIpcLayout.HudHandleValueOffset, "Ptr")
         }
         return 0
     }

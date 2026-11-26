@@ -240,7 +240,7 @@ class WindowManageGui {
     Init(cmd) {
         cmdArr := cmd != "" ? StrSplit(cmd, "_") : []
         DLVariableArr := GetGuiVarArr()
-        this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : GetCMDSerialStr(this.CmdKey)
+        this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : AllocateCommandSerial(this.CmdKey)
         this._ComboPush("RemarkCon", "Text", cmdArr.Length >= 2 ? cmdArr[2] : "")
         this.Data := GetMacroCMDData(this.SerialStr)
         this._autoRemark := ReadCommandAutoRemark(this.Data, GenerateCommandAutoRemark)
@@ -380,7 +380,7 @@ class WindowManageGui {
         this._ComboPush("InfoResultsGrid", "Visibility", fields.Length ? "Visible" : "Collapsed")
         if (fields.Length) {
             resultText := resultText ?? (this._syncing ? this.Data.ResultVar1 : this.ui.Query("InfoResultCon1"))
-            this._SetCombo("InfoResultCon1", actionKey == "匹配窗口列表" ? GetGuiArrNameArr() : GetGuiVarArr(), resultText)
+            this._SetCombo("InfoResultCon1", actionKey == "匹配窗口列表" ? GetArrayVariableNames() : GetGuiVarArr(), resultText)
         }
         Loop 7 {
             this._ComboPush("InfoResultRow" A_Index, "Visibility", A_Index <= fields.Length ? "Visible" : "Collapsed")
@@ -565,14 +565,14 @@ class WindowManageGui {
         this.SaveData()
         CommandStr := this.GetCommandStr()
         if (!isInfo) {
-            OnTriggerSepcialItemMacro(CommandStr)
+            RunEditorMacroPreview(CommandStr)
             return
         }
 
         preview := {}
         owner := this.Hwnd()
         action := this.Data.ActionType
-        OnTriggerSepcialItemMacro(CommandStr, false, this.WindowBindingContext, preview)
+        RunEditorMacroPreview(CommandStr, false, this.WindowBindingContext, preview)
         this.ShowInfoPreview(action, preview, owner)
     }
 

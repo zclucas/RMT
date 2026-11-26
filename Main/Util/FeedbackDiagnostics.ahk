@@ -2,6 +2,8 @@
 
 ; 反馈上下文：只在内存保留最近十步，不读取控件值、窗口标题或玩家命名。
 class FeedbackDiagnostics {
+    static MaxSteps := 10
+    static MergeWindowMs := 1000
     static Steps := []
     static PendingOpen := Map()
     static SettingNames := Map(
@@ -265,11 +267,11 @@ class FeedbackDiagnostics {
             step := {time: FormatTime(, "HH:mm:ss"), text: description, key: mergeKey, tick: A_TickCount}
             n := this.Steps.Length
             ; 同一次拖动/同一控件的连续变化只占一步；普通重复点击仍独立记录。
-            if (n && mergeKey != "" && this.Steps[n].key == mergeKey && A_TickCount - this.Steps[n].tick < 1000)
+            if (n && mergeKey != "" && this.Steps[n].key == mergeKey && A_TickCount - this.Steps[n].tick < this.MergeWindowMs)
                 this.Steps[n] := step
             else
                 this.Steps.Push(step)
-            while (this.Steps.Length > 10)
+            while (this.Steps.Length > this.MaxSteps)
                 this.Steps.RemoveAt(1)
         } finally {
             Critical(wasCritical)

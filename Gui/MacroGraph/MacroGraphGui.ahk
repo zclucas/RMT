@@ -181,7 +181,7 @@ class MacroGraphGui {
         }
 
         ; 线性铺开（首次/旧数据）：开始节点 + 各指令节点依次串联，无结束节点
-        this.startSerial := GetCMDSerialStr("图形开始节点")
+        this.startSerial := AllocateCommandSerial("图形开始节点")
         baseY := 220, step := 240, x := 60
         this.pos[this.startId] := { x: x, y: baseY }
         prevId := this.startId
@@ -496,7 +496,7 @@ class MacroGraphGui {
         }
         if (IsMoveProCmd(cmdName)) {
             ; 移动Pro 走 INI 持久化（参数存 MMProFile.toml，CurCMD 仅为序列码引用，与执行引擎一致）
-            serial := GetCMDSerialStr(GetLangKey(cmdName))
+            serial := AllocateCommandSerial(GetLangKey(cmdName))
             data := MMProData()
             data.SerialStr := serial
             SaveMacroCMDData(data)
@@ -504,7 +504,7 @@ class MacroGraphGui {
         }
         if (IsDeltaMoveCmd(cmdName)) {
             ; §20 增量移动：配置化（参数存 DeltaMoveFile.toml）
-            serial := GetCMDSerialStr(GetLangKey(cmdName))
+            serial := AllocateCommandSerial(GetLangKey(cmdName))
             data := DeltaMoveData()
             data.SerialStr := serial
             SaveMacroCMDData(data)
@@ -512,21 +512,21 @@ class MacroGraphGui {
         }
         if (cmdName == GetLang("搜索All") || cmdName == GetLang("搜索") || cmdName == GetLang("搜索Pro") || cmdName == GetLang("搜索Combo") || cmdName == GetLang("组合搜索") || cmdName == GetLang("搜索Multi")) {
             ; 搜索/搜索Pro/搜索Combo 走 INI 持久化（参数存 SearchFile.toml，CurCMD 仅为序列码引用，与执行引擎一致）
-            serial := cmdName == GetLang("搜索All") ? GetCMDSerialStr("搜索All") : GetCMDSerialStr((cmdName == GetLang("搜索Combo") || cmdName == GetLang("组合搜索") || cmdName == GetLang("搜索Multi")) ? "搜索Combo" : (cmdName == GetLang("搜索Pro") ? "搜索Pro" : "搜索"))
+            serial := cmdName == GetLang("搜索All") ? AllocateCommandSerial("搜索All") : AllocateCommandSerial((cmdName == GetLang("搜索Combo") || cmdName == GetLang("组合搜索") || cmdName == GetLang("搜索Multi")) ? "搜索Combo" : (cmdName == GetLang("搜索Pro") ? "搜索Pro" : "搜索"))
             data := cmdName == GetLang("搜索All") ? SearchAllData() : SearchData()
             data.SerialStr := serial
             SaveMacroCMDData(data)
             return this._MakeNode(serial)
         }
         if (cmdName == GetLang("输入")) {
-            serial := GetCMDSerialStr("输入")
+            serial := AllocateCommandSerial("输入")
             data := InputData()
             data.SerialStr := serial
             SaveMacroCMDData(data)
             return this._MakeNode(serial)
         }
         if (cmdName == GetLang("输出")) {
-            serial := GetCMDSerialStr("输出")
+            serial := AllocateCommandSerial("输出")
             data := OutputData()
             data.SerialStr := serial
             SaveMacroCMDData(data)
@@ -534,7 +534,7 @@ class MacroGraphGui {
         }
         if (cmdName == GetLang("RMT指令")) {
             ; 阶段5：配置化（RMT指令<serial>_截图，参数存 RMTCMDFile.toml）
-            serial := GetCMDSerialStr("RMT指令")
+            serial := AllocateCommandSerial("RMT指令")
             data := RMTCMDData()
             data.SerialStr := serial
             SaveMacroCMDData(data)
@@ -542,7 +542,7 @@ class MacroGraphGui {
         }
         for key in this._FormalIniCmdKeys() {
             if (cmdName == GetLang(key)) {
-                serial := GetCMDSerialStr(key)
+                serial := AllocateCommandSerial(key)
                 cls := this._FormalIniDataClass(key)
                 if (cls == "")
                     break

@@ -4,7 +4,7 @@
 ; ============================================================
 class MacroItem {
     __New() {
-        this.ID := ""           ;条目唯一 ID（复用 GetCMDSerialStr("Item") 机制，全局唯一）
+        this.ID := ""           ;条目唯一 ID（复用 AllocateCommandSerial("Item") 机制，全局唯一）
         this.TK := ""           ;触发键
         this.Macro := ""        ;宏内容
         this.PreMacro := ""     ;执行前钩子（宏串，空=不启用）
@@ -1069,7 +1069,7 @@ SearchImageDefaultType() {
         if (IsSet(MainSoftData) && MainSoftData.HasProp("SearchImageType") && IsNumber(MainSoftData.SearchImageType))
             v := Integer(MainSoftData.SearchImageType)
     }
-    return (v == 2) ? 2 : 1
+    return RuntimeChoice.Code("SearchImageType", v)
 }
 
 class SearchData {

@@ -39,7 +39,7 @@ class TimeGui {
         if (IsObject(this.ui) && !this._closed)
             this._CloseWindow()
         cmdArr := cmd != "" ? SplitCommand(cmd) : []
-        this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : GetCMDSerialStr("时间")
+        this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : AllocateCommandSerial("时间")
         this._BuildAndShow()
         if (this.OwnerHwnd != "" && MainSoftData.IsModalSubGui) {
             try SafeGuiFromHwnd(this.OwnerHwnd).Opt("+Disabled")
@@ -272,7 +272,7 @@ class TimeGui {
 
     Init(cmd) {
         cmdArr := cmd != "" ? SplitCommand(cmd) : []
-        this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : GetCMDSerialStr("时间")
+        this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : AllocateCommandSerial("时间")
         this.Data := GetMacroCMDData(this.SerialStr)
         this.ui.Update("RemarkCon", "Text", cmdArr.Length >= 2 ? cmdArr[2] : "")
 
@@ -357,7 +357,7 @@ class TimeGui {
         if (!this.CheckIfValid())
             return
         this.SaveTimeData()
-        OnTriggerSepcialItemMacro(this.GetCommandStr())
+        RunEditorMacroPreview(this.GetCommandStr())
     }
 
     _ModeValue() {

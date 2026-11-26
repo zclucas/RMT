@@ -308,14 +308,14 @@ class FileIOGui {
     Init(cmd) {
         this._ApplyCmdKeyFromCmd(cmd)
         cmdArr := cmd != "" ? StrSplit(cmd, "_") : []
-        this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : GetCMDSerialStr(this.CmdKey)
+        this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : AllocateCommandSerial(this.CmdKey)
         this._ComboPush("RemarkCon", "Text", cmdArr.Length >= 2 ? cmdArr[2] : "")
         this.Data := GetMacroCMDData(this.SerialStr)
         if (cmd == "")
             this._EnsureDefaultOper()
         this._autoRemark := ReadCommandAutoRemark(this.Data, this._GenerateRemark.Bind(this))
         this.DLVarArr := GetGuiVarArr("count")
-        this.DLArrayArr := GetGuiArrNameArr()
+        this.DLArrayArr := GetArrayVariableNames()
 
         this._SetDDL("OperTypeCombo", this._OperTypes(), GetLang(this.Data.OperType))
         this._SetDDL("EncodingCombo", GetLangArr(MySoftData.FileEncodingArr), GetEncodingDisplayName(this.Data.Encoding))
@@ -559,7 +559,7 @@ class FileIOGui {
 
     TriggerMacro(state := "", ctrl := "", event := "") {
         CommandStr := this.SaveData()
-        OnTriggerSepcialItemMacro(CommandStr)
+        RunEditorMacroPreview(CommandStr)
 
         CurType := this._TypeText()
         IsRead := FileIOIsReadType(CurType)
@@ -568,7 +568,7 @@ class FileIOGui {
             if (this.Data.SaveType == "变量" && MySoftData.VariableMap.Has(this.Data.SaveName))
                 Res := MySoftData.VariableMap[this.Data.SaveName]
             if (this.Data.SaveType == "数组" && MySoftData.ArrayMap.Has(this.Data.SaveName))
-                Res := GetArrayStr(MySoftData.ArrayMap[this.Data.SaveName])
+                Res := FormatArrayText(MySoftData.ArrayMap[this.Data.SaveName])
             if (Res != "") {
                 tip1 := Format(GetLang("变量：{}"), this.Data.SaveName)
                 tip2 := Format(GetLang("值：{}"), Res)

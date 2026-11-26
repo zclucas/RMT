@@ -291,24 +291,6 @@ SwapTableContent(tableItem, indexA, indexB) {
     tableItem.RebuildIndex()
 }
 
-SwapArrValue(Arr, indexA, indexB, valueType := 1) {
-    if (valueType == 3) {
-        temp := Arr[indexA].Text
-        Arr[indexA].Text := Arr[indexB].Text
-        Arr[indexB].Text := temp
-    }
-    else if (valueType == 2) {
-        temp := Arr[indexA].Value
-        Arr[indexA].Value := Arr[indexB].Value
-        Arr[indexB].Value := temp
-    }
-    else {
-        temp := Arr[indexA]
-        Arr[indexA] := Arr[indexB]
-        Arr[indexB] := temp
-    }
-}
-
 PluginInit() {
     global MyWorkPool := WorkPool()
     global MyChineseOcr := 0  ; 懒加载：首次使用时才初始化
@@ -628,7 +610,7 @@ EnsureSponsorLogo(logo) {
             retryAfter := A_TickCount + 60000
             if (FileExist(bundle))
                 FileDelete(bundle)
-            if (RmtDownloadManager.DownloadBlocking(GetSponsorLogoBundleUrl(), bundle, 60, pg) != "ok")
+            if (DownloadResourceWithRetry(GetSponsorLogoBundleUrl(), bundle, 60, pg) != "ok")
                 return ""
             bundleReady := true
         }
@@ -786,8 +768,8 @@ StopMacro(tableItem, itemIndex, playStopTip := false, source := "") {
     item := tableItem.Items[itemIndex]
     if (!item)
         return
-    if (playStopTip && item.StopTipSound == 2)
-        PlayTipSound(3)
+    if (playStopTip && RuntimeChoice.Key("StopTipSound", item.StopTipSound) == "终止提示")
+        PlayTipSound("终止")
     item.GraphBranchCount := 0
     FeedbackDiagnostics.Macro(tableItem, itemIndex, "停止", source)
 
@@ -802,7 +784,7 @@ StopMacro(tableItem, itemIndex, playStopTip := false, source := "") {
 
     ; 主进程内执行的宏：置 Killed 标记后，宏循环会自行退出并由 FinalizeMacroRun 设置终止状态
     KillTableItemMacro(tableItem, itemIndex)
-    if (item.TriggerType == 4)
+    if (RuntimeChoice.Key("TriggerType", item.TriggerType) == "开关")
         SetTableItemState(tableItem, itemIndex, 3)
 }
 
@@ -829,7 +811,7 @@ HandleWorkerGraphBranches(wd, tableID, itemID, nodeArr) {
 }
 
 SetGlobalArray(name, value) => CommitGlobalData("SA", [name, value])
-CloneGlobalArray(source, name) => SetGlobalArray(name, CloneArray(IsObject(source) ? source : MySoftData.ArrayMap[source]))
+CloneGlobalArray(source, name) => SetGlobalArray(name, CloneNestedArray(IsObject(source) ? source : MySoftData.ArrayMap[source]))
 DeleteGlobalArray(name) => CommitGlobalData("DA", [name])
 ModifyGlobalArray(name, row, index, isArrayValue, value) => CommitGlobalData("MA", [name, row, index, value])
 InsertGlobalArray(name, row, index, isArrayValue, value) => CommitGlobalData("IA", [name, row, index, value])
@@ -869,7 +851,7 @@ CommitGlobalData(opcode, args) {
                 if (opcode == "SA") {
                     root := args[2]
                 } else {
-                    root := CloneArray(arrays[name])
+                    root := CloneNestedArray(arrays[name])
                     target := args[2] == 0 ? root : root[Integer(args[2])]
                     index := Integer(args[3])
                     switch opcode {
@@ -1257,7 +1239,7 @@ RmtCmdSetFoldForbidState(paramArr, forbid) {
     HotReloadPublish(tableItem.Index, 0)
     tip := (forbid ? GetLang("模块已禁用：") : GetLang("模块已启用：")) (fold.Remark == "" ? fold.ID : fold.Remark)
     if (MySoftData.CMDTip)
-        MyCMDReportAciton(tip)
+        CommandReportHandler(tip)
 }
 
 ScreenShot(X1, Y1, X2, Y2, FileName) {
@@ -1774,7 +1756,7 @@ FullCopyCmd(cmdStr, CopyedMap := Map()) {
     if (!MySoftData.DataFileMap.Has(cmd))
         return cmdStr
     Data := GetMacroCMDData(paramArr[1]).Clone()
-    Data.SerialStr := GetCMDSerialStr(cmd)
+    Data.SerialStr := AllocateCommandSerial(cmd)
 
     ; 优化：使用单次遍历拆分（替代RegExReplace）
     dummyText := ""
@@ -1835,7 +1817,7 @@ FullCopyGraphStart(startSerial, CopyedMap := Map()) {
         if (s == "" || serialMap.Has(s))
             continue
         SplitSerialTextAndNumbers(s, &st, &sn)
-        serialMap[s] := GetCMDSerialStr(st != "" ? st : "图形节点")
+        serialMap[s] := AllocateCommandSerial(st != "" ? st : "图形节点")
         nd := GetMacroCMDData(s)
         if (IsObject(nd) && nd.HasOwnProp("NextNodeArr") && IsObject(nd.NextNodeArr)) {
             for ns in nd.NextNodeArr
@@ -1868,7 +1850,7 @@ FullCopyGraphStart(startSerial, CopyedMap := Map()) {
         CopyedMap.Set(oldS, newS)
     }
 
-    newStart := GetCMDSerialStr("图形开始节点")
+    newStart := AllocateCommandSerial("图形开始节点")
     CopyedMap.Set(startSerial, newStart)
     sn := MacroGraphStartNode()
     sn.SerialStr := newStart
@@ -2043,8 +2025,8 @@ FormatCommandAutoRemark(data, remark, previousAutoRemark, generate, commitRemark
     SplitSerialTextAndNumbers(data.SerialStr, &name, &number)
     remark := CleanCommandRemark(remark)
     isAuto := previousAutoRemark != "" && remark == previousAutoRemark
-    mode := MainSoftData.RemarkAutoType
-    if (mode == 3 || (mode == 2 && (Trim(remark, " `t`r`n") == "" || isAuto))) {
+    mode := RuntimeChoice.Key("RemarkAutoType", MainSoftData.RemarkAutoType)
+    if (mode == "覆盖生成" || (mode == "自动生成" && (Trim(remark, " `t`r`n") == "" || isAuto))) {
         generated := CleanCommandRemark(generate.Call(data))
         if (generated != "") {
             remark := generated
@@ -2178,11 +2160,12 @@ CommandRemarkKeys(keys) {
     return CommandRemarkPreview(text, 60)
 }
 
-OnTriggerSepcialItemMacro(MacroStr, preserveBranchExit := false, windowBindingContext := "", windowInfoPreview := "") {
+; 在独立测试条目中同步执行编辑器指令，临时窗口上下文在 finally 中还原。
+RunEditorMacroPreview(macroText, preserveBranchExit := false, windowBindingContext := "", windowInfoPreview := "") {
     tableItem := MySoftData.SpecialTableItem
     if (tableItem.Items.Length == 0) {
         item := MacroItem()
-        item.ID := GetCMDSerialStr("Item")
+        item.ID := AllocateCommandSerial("Item")
         tableItem.Items.Push(item)
         tableItem.RebuildIndex()
     }
@@ -2210,7 +2193,7 @@ OnTriggerSepcialItemMacro(MacroStr, preserveBranchExit := false, windowBindingCo
     try {
         UpdateMacroRunningCount(0, 1)
         RefreshItemColorUI(tableItem, 1)
-        RunMacroBodyOnce(tableItem, MacroStr, 1, preserveBranchExit)
+        RunMacroBodyOnce(tableItem, macroText, 1, preserveBranchExit)
         return !item.Killed
     } finally {
         if (IsObject(windowBindingContext))

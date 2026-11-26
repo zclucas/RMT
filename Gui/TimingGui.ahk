@@ -29,7 +29,7 @@ class TimingGui {
 
     ShowGui(SerialStr, tableItem := "", index := 0) {
         if (SerialStr == "" || !RegExMatch(SerialStr, "^Timing\d+$"))
-            SerialStr := GetCMDSerialStr("Timing")
+            SerialStr := AllocateCommandSerial("Timing")
         this.SerialStr := SerialStr
         this.Data := this.GetTimingData(this.SerialStr)
         this.tableItem := tableItem

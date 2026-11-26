@@ -1,10 +1,11 @@
 #Requires AutoHotkey v2.0
+#Include ..\Shared\RuntimeChoice.ahk
 
 ; 鼠标移动策略统一入口
 ; 按「按键类型」(ModeArr) + 「移动模式」(绝对/相对/游戏视角) 分发到 AHK / 罗技 / AHI / VIIPER
 ;
-; keyMode : 1 默认(AHK) | 2 游戏(AHK键) | 3 罗技 | 4 AHI | 5 VIIPER
-; moveMode: 0 绝对 | 1 相对 | 2 游戏视角（相对位移，仅移动不点击，与按键类型无关）
+; keyMode 使用语义键：AHK Send / keybd_event / 罗技 / AHI / VIIPER。旧数字仅在入口兼容。
+; moveMode 使用绝对移动 / 相对移动 / 游戏视角；游戏视角仅移动不点击。
 ;
 ; 速度约定（与编辑器一致）：uiSpeed 0~100，越大越快
 ; - AHK MouseMove / SetDefaultMouseSpeed：需转为 0 最快 ~ 100 最慢
@@ -42,20 +43,12 @@ MouseMoveLog(tag, msg) {
     }
 }
 
-; keyMode → 可读名称
-_MM_KM_NAME := Map(1, "AHK", 2, "AHK-Game", 3, "Logitech", 4, "AHI", 5, "VIIPER")
-_MM_ModeName(mode) => (mode == 0 ? "Abs" : (mode == 1 ? "Rel" : "GameView"))
-
-_MM_KeyModeName(km) {
-    return _MM_KM_NAME.Has(Integer(km)) ? _MM_KM_NAME[Integer(km)] : "KM" km
-}
-
 ; 从宏项读取按键类型
-GetMacroKeyMode(tableItem, index) {
+GetMacroInputBackend(tableItem, index) {
     try
-        return Integer(tableItem.Items[index].Mode)
+        return RuntimeChoice.Key("KeyMode", tableItem.Items[index].Mode)
     catch
-        return 1
+        return "AHK Send"
 }
 
 NormalizeUiMouseSpeed(uiSpeed) {
@@ -73,24 +66,24 @@ UiSpeedToAhkSpeed(uiSpeed) {
 
 ; 初始化对应后端；失败返回 false（AHI/罗技不可用时上层应中止）
 EnsureMouseBackend(keyMode, relative, usesButtons := false) {
-    keyMode := Integer(keyMode)
-    if (keyMode == 3)
+    keyMode := RuntimeChoice.Key("KeyMode", keyMode)
+    if (keyMode == "罗技")
         return !relative || InitMouseControl()
-    if (keyMode == 5) {
+    if (keyMode == "VIIPER") {
         if (relative || usesButtons)
             ViiperInput.Stream("mouse")
         return true
     }
-    if (keyMode == 4)
+    if (keyMode == "AHI")
         return InitAHI()
     return true
 }
 
 ; 按按键类型点击鼠标，默认左键。
 MouseClickByKeyMode(keyMode, clickCount := 1, button := "LButton") {
-    keyMode := Integer(keyMode)
+    keyMode := RuntimeChoice.Key("KeyMode", keyMode)
     clickCount := Max(1, Integer(clickCount))
-    if (keyMode == 5) {
+    if (keyMode == "VIIPER") {
         loop clickCount {
             try {
                 ViiperInput.Key(button, true)
@@ -100,13 +93,13 @@ MouseClickByKeyMode(keyMode, clickCount := 1, button := "LButton") {
         }
         return true
     }
-    if (keyMode == 3) {
+    if (keyMode == "罗技") {
         if (!InitLogitechGHubNew())
             return false
         IbClick(button == "RButton" ? "Right" : "Left", , , clickCount)
         return true
     }
-    if (keyMode == 4) {
+    if (keyMode == "AHI") {
         AhiClick(button == "RButton" ? "R" : "L", clickCount)
         return true
     }
@@ -116,10 +109,10 @@ MouseClickByKeyMode(keyMode, clickCount := 1, button := "LButton") {
 
 ; 绝对移动（屏幕坐标）；speed 为界面速度 0~100
 MouseMoveAbsByKeyMode(keyMode, x, y, speed := 90, isHuman := false, item := "") {
-    keyMode := Integer(keyMode)
+    keyMode := RuntimeChoice.Key("KeyMode", keyMode)
     x := Round(x), y := Round(y)
     uiSpeed := NormalizeUiMouseSpeed(speed)
-    if (keyMode == 5) {
+    if (keyMode == "VIIPER") {
         if !MoveWindowsCursorAbs(x, y, uiSpeed, item)
             return false
         ; 单次核对落点，避免受限的光标位置触发错误点击。
@@ -129,26 +122,26 @@ MouseMoveAbsByKeyMode(keyMode, x, y, speed := 90, isHuman := false, item := "") 
     SendMode("Event")
     CoordMode("Mouse", "Screen")
 
-    if (isHuman && keyMode != 3 && keyMode != 4 && keyMode != 5) {
+    if (isHuman && keyMode != "罗技" && keyMode != "AHI" && keyMode != "VIIPER") {
         hm := HumanMouse.GetInstance()
         hm.SetParams({ IsEnabled: true, Speed: uiSpeed })
         return hm.Move(x, y, , item)
     }
 
     MouseGetPos(&startX, &startY)
-    if (keyMode == 3) {
+    if (keyMode == "罗技") {
         ok := MC_MoveAbsSmooth(x, y, uiSpeed, item)
         MouseGetPos(&endX, &endY)
         MouseMoveLog("ABS", Format("{} target=({},{}) start=({},{}) end=({},{}) dXY=({},{}) eXY=({},{}) speed={}"
-            , _MM_KeyModeName(keyMode), x, y, startX, startY, endX, endY
+            , keyMode, x, y, startX, startY, endX, endY
             , x - startX, y - startY, x - endX, y - endY, uiSpeed))
         return ok
     }
-    if (keyMode == 4) {
+    if (keyMode == "AHI") {
         ok := AhiMoveAbsSmooth(x, y, uiSpeed, item)
         MouseGetPos(&endX, &endY)
         MouseMoveLog("ABS", Format("{} target=({},{}) start=({},{}) end=({},{}) dXY=({},{}) eXY=({},{}) speed={}"
-            , _MM_KeyModeName(keyMode), x, y, startX, startY, endX, endY
+            , keyMode, x, y, startX, startY, endX, endY
             , x - startX, y - startY, x - endX, y - endY, uiSpeed))
         return ok
     }
@@ -229,15 +222,15 @@ MoveDriverCursorRel(dx, dy, speed, sendDelta, item) {
 
 ; 相对移动；speed 为界面速度 0~100
 MouseMoveRelByKeyMode(keyMode, x, y, speed := 90, isHuman := false, item := "") {
-    keyMode := Integer(keyMode)
+    keyMode := RuntimeChoice.Key("KeyMode", keyMode)
     x := Integer(x), y := Integer(y)
-    if (keyMode == 5)
+    if (keyMode == "VIIPER")
         return ViiperInput.Move(x, y, speed, item)
     uiSpeed := NormalizeUiMouseSpeed(speed)
     SendMode("Event")
     CoordMode("Mouse", "Screen")
 
-    if (isHuman && keyMode != 3 && keyMode != 4 && keyMode != 5) {
+    if (isHuman && keyMode != "罗技" && keyMode != "AHI" && keyMode != "VIIPER") {
         MouseGetPos(&curX, &curY)
         hm := HumanMouse.GetInstance()
         hm.SetParams({ IsEnabled: true, Speed: uiSpeed })
@@ -245,19 +238,19 @@ MouseMoveRelByKeyMode(keyMode, x, y, speed := 90, isHuman := false, item := "") 
     }
 
     MouseGetPos(&startX, &startY)
-    if (keyMode == 3) {
+    if (keyMode == "罗技") {
         ok := MC_MoveRSmooth(x, y, uiSpeed, item)
         MouseGetPos(&endX, &endY)
         MouseMoveLog("REL", Format("{} delta=({},{}) start=({},{}) end=({},{}) expect=({},{}) err=({},{}) speed={}"
-            , _MM_KeyModeName(keyMode), x, y, startX, startY, endX, endY
+            , keyMode, x, y, startX, startY, endX, endY
             , startX + x, startY + y, (startX + x) - endX, (startY + y) - endY, uiSpeed))
         return ok
     }
-    if (keyMode == 4) {
+    if (keyMode == "AHI") {
         ok := AhiMoveRSmooth(x, y, uiSpeed, item)
         MouseGetPos(&endX, &endY)
         MouseMoveLog("REL", Format("{} delta=({},{}) start=({},{}) end=({},{}) expect=({},{}) err=({},{}) speed={}"
-            , _MM_KeyModeName(keyMode), x, y, startX, startY, endX, endY
+            , keyMode, x, y, startX, startY, endX, endY
             , startX + x, startY + y, (startX + x) - endX, (startY + y) - endY, uiSpeed))
         return ok
     }
@@ -276,7 +269,7 @@ MoveAhkCursor(x, y, uiSpeed, relative, item) {
 }
 
 ; 游戏视角：相对位移，仅移动不点击；固定走 mouse_event，与按键类型无关
-MouseMoveGameViewByKeyMode(keyMode, x, y, speed := 90) {
+MoveMouseGameView(x, y) {
     x := Integer(x), y := Integer(y)
     ; MOUSEEVENTF_MOVE = 0x0001：相对移动（游戏通常通过 Raw Input 读取）
     DllCall("mouse_event", "UInt", 0x0001, "UInt", x, "UInt", y, "UInt", 0, "UPtr", 0)
@@ -293,7 +286,7 @@ DeltaMoveStep(delta, count, step) {
 ; clickCount: 0=只移动；>0=移动后左键点击次数
 ; moveMode: 绝对移动 | 相对移动 | 游戏视角（忽略 clickCount/isHuman，走游戏视角语义）
 MouseMoveByStrategy(keyMode, moveMode, x, y, speed := 90, clickCount := 0, isHuman := false, item := "") {
-    keyMode := Integer(keyMode)
+    keyMode := RuntimeChoice.Key("KeyMode", keyMode)
     moveMode := CmdEnumMoveMode(moveMode)
     clickCount := Integer(clickCount)
     uiSpeed := NormalizeUiMouseSpeed(speed)
@@ -302,13 +295,13 @@ MouseMoveByStrategy(keyMode, moveMode, x, y, speed := 90, clickCount := 0, isHum
 
     ; 游戏视角与按键类型无关，直接走 mouse_event，无需初始化罗技/AHI 后端
     if (moveMode == "游戏视角")
-        return MouseMoveGameViewByKeyMode(keyMode, x, y, uiSpeed)
+        return MoveMouseGameView(x, y)
 
     if (!EnsureMouseBackend(keyMode, moveMode == "相对移动", clickCount > 0))
         return false
 
     ; AHK：带点击时用 Click 一步完成（含位移），避免相对位移执行两次
-    if (clickCount > 0 && keyMode != 3 && keyMode != 4 && keyMode != 5 && (!item || uiSpeed == 100)) {
+    if (clickCount > 0 && keyMode != "罗技" && keyMode != "AHI" && keyMode != "VIIPER" && (!item || uiSpeed == 100)) {
         SendMode("Event")
         CoordMode("Mouse", "Screen")
         SetDefaultMouseSpeed(UiSpeedToAhkSpeed(uiSpeed))
@@ -326,7 +319,7 @@ MouseMoveByStrategy(keyMode, moveMode, x, y, speed := 90, clickCount := 0, isHum
         return false
 
     if (clickCount > 0) {
-        if (moveMode == "相对移动" && keyMode >= 3)
+        if (moveMode == "相对移动" && (keyMode == "罗技" || keyMode == "AHI" || keyMode == "VIIPER"))
             Sleep(30)
         if (item && item.Killed)
             return false
@@ -338,7 +331,7 @@ MouseMoveByStrategy(keyMode, moveMode, x, y, speed := 90, clickCount := 0, isHum
 ; 搜索等场景：屏幕绝对坐标移动，可选左击、右击；兼容旧动作名。
 ; speed: 界面速度 0~100
 SearchMouseActionByStrategy(keyMode, actionType, x, y, speed := 90, clickCount := 1) {
-    keyMode := Integer(keyMode)
+    keyMode := RuntimeChoice.Key("KeyMode", keyMode)
     actionType := CmdEnumMouseAct(actionType)
     uiSpeed := NormalizeUiMouseSpeed(speed)
     if (!EnsureMouseBackend(keyMode, false, actionType != "移动至目标" && actionType != "仅移动"))
@@ -349,7 +342,7 @@ SearchMouseActionByStrategy(keyMode, actionType, x, y, speed := 90, clickCount :
 
     button := actionType == "移动至目标右键点击1次" ? "RButton" : "LButton"
     n := (actionType == "移动至目标点击2次") ? 2 : Max(1, Integer(clickCount))
-    if (keyMode == 3 || keyMode == 4 || keyMode == 5) {
+    if (keyMode == "罗技" || keyMode == "AHI" || keyMode == "VIIPER") {
         if (!MouseMoveAbsByKeyMode(keyMode, x, y, uiSpeed, false))
             return false
         return MouseClickByKeyMode(keyMode, n, button)
@@ -364,7 +357,7 @@ SearchMouseActionByStrategy(keyMode, actionType, x, y, speed := 90, clickCount :
 ; 拖拽统一入口：绝对模式先定位起点，相对模式从当前位置按偏移拖动。
 ; 按下后始终在 finally 松开，避免移动异常导致左键保持按下。
 MouseDragByStrategy(tableItem, index, keyMode, moveMode, x, y, endX, endY, speed := 90, isHuman := false) {
-    keyMode := Integer(keyMode)
+    keyMode := RuntimeChoice.Key("KeyMode", keyMode)
     moveMode := CmdEnumMoveMode(moveMode)
     item := GetItemByIndex(tableItem, index)
     if (item && item.Killed)
@@ -373,7 +366,7 @@ MouseDragByStrategy(tableItem, index, keyMode, moveMode, x, y, endX, endY, speed
         return false
     if (moveMode == "绝对移动" && !MouseMoveAbsByKeyMode(keyMode, x, y, speed, false, item))
         return false
-    if (keyMode == 3 && !InitLogitechGHubNew())
+    if (keyMode == "罗技" && !InitLogitechGHubNew())
         return false
     try {
         MouseDragButtonByKeyMode(keyMode, true, tableItem, index)
@@ -388,11 +381,12 @@ MouseDragByStrategy(tableItem, index, keyMode, moveMode, x, y, endX, endY, speed
 }
 
 MouseDragButtonByKeyMode(keyMode, isDown, tableItem, index) {
-    if (keyMode == 5)
+    keyMode := RuntimeChoice.Key("KeyMode", keyMode)
+    if (keyMode == "VIIPER")
         return SendViiperKey("LButton", isDown, tableItem, index)
-    if (keyMode == 3)
+    if (keyMode == "罗技")
         IbClick(isDown ? "Down" : "Up")
-    else if (keyMode == 4) {
+    else if (keyMode == "AHI") {
         if (isDown)
             AhiMouseDown("L")
         else
@@ -404,7 +398,7 @@ MouseDragButtonByKeyMode(keyMode, isDown, tableItem, index) {
     }
     bucket := GetHoldBucket(tableItem, index)
     if (isDown)
-        TrackDown(bucket, "LButton", keyMode == 3 ? "Logic" : keyMode == 4 ? "AHI" : "Normal", tableItem, index)
+        TrackDown(bucket, "LButton", keyMode == "罗技" ? "Logic" : keyMode == "AHI" ? "AHI" : "Normal", tableItem, index)
     else
         TrackUp(bucket, "LButton", tableItem, index)
 }

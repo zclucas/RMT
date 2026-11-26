@@ -4,8 +4,8 @@
     ; 统一走 _BindLive：Show 之后注入的控件不在建窗事件表里，引擎侧钩子要靠 BindEvent 现挂。
     _BindAiPanel(t) {
         this._BindLive("AiSplit_" t, "PreviewMouseLeftButtonDown", ObjBindMethod(this, "OnAiSplitStart"))
-        this._BindLive("BtnSideModeTree_" t, "Click", ObjBindMethod(this, "OnSidePanelMode", 1))
-        this._BindLive("BtnSideModeAi_" t, "Click", ObjBindMethod(this, "OnSidePanelMode", 2))
+        this._BindLive("BtnSideModeTree_" t, "Click", ObjBindMethod(this, "OnSidePanelMode", "逻辑树"))
+        this._BindLive("BtnSideModeAi_" t, "Click", ObjBindMethod(this, "OnSidePanelMode", "AI助手"))
         this._BindLive("BtnSideToolsToggle_" t, "Click", ObjBindMethod(this, "OnSideToolsToggle"))
         this._BindLive("AiInput_" t, "TextChanged", ObjBindMethod(this, "OnAiInputChanged", t))
         this._BindLive("AiInput_" t, "PreviewKeyDown:Return", ObjBindMethod(this, "OnAiInputEnter", t))
@@ -128,7 +128,7 @@
             if (IsObject(this._vl) && this._useVirtual.Has(t0))
                 this._vl.SetCompact(t0, true)
             this._EnsureAiSeeded(t0)
-            if (this.sidePanelMode == 1)
+            if (this.sidePanelMode == "逻辑树")
                 SetTimer(ObjBindMethod(this, "RefreshSideTree", t0), -1)
         } else {
             this.HideSideDebugTools()
@@ -308,10 +308,10 @@
     }
 
     OnSidePanelMode(mode, state, ctrl, event) {
-        this.sidePanelMode := Integer(mode)
+        this.sidePanelMode := mode
         this._ApplySidePanelMode()
         t := MainSoftData.TableIndex
-        if (this.sidePanelMode == 1)
+        if (this.sidePanelMode == "逻辑树")
             this.RefreshSideTree(t)
         else if (this.aiAssistOpen) {
             this._EnsureAiSeeded(t)
@@ -384,7 +384,7 @@
 
     _ApplySideToolsVisibility() {
         expanded := !!this._sideToolsExpanded
-        isTree := this.sidePanelMode == 1
+        isTree := this.sidePanelMode == "逻辑树"
         glyph := expanded ? Chr(0xE70E) : Chr(0xE70D)
         tip := expanded ? GetLang("收起操作") : GetLang("展开操作")
         for t in this._useVirtual {

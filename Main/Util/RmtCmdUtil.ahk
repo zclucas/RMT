@@ -603,10 +603,10 @@ RmtCmdParseArray(text) {
         open := SubStr(text, 1, 1)
         close := SubStr(text, -1)
         wrapped := (open = "[" && close = "]") || (open = "【" && close = "】")
-        if (wrapped && GetArrayEndPos(text, 0) == StrLen(text))
+        if (wrapped && FindMatchingArrayBracket(text, 0) == StrLen(text))
             text := SubStr(text, 2, StrLen(text) - 2)
     }
-    arr := GetArray(text)
+    arr := ParseArrayText(text)
     RmtCmdTrimArray(arr)
     return arr
 }
@@ -626,7 +626,7 @@ RmtCmdTrimArray(arr) {
 RmtCmdFormatArray(arr) {
     if !(arr is Array)
         return "[]"
-    return "[" GetArrayStr(arr) "]"
+    return "[" FormatArrayText(arr) "]"
 }
 
 RmtCmdHelpText() {

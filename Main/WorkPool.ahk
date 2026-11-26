@@ -239,12 +239,12 @@ class WorkPool {
         this.workerMap[idx] := wd
         this.pending[idx] := wd
         try {
-            wd.shmTx := SharedMemory(1048576 + 192)
-            wd.tx := RingBuffer(wd.shmTx.ptr, 1048576)
-            wd.shmRx := SharedMemory(1048576 + 192)
-            wd.rx := RingBuffer(wd.shmRx.ptr, 1048576)
+            wd.shmTx := SharedMemory(WorkerIpcLayout.RingMappingBytes())
+            wd.tx := RingBuffer(wd.shmTx.ptr, WorkerIpcLayout.ChannelCapacityBytes)
+            wd.shmRx := SharedMemory(WorkerIpcLayout.RingMappingBytes())
+            wd.rx := RingBuffer(wd.shmRx.ptr, WorkerIpcLayout.ChannelCapacityBytes)
             ; 悬浮窗单槽：主进程写最新帧与引擎窗口句柄表，Worker 只读
-            wd.shmHud := SharedMemory(65536 + 64)
+            wd.shmHud := SharedMemory(WorkerIpcLayout.HudMappingBytes())
             wd.hudSeq := NumGet(wd.shmHud.ptr, 4, "UInt")
             wd.hEvt := CreateEvent()
             if (!wd.hEvt)
@@ -502,7 +502,7 @@ class WorkPool {
         item.Killed := true
         item.ToggleState := false
 
-        if (MainSoftData.MacroStopType == 2) {
+        if (RuntimeChoice.Key("MacroStopType", MainSoftData.MacroStopType) == "强制终止") {
             ; 强制终止：直接杀进程重建，不等待 Worker 协作退出
             killed := this.KillWorkersForItem(tableID, itemID)
             GraphPoolLog("停止宏-强制终止", Format("tab={1} item={2} 强杀Worker={3} 忙碌=[{4}]"
@@ -1073,26 +1073,26 @@ class WorkPool {
         ; 调用方可能传入刚被回收的实例，其共享内存已不可访问。
         if (!IsObject(wd) || !wd.shmHud || !this.IsInstanceAlive(wd))
             return 0
-        p := wd.shmHud.ptr
+        slotPtr := wd.shmHud.ptr
         loop 3 {
-            seq := NumGet(p, 4, "UInt")
-            if (seq == wd.hudSeq)
+            frameSequence := NumGet(slotPtr, WorkerIpcLayout.HudSequenceOffset, "UInt")
+            if (frameSequence == wd.hudSeq)
                 return 0        ; 无新帧：不清 pending，否则 Worker 会反复补发通知
-            len := NumGet(p, 8, "UInt")
-            if (len = 0 || len > 65000)
+            payloadBytes := NumGet(slotPtr, WorkerIpcLayout.HudLengthOffset, "UInt")
+            if (payloadBytes = 0 || payloadBytes > WorkerIpcLayout.HudMaxPayloadBytes)
                 return 0
-            raw := StrGet(p + 16, len, "UTF-8")
+            payloadText := StrGet(slotPtr + WorkerIpcLayout.HudPayloadOffset, payloadBytes, "UTF-8")
             ; 读取期间 Worker 可能覆盖新帧：序号变化则重读，避免取到不一致的数据
-            if (NumGet(p, 4, "UInt") != seq)
+            if (NumGet(slotPtr, WorkerIpcLayout.HudSequenceOffset, "UInt") != frameSequence)
                 continue
-            wd.hudSeq := seq
-            NumPut("UInt", 0, p, 0)     ; 标记已取走，允许发送下一次通知
-            parts := StrSplit(raw, Chr(1), , 4)
+            wd.hudSeq := frameSequence
+            NumPut("UInt", 0, slotPtr, WorkerIpcLayout.HudPendingOffset)     ; 标记已取走，允许发送下一次通知
+            parts := StrSplit(payloadText, Chr(1), , 4)
             if (parts.Length < 4)
                 return 0
             ; 记录该指令所属 Worker 的槽基址：窗口建好后把引擎句柄登记进去，
             ; Worker 下一帧即可直连投递
-            try MyHudSlotMap[parts[1]] := p
+            try MyHudSlotMap[parts[1]] := slotPtr
             HudOutputShow(parts[1], parts[4], parts[2], parts[3])
             return 1
         }

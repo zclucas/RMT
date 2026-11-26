@@ -284,18 +284,18 @@ class ArrayGui {
 
     Init(cmd) {
         cmdArr := cmd != "" ? StrSplit(cmd, "_") : []
-        this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : GetCMDSerialStr("数组")
+        this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : AllocateCommandSerial("数组")
         this.ui.Update("RemarkCon", "Text", cmdArr.Length >= 2 ? cmdArr[2] : "")
         this.Data := GetMacroCMDData(this.SerialStr)
         this._autoRemark := ReadCommandAutoRemark(this.Data, this._GenerateRemark.Bind(this))
         this.DLVariableArr := GetGuiVarArr("all")
-        this.DLArrayArr := GetGuiArrNameArr()
+        this.DLArrayArr := GetArrayVariableNames()
 
         this._SetDDL("TypeCombo", GetLangArr(["创建", "克隆", "删除", "包含", "取值", "赋值", "插入", "追加", "移除", "移除最后", "反转", "长度"]), GetLang(this.Data.Type))
         this.ui.Update("IsIgnoreExist", "IsChecked", this.Data.IsIgnoreExist ? "True" : "False")
         this._SetCombo("NameCon", this.DLArrayArr, this.Data.Name)
         this._SetCombo("MainIndexCon", GetGuiVarArr("count"), GetLang(this.Data.MainIndex))
-        this.ui.Update("InitArrCon", "Text", GetArrayStr(this.Data.InitArr))
+        this.ui.Update("InitArrCon", "Text", FormatArrayText(this.Data.InitArr))
         this._SetCombo("ArgsIndexCon", GetGuiVarArr("count"), GetLang(this.Data.ArgsIndex))
         this._SetDDL("ArgsTypeCon", GetLangArr(["变量或值", "数组"]), GetLang(this.Data.ArgsType))
         this._SetCombo("ArgsNameCon", this.DLVariableArr, GetLang(this.Data.ArgsName))
@@ -452,7 +452,7 @@ class ArrayGui {
             || t == GetLang("移除") || t == GetLang("移除最后") || t == GetLang("包含") || t == GetLang("反转")
         if (showResult && !CheckVarNameIfValid(this.ui.Query("SaveNameCon")))
             return false
-        try GetArray(this.ui.Query("InitArrCon"))
+        try ParseArrayText(this.ui.Query("InitArrCon"))
         catch ValueError as e {
             RMTErrorShow(e.Message, RMT_LV_WARN, "数组")
             return false
@@ -510,7 +510,7 @@ class ArrayGui {
         this.Data.IsIgnoreExist := isCreate ? (this.ui.Query("IsIgnoreExist") == "True") : 0
         this.Data.Type := GetLangKey(this._TypeText())
         this.Data.Name := this.ui.Query("NameCon")
-        this.Data.InitArr := GetArray(this.ui.Query("InitArrCon"))
+        this.Data.InitArr := ParseArrayText(this.ui.Query("InitArrCon"))
         this.Data.MainIndex := GetLangKey(this.ui.Query("MainIndexCon"))
         this.Data.ArgsIndex := GetLangKey(this.ui.Query("ArgsIndexCon"))
         this.Data.ArgsType := GetLangKey(this.ui.Query("ArgsTypeCon"))

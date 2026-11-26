@@ -24,7 +24,7 @@ class MacroGraphDataMixin {
     _CloneMMPro(srcCmd) {
         srcArr := SplitCommand(srcCmd)
         srcSerial := srcArr.Length >= 1 ? srcArr[1] : srcCmd
-        newSerial := GetCMDSerialStr("移动Pro")
+        newSerial := AllocateCommandSerial("移动Pro")
         newData := MMProData()
         newData.SerialStr := newSerial
         try {
@@ -55,7 +55,7 @@ class MacroGraphDataMixin {
         srcSerial := srcArr.Length >= 1 ? srcArr[1] : srcCmd
         isCombo := this._IsSearchComboName(srcSerial)
         isPro := this._IsSearchProName(srcSerial)
-        newSerial := this._IsSearchAllName(srcSerial) ? GetCMDSerialStr("搜索All") : GetCMDSerialStr(isCombo ? "搜索Combo" : (isPro ? "搜索Pro" : "搜索"))
+        newSerial := this._IsSearchAllName(srcSerial) ? AllocateCommandSerial("搜索All") : AllocateCommandSerial(isCombo ? "搜索Combo" : (isPro ? "搜索Pro" : "搜索"))
         newData := this._IsSearchAllName(srcSerial) ? SearchAllData() : SearchData()
         newData.SerialStr := newSerial
         try {
@@ -149,7 +149,7 @@ class MacroGraphDataMixin {
             if (s == "" || serialMap.Has(s))
                 continue
             SplitSerialTextAndNumbers(s, &st, &sn)
-            serialMap[s] := GetCMDSerialStr(st)
+            serialMap[s] := AllocateCommandSerial(st)
             nd := GetMacroCMDData(s)
             if (IsObject(nd) && nd.HasOwnProp("NextNodeArr") && IsObject(nd.NextNodeArr)) {
                 for ns in nd.NextNodeArr
@@ -184,7 +184,7 @@ class MacroGraphDataMixin {
         }
 
         ; 3) 复制开始节点，重映射 NodeArr/EmptyNode
-        newStart := GetCMDSerialStr("图形开始节点")
+        newStart := AllocateCommandSerial("图形开始节点")
         sn := MacroGraphStartNode()
         sn.SerialStr := newStart
         newNodeArr := []
@@ -205,7 +205,7 @@ class MacroGraphDataMixin {
     _CloneInput(srcCmd) {
         srcArr := SplitCommand(srcCmd)
         srcSerial := srcArr.Length >= 1 ? srcArr[1] : srcCmd
-        newSerial := GetCMDSerialStr("输入")
+        newSerial := AllocateCommandSerial("输入")
         newData := InputData()
         newData.SerialStr := newSerial
         try {
@@ -226,7 +226,7 @@ class MacroGraphDataMixin {
     _CloneOutput(srcCmd) {
         srcArr := SplitCommand(srcCmd)
         srcSerial := srcArr.Length >= 1 ? srcArr[1] : srcCmd
-        newSerial := GetCMDSerialStr("输出")
+        newSerial := AllocateCommandSerial("输出")
         newData := OutputData()
         newData.SerialStr := newSerial
         try {
@@ -314,7 +314,7 @@ class MacroGraphDataMixin {
         cls := this._FormalIniDataClass(cmdKey)
         if (cls == "")
             return srcCmd
-        newSerial := GetCMDSerialStr(cmdKey)
+        newSerial := AllocateCommandSerial(cmdKey)
         ; 用 .Clone() 整体复制源数据（应用通用机制，最可靠），再对数组逐个深拷贝，
         ; 避免新旧节点共享同一份配置；克隆失败再回退默认对象。
         newData := ""
@@ -356,7 +356,7 @@ class MacroGraphDataMixin {
     _CloneIf(srcCmd) {
         srcArr := SplitCommand(srcCmd)
         srcSerial := srcArr.Length >= 1 ? srcArr[1] : srcCmd
-        newSerial := GetCMDSerialStr("如果")
+        newSerial := AllocateCommandSerial("如果")
         newData := CompareData()
         newData.SerialStr := newSerial
         try {
@@ -379,7 +379,7 @@ class MacroGraphDataMixin {
     _CloneComparePro(srcCmd) {
         srcArr := SplitCommand(srcCmd)
         srcSerial := srcArr.Length >= 1 ? srcArr[1] : srcCmd
-        newSerial := GetCMDSerialStr("如果Pro")
+        newSerial := AllocateCommandSerial("如果Pro")
         newData := CompareProData()
         newData.SerialStr := newSerial
         try {
@@ -540,7 +540,7 @@ class MacroGraphDataMixin {
             d.isIgnoreExist := data.IsIgnoreExist
             d.arrayType := data.Type
             d.arrayName := data.Name
-            d.initArr := CloneArray(data.InitArr)
+            d.initArr := CloneNestedArray(data.InitArr)
             d.mainIndex := data.MainIndex
             d.argsIndex := data.ArgsIndex
             d.argsType := data.ArgsType
@@ -702,7 +702,7 @@ class MacroGraphDataMixin {
         if (this.graph == "")
             return
         if (this.startSerial == "")
-            this.startSerial := GetCMDSerialStr("图形开始节点")
+            this.startSerial := AllocateCommandSerial("图形开始节点")
         ; 保存前：把画布内联控件当前值写回各节点数据（标签拖拽等平时不即时落盘）
         this._FlushInlineFieldsFromUI()
         this._CaptureTopLevelSuccessorLinks()
@@ -927,9 +927,9 @@ class MacroGraphDataMixin {
             if (serialToEngine.Has(s))
                 this.links.Push({ from: this.startId, to: serialToEngine[s] })
         }
-        ; 登记已用序号（含开始节点），避免后续 GetCMDSerialStr 生成重复
+        ; 登记已用序号（含开始节点），避免后续 AllocateCommandSerial 生成重复
         loadedSerials.Push(startSerial)
-        SetSerialByArr(loadedSerials)
+        RegisterCommandSerials(loadedSerials)
         return true
     }
 
@@ -945,11 +945,11 @@ class MacroGraphDataMixin {
         return false
     }
 
-    ; 创建节点：MacroGraphNode（来自 DataClass），持有 CurCMD，SerialStr 由 GetCMDSerialStr("图形节点") 生成
+    ; 创建节点：MacroGraphNode（来自 DataClass），持有 CurCMD，SerialStr 由 AllocateCommandSerial("图形节点") 生成
     _MakeNode(cmd) {
         node := MacroGraphNode()
         node.CurCMD := cmd
-        node.SerialStr := GetCMDSerialStr("图形节点")
+        node.SerialStr := AllocateCommandSerial("图形节点")
         return node
     }
 

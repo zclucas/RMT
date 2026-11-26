@@ -636,7 +636,7 @@ class RMTCMDGui {
             return
         if (!this.CheckIfValid())
             return
-        OnTriggerSepcialItemMacro(this.GetCmdStr())
+        RunEditorMacroPreview(this.GetCmdStr())
     }
 
     OnSureBtnClick(state, ctrl, event) {
@@ -668,7 +668,7 @@ class RMTCMDGui {
         }
 
         if (this.Data.SerialStr == "")
-            this.Data.SerialStr := GetCMDSerialStr("RMT指令")
+            this.Data.SerialStr := AllocateCommandSerial("RMT指令")
         SaveMacroCMDData(this.Data)
         remark := this.Data.CmdStr
         return CorrectRemark(this.Data.SerialStr, remark)

@@ -166,7 +166,7 @@ class ProcessManageGui extends CommentGui {
 
     Init(cmd) {
         parts := cmd == "" ? [] : SplitCommand(cmd)
-        this.SerialStr := parts.Length ? parts[1] : GetCMDSerialStr(ProcessManageGui.CmdKey)
+        this.SerialStr := parts.Length ? parts[1] : AllocateCommandSerial(ProcessManageGui.CmdKey)
         this.Data := GetMacroCMDData(this.SerialStr)
         this._autoRemark := ReadCommandAutoRemark(this.Data, GenerateCommandAutoRemark)
         this.SerialStr := this.Data.SerialStr
@@ -183,7 +183,7 @@ class ProcessManageGui extends CommentGui {
         this._FillTargets()
         this._ComboPush("Remark", "Text", parts.Length >= 2 ? parts[2] : "")
         vars := GetGuiVarArr()
-        arrays := GetGuiArrNameArr()
+        arrays := GetArrayVariableNames()
         for field in ProcessManageGui.Outputs {
             for name in (field == "ResultArray" ? arrays : vars)
                 this._ComboPush(field, "AddItem", name)

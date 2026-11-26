@@ -137,7 +137,7 @@ class JoyCheckGui extends JoyGui {
 
     Init(cmd) {
         cmdArr := cmd != "" ? SplitCommand(cmd) : []
-        this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : GetCMDSerialStr("手柄检测")
+        this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : AllocateCommandSerial("手柄检测")
         this.Data := this.HasProp("SelectionData") ? this.SelectionData : GetMacroCMDData(this.SerialStr)
         this._autoRemark := ReadCommandAutoRemark(this.Data, GenerateCommandAutoRemark)
         if (!this.HasProp("SelectionData"))

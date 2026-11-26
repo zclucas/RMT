@@ -375,7 +375,7 @@ class MacroGraphInlineMixin {
         for sid in subs {
             if (!this.cmdNodes.Has(sid))
                 continue
-            s := (this._ilSerial.Has(sid) && this._ilSerial[sid] != "") ? this._ilSerial[sid] : GetCMDSerialStr("图形节点")
+            s := (this._ilSerial.Has(sid) && this._ilSerial[sid] != "") ? this._ilSerial[sid] : AllocateCommandSerial("图形节点")
             this._ilSerial[sid] := s
             serialOf[sid] := s
         }
@@ -444,7 +444,7 @@ class MacroGraphInlineMixin {
         }
 
         ; 开始节点（复用既有容器开始序列码，无则新建一次并记住）
-        startSerial := (this._ilStartSerial.Has(brId) && this._ilStartSerial[brId] != "") ? this._ilStartSerial[brId] : GetCMDSerialStr("图形开始节点")
+        startSerial := (this._ilStartSerial.Has(brId) && this._ilStartSerial[brId] != "") ? this._ilStartSerial[brId] : AllocateCommandSerial("图形开始节点")
         this._ilStartSerial[brId] := startSerial
         sn := MacroGraphStartNode()
         sn.SerialStr := startSerial

@@ -171,7 +171,7 @@ IsDesktopKeyPressed(key) {
 }
 
 HandleRepeatedKeyDown(key, tableItem, index, Action) {
-    if (MainSoftData.KeyDownDownType = 3 || InStr(key, "Joy"))
+    if (RuntimeChoice.Key("KeyDownDownType", MainSoftData.KeyDownDownType) == "允许重复按下" || InStr(key, "Joy"))
         return false
 
     try {
@@ -181,11 +181,11 @@ HandleRepeatedKeyDown(key, tableItem, index, Action) {
         return false
     }
 
-    switch MainSoftData.KeyDownDownType {
-        case 1:  ; auto release first
+    switch RuntimeChoice.Key("KeyDownDownType", MainSoftData.KeyDownDownType) {
+        case "自动松开":
             GraphPoolLog("RepeatedKeyDown", Format("tab={1} item={2} key={3} 已按下→先松开", tableItem.Index, index, key))
             Action(key, 0, tableItem, index)
-        case 2:  ; ignore later press
+        case "忽略重复按下":
             return true
     }
     return false
@@ -470,7 +470,7 @@ SetBrightnessByKey(key, *) {
 }
 
 ChangeBrightness(isAdd) {
-    CurrentBrightness := GetBrightness()
+    CurrentBrightness := GetMonitorBrightness()
     Value := Max(0, Min(100, CurrentBrightness + (isAdd ? 10 : -10)))
     wmi := ComObjGet("winmgmts:\\.\root\WMI")
     for item in wmi.ExecQuery("SELECT * FROM WmiMonitorBrightnessMethods")

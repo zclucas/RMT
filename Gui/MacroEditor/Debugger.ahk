@@ -684,7 +684,7 @@
                 ; 宏操作插入的指令没有对应树节点，作为一条指令完整执行。
                 hook.active := into && command != "宏操作"
             }
-            if (!OnTriggerSepcialItemMacro(CurLangCMD, true)) {
+            if (!RunEditorMacroPreview(CurLangCMD, true)) {
                 this.ResetDebugState()
                 return
             }

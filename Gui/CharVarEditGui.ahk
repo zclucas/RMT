@@ -133,7 +133,7 @@ class CharVarEditGui {
         ; Show 前查不到 XAML 的默认选项，此时使用第 0 项「变量」。
         typeKey := typeCombo ">SelectedIndex"
         state := ui.Query(typeKey, nameCombo)
-        items := state.Get(typeKey, "") == "1" ? GetGuiArrNameArr() : GetGuiVarArr("all")
+        items := state.Get(typeKey, "") == "1" ? GetArrayVariableNames() : GetGuiVarArr("all")
         currentName := state.Get(nameCombo, "")
         updates := [{ControlName: nameCombo, PropertyName: "ClearItems", Value: ""}]
         selectedIndex := 0

@@ -322,7 +322,7 @@ class KeyCheckGui {
 
     Init(cmd) {
         cmdArr := cmd != "" ? SplitCommand(cmd) : []
-        this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : GetCMDSerialStr("按键检测")
+        this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : AllocateCommandSerial("按键检测")
         this.Data := this.HasProp("SelectionData") ? this.SelectionData : GetMacroCMDData(this.SerialStr)
         this._autoRemark := ReadCommandAutoRemark(this.Data, GenerateCommandAutoRemark)
         if (!this.HasProp("SelectionData"))

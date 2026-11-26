@@ -51,7 +51,7 @@ class CommandErrorContext {
         location := "单条指令测试"
         try location := this.Location(frame.table, frame.index)
         context := this.Describe(frame.cmd, location)
-        if (IsObject(this.Editor) && InStr(stack, "_RunDiagnosticCallback") && InStr(stack, "OnTriggerSepcialItemMacro")) {
+        if (IsObject(this.Editor) && InStr(stack, "_RunDiagnosticCallback") && InStr(stack, "RunEditorMacroPreview")) {
             context.mode := "editor"
             try context.location := this.Editor.Call().location
         }

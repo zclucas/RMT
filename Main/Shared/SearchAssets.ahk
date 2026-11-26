@@ -126,7 +126,7 @@ OcrEngineFromIndex(index) {
 GetChineseOcr(engine := "") {
     global MyChineseOcr, MyEnglishOcr, LastChineseOcrUseTime, LastEnglishOcrUseTime, MainSoftData
     if (engine == "")
-        engine := MainSoftData.OCRTypeValue == 2 ? "Tesseract OCR" : "RapidOCR"
+        engine := RuntimeChoice.Key("OCRTypeValue", MainSoftData.OCRTypeValue) == "Tesseract OCR" ? "Tesseract OCR" : "RapidOCR"
     if (engine == "RapidOCR") {
         if (!MyChineseOcr)
             MyChineseOcr := RapidOcr(GetProjectRoot())

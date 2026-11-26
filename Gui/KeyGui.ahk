@@ -469,7 +469,7 @@ class KeyGui {
             return
 
         this.UpdateCommandStr()
-        OnTriggerSepcialItemMacro(this.CommandStr)
+        RunEditorMacroPreview(this.CommandStr)
     }
 
     ToggleFunc(state) {

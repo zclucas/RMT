@@ -374,7 +374,7 @@ class CompareGui {
 
     Init(cmd) {
         cmdArr := cmd != "" ? StrSplit(cmd, "_") : []
-        this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : GetCMDSerialStr("如果")
+        this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : AllocateCommandSerial("如果")
         this.ui.Update("RemarkCon", "Text", cmdArr.Length >= 2 ? cmdArr[2] : "")
         this.Data := GetMacroCMDData(this.SerialStr)
         this.Data.SerialStr := this.SerialStr
@@ -514,7 +514,7 @@ class CompareGui {
             return
 
         this.SaveCompareData()
-        OnTriggerSepcialItemMacro(this.GetCommandStr())
+        RunEditorMacroPreview(this.GetCommandStr())
     }
 
     SaveCompareData() {

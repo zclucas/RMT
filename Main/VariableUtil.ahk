@@ -15,7 +15,7 @@ SetGlobalData(macroStr, visitMap) {
             continue
             
         visitMap[cmdName] := true
-        SetCMDSerialData(cmdArr[A_Index])
+        RegisterCommandSerial(cmdArr[A_Index])
 
         baseCmd := GetCommandKey(RTrim(cmdName, "0123456789"))
         

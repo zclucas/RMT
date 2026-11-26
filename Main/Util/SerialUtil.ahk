@@ -1,13 +1,7 @@
 #Requires AutoHotkey v2.0
 
 SerialMap := Map()
-GetSerialStr(CmdStr) {
-    currentDateTime := FormatTime(, "HHmmss")
-    randomNum := Random(0, 9)
-    return CmdStr CurrentDateTime randomNum
-}
-
-SetCMDSerialData(CMD) {
+RegisterCommandSerial(CMD) {
     paramArr := StrSplit(CMD, "_")
     paramArr[1] := GetCmdStr(paramArr[1])
     ; 间隔/按键/RMT 等配置化指令登记序列码；普通移动为内联，无序列号则跳过
@@ -30,7 +24,7 @@ SetCMDSerialData(CMD) {
     Data.Refresh()
 }
 
-SetSerialByArr(Arr) {
+RegisterCommandSerials(Arr) {
     for index, value in Arr {
         textOnly := RegExReplace(value, "\d+")
         textOnly := textOnly == "" ? "Default" : GetCommandKey(textOnly)
@@ -46,7 +40,7 @@ SetSerialByArr(Arr) {
     }
 }
 
-GetCMDSerialStr(Cmd) {
+AllocateCommandSerial(Cmd) {
     Cmd := GetCommandKey(Cmd)
     if (!SerialMap.Has(Cmd)) {
         SerialMap.Set(Cmd, SerialData(Cmd))

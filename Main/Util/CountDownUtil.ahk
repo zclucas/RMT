@@ -174,16 +174,10 @@ CountDownHex(val, def) {
     return s
 }
 
-CountDownStyleKind() {
-    global MainSoftData
-    v := 2
-    try {
-        if (IsSet(MainSoftData) && MainSoftData.HasProp("CountDownStyle") && IsNumber(MainSoftData.CountDownStyle))
-            v := Integer(MainSoftData.CountDownStyle)
-    }
-    if (v < 1 || v > 3)
-        v := 2
-    return v
+GetCountdownStyleKey() {
+    value := "智能"
+    try value := MainSoftData.CountDownStyle
+    return RuntimeChoice.Key("CountDownStyle", value)
 }
 
 CountDownPadEnabled() {
@@ -204,10 +198,10 @@ CountDownFormatMode(sec) {
     sec := Integer(sec)
     if (sec < 0)
         sec := 0
-    switch CountDownStyleKind() {
-        case 1:
+    switch GetCountdownStyleKey() {
+        case "时分秒":
             return "hhmmss"
-        case 3:
+        case "秒":
             return "ss"
         default:
             if (sec >= 3600)

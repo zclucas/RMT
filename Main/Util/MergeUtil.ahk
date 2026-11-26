@@ -1151,7 +1151,7 @@ class MergeUtil {
                     if (newItem.TimingSerial != "" && IsObject(replaceInfo) && collectedConfigs.Has(newItem.TimingSerial))
                         newItem.TimingSerial := serialReplaceMap.Get(newItem.TimingSerial, newItem.TimingSerial)
                     else {
-                        newItem.TimingSerial := GetCMDSerialStr("Timing")
+                        newItem.TimingSerial := AllocateCommandSerial("Timing")
                         if (newItem.TimingSerial == "")
                             newItem.TimingSerial := newSerial
                     }

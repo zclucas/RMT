@@ -194,7 +194,7 @@ class VariableGui {
 
     Init(cmd) {
         cmdArr := cmd != "" ? SplitCommand(cmd) : []
-        this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : GetCMDSerialStr("变量")
+        this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : AllocateCommandSerial("变量")
         this.Data := JSON.parse(JSON.stringify(GetMacroCMDData(this.SerialStr)), , false)
 
         this._EnsureVarDataLen()

@@ -133,7 +133,7 @@
             return
         }
         if (this._sideMode && !this._sideActive) {
-            if (IsSet(MyMainWin) && IsObject(MyMainWin) && (!MyMainWin.aiAssistOpen || MyMainWin.sidePanelMode != 1))
+            if (IsSet(MyMainWin) && IsObject(MyMainWin) && (!MyMainWin.aiAssistOpen || MyMainWin.sidePanelMode != "逻辑树"))
                 return
             if (IsSet(MyMainWin) && IsObject(MyMainWin) && IsObject(MyMainWin._sideTree)) {
                 ed := MyMainWin._sideTree.ActiveEditor()
@@ -144,7 +144,7 @@
             }
             return
         }
-        if (this._sideMode && IsSet(MyMainWin) && IsObject(MyMainWin) && (!MyMainWin.aiAssistOpen || MyMainWin.sidePanelMode != 1))
+        if (this._sideMode && IsSet(MyMainWin) && IsObject(MyMainWin) && (!MyMainWin.aiAssistOpen || MyMainWin.sidePanelMode != "逻辑树"))
             return
         if (StrLower(key) == StrLower(this._GetContinueHotkey()))
             this.MenuHandler(this._ContinueLabel())

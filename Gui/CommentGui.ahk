@@ -129,7 +129,7 @@ class CommentGui {
 
     Init(cmd) {
         cmdArr := cmd != "" ? StrSplit(cmd, "_") : []
-        this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : GetCMDSerialStr("注释")
+        this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : AllocateCommandSerial("注释")
         this.Data := GetMacroCMDData(this.SerialStr)
         if (IsObject(this.ui))
             this.ui.Update("ContentCon", "Text", this.Data.Content)

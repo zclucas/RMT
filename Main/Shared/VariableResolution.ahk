@@ -25,7 +25,7 @@ GetReplaceVarText(tableItem, tableIndex, text, variTip := true) {
     ; 替换数组变量（去掉花括号和ε）
     for index, arrName in arrayMatches {
         if (MySoftData.ArrayMap.Has(arrName)) {
-            arrValue := GetArrayStr(MySoftData.ArrayMap[arrName])
+            arrValue := FormatArrayText(MySoftData.ArrayMap[arrName])
             ResText := StrReplace(ResText, "{ε" arrName "}", arrValue)
         }
     }
@@ -116,7 +116,7 @@ TryGetVarValue(&Value, varName, variTip := true, tableVarMap := Map(), allowLite
             Value := varName == "运行时坐标X" ? mouseX : mouseY
             return true
         case "运行时窗口坐标X", "运行时窗口坐标Y":
-            pos := GetCurWinPos()
+            pos := GetMouseWindowClientPosition()
             Value := pos[varName == "运行时窗口坐标X" ? 1 : 2]
             return true
         case "日期文本":
@@ -215,11 +215,11 @@ ShowNoVariableTip(VarName) {
     }
 }
 
-GetBrightness() {
+GetMonitorBrightness() {
     wmi := ComObjGet("winmgmts:\\.\root\WMI")
-    itmes := wmi.ExecQuery("SELECT * FROM WmiMonitorBrightness")
-    for item in itmes {
-        return item.CurrentBrightness
+    brightnessReadings := wmi.ExecQuery("SELECT * FROM WmiMonitorBrightness")
+    for reading in brightnessReadings {
+        return reading.CurrentBrightness
     }
     return 20
 }

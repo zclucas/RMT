@@ -13,7 +13,7 @@ GetTableSerialStr() {
     return "t_" FormatTime(, "HHmmss") Random(10, 99)
 }
 
-; 条目 ID：复用 GetCMDSerialStr("Item")（已全局唯一登记，含时间戳+随机数）
+; 条目 ID：复用 AllocateCommandSerial("Item")（已全局唯一登记，含时间戳+随机数）
 
 ; ===== 全局索引构建 =====
 ; 遍历 MySoftData.TableInfo 重建 TableMap / GlobalItemMap / 每表 ItemMap/FoldMap
@@ -230,7 +230,7 @@ AddTableItem(tableItem, item := "", fallbackFoldSeg := "") {
         if (parentSeg != "")
             item.ID := NewMacroPath(tableItem, parentSeg)
         else
-            item.ID := GetCMDSerialStr("Item")   ; 兜底（无模块归属时退回序列号，正常流程应有模块）
+            item.ID := AllocateCommandSerial("Item")   ; 兜底（无模块归属时退回序列号，正常流程应有模块）
     }
     tableItem.Items.Push(item)
     tableItem.RebuildIndex()

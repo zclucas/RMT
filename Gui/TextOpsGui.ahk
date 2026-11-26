@@ -322,14 +322,14 @@ class TextOpsGui {
 
     Init(cmd) {
         cmdArr := cmd != "" ? StrSplit(cmd, "_") : []
-        this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : GetCMDSerialStr("文本处理")
+        this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : AllocateCommandSerial("文本处理")
         this._ComboPush("RemarkCon", "Text", cmdArr.Length >= 2 ? cmdArr[2] : "")
         this.Data := GetMacroCMDData(this.SerialStr)
         this._autoRemark := ReadCommandAutoRemark(this.Data, GenerateCommandAutoRemark)
         ; 旧替换指令以 MatchType 为准，ArgsType 可能仍为旧默认值。
         if (this.Data.Type == "文本替换")
             this.Data.ArgsType := this.Data.MatchType
-        this.DLArrayArr := GetGuiArrNameArr()
+        this.DLArrayArr := GetArrayVariableNames()
         this.ArgsNameOptions := GetGuiVarArr("clipboard")
         this._activeType := this.Data.Type
         this._activeMode := this.Data.ArgsType
@@ -745,12 +745,12 @@ class TextOpsGui {
             return
         this.SaveTextOpsData()
         CommandStr := this.GetCommandStr()
-        OnTriggerSepcialItemMacro(CommandStr)
+        RunEditorMacroPreview(CommandStr)
         Res := ""
         if (this.Data.SaveType == "变量" && MySoftData.VariableMap.Has(this.Data.SaveName))
             Res := MySoftData.VariableMap[this.Data.SaveName]
         if (this.Data.SaveType == "数组" && MySoftData.ArrayMap.Has(this.Data.SaveName))
-            Res := GetArrayStr(MySoftData.ArrayMap[this.Data.SaveName])
+            Res := FormatArrayText(MySoftData.ArrayMap[this.Data.SaveName])
         if (Res != "") {
             tip1 := Format(GetLang("变量：{}"), this.Data.SaveName)
             tip2 := Format(GetLang("值：{}"), Res)

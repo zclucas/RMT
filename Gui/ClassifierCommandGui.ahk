@@ -82,7 +82,7 @@ class ClassifierCommandGui extends CommentGui {
 
     Init(cmd) {
         parts := cmd == "" ? [] : StrSplit(cmd, "_")
-        this.SerialStr := parts.Length ? parts[1] : GetCMDSerialStr(this.CmdKey)
+        this.SerialStr := parts.Length ? parts[1] : AllocateCommandSerial(this.CmdKey)
         this.Data := GetMacroCMDData(this.SerialStr)
         this._ComboPush("Remark", "Text", parts.Length >= 2 ? parts[2] : "")
         resultFields := this.HasResultField ? ["ResultVar"] : []
@@ -587,7 +587,7 @@ class ControlInfoGui extends WindowControlGui {
         this._testRunning := true
         try {
             this.SaveData()
-            if (OnTriggerSepcialItemMacro(this.GetCommandStr(), false, this.WindowBindingContext) && this.ui == ui) {
+            if (RunEditorMacroPreview(this.GetCommandStr(), false, this.WindowBindingContext) && this.ui == ui) {
                 fields := this.Data.ActionType == "读取位置/宽高" ? WindowControl.PositionFields
                     : this.Data.ActionType == "检测控件存在" ? ["ResultVar", "ControlVar", "HwndVar"] : ["ResultVar"]
                 message := ""
@@ -703,7 +703,7 @@ class ControlOperationGui extends WindowControlGui {
         this._testRunning := true
         try {
             this.SaveData()
-            OnTriggerSepcialItemMacro(this.GetCommandStr(), false, this.WindowBindingContext)
+            RunEditorMacroPreview(this.GetCommandStr(), false, this.WindowBindingContext)
         } finally {
             this._testRunning := false
         }
@@ -1442,7 +1442,7 @@ class AiDecisionGui extends ClassifierCommandGui {
         try {
             this.SaveData()
             resultVar := this.Data.ResultVar
-            if (OnTriggerSepcialItemMacro(this.GetCommandStr(), false, this.WindowBindingContext)
+            if (RunEditorMacroPreview(this.GetCommandStr(), false, this.WindowBindingContext)
                 && this.ui == ui && MySoftData.VariableMap.Has(resultVar)) {
                 value := MySoftData.VariableMap[resultVar]
                 RmtDialog.Info(resultVar " = " value, GetLang(this.CmdKey), this.Hwnd())

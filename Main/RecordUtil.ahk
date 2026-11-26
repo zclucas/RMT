@@ -1,6 +1,19 @@
 #Requires AutoHotkey v2.0
 #Include RecordBackgroundUtil.ahk
 
+class RecordingPolicy {
+    static CountdownMs := 3000
+    static CountdownFrameMs := 33
+    static StopClickMaxAgeMs := 500
+    static StopClickRadiusPx := 4
+    static WheelDelta := 120 ; Win32 WHEEL_DELTA，高精度滚轮按此累计成一格。
+    static RawInputMessage := 0x00FF ; WM_INPUT
+    static RawInputCommand := 0x10000003 ; RID_INPUT
+    static RawMouseType := 0
+    static RawKeyboardType := 1
+    static VerticalWheelFlag := 0x0400 ; RI_MOUSE_WHEEL，横向标记为其左移一位。
+}
+
 global RI_hwnd := 0
 global RI_isActive := false
 global RI_accumX := 0
@@ -149,7 +162,7 @@ RI_Init() {
     RI_hwnd := DllCall("CreateWindowEx", "UInt", 0, "Str", "Message", "Ptr", 0, "UInt", 0
         , "Int", 0, "Int", 0, "Int", 0, "Int", 0, "Ptr", -3, "Ptr", 0, "Ptr", hInstance, "Ptr", 0, "Ptr")
 
-    OnMessage(0x00FF, OnWMInput_Raw)
+    OnMessage(RecordingPolicy.RawInputMessage, OnWMInput_Raw)
 
     RID := Buffer(A_PtrSize == 8 ? 16 : 12, 0)
     NumPut("UShort", 0x01, RID, 0)
@@ -257,7 +270,7 @@ ShowRecordCountdown(callback) {
 
     CD_canceled := false
     CD_startTime := A_TickCount
-    CD_duration := 3000
+    CD_duration := RecordingPolicy.CountdownMs
     CD_hwnd := hwnd
     CD_cx := cx
     CD_cy := cy
@@ -271,7 +284,7 @@ ShowRecordCountdown(callback) {
     CD_cb.Push(callback)
     RecordCountdownGui := cdGui
 
-    SetTimer(DrawCDFrame, 33)
+    SetTimer(DrawCDFrame, RecordingPolicy.CountdownFrameMs)
 }
 
 DrawCDFrame() {
@@ -297,7 +310,7 @@ DrawCDFrame() {
     }
 
     progress := elapsed / CD_duration
-    displayNum := 3 - Floor(elapsed / 1000)
+    displayNum := Ceil(CD_duration / 1000) - Floor(elapsed / 1000)
     if (displayNum < 1)
         displayNum := 1
     sweepAngle := 360 * progress
@@ -410,14 +423,14 @@ OnWMInput_Raw(wParam, lParam, msg, hwnd) {
 
     rawInput := Buffer(64, 0)
     size := 64
-    ret := DllCall("GetRawInputData", "Ptr", lParam, "UInt", 0x10000003, "Ptr", rawInput.Ptr, "UIntP", &size, "UInt", RI_headerSize)
+    ret := DllCall("GetRawInputData", "Ptr", lParam, "UInt", RecordingPolicy.RawInputCommand, "Ptr", rawInput.Ptr, "UIntP", &size, "UInt", RI_headerSize)
     if (ret <= 0)
         return
 
     dwType := NumGet(rawInput, 0, "UInt")
     eventTime := RecordNow()
 
-    if (dwType == 0) {
+    if (dwType == RecordingPolicy.RawMouseType) {
         if (A_PtrSize == 8) {
             x := NumGet(rawInput, 36, "Int")
             y := NumGet(rawInput, 40, "Int")
@@ -433,7 +446,7 @@ OnWMInput_Raw(wParam, lParam, msg, hwnd) {
         if (x != 0 || y != 0) {
             RI_accumX += x
             RI_accumY += y
-            if (MainSoftData.RecordMouse && MainSoftData.RecordMouseTrail == 3) {
+            if (MainSoftData.RecordMouse && RuntimeChoice.Key("RecordMouseTrail", MainSoftData.RecordMouseTrail) == "全量") {
                 RI_eventQueue.Push(Map("type", "move", "ax", x, "ay", y, "t", eventTime))
             }
         }
@@ -449,7 +462,7 @@ OnWMInput_Raw(wParam, lParam, msg, hwnd) {
             RI_QueueMouseButtons(btnFlags, buttonData, eventTime, snapX, snapY)
         }
     }
-    else if (dwType == 1 && MainSoftData.RecordKeyboard) {
+    else if (dwType == RecordingPolicy.RawKeyboardType && MainSoftData.RecordKeyboard) {
         CoordMode("Mouse", "Screen")
         MouseGetPos &snapX, &snapY
         if (snapX != RI_lastSnapX || snapY != RI_lastSnapY) {
@@ -490,11 +503,11 @@ RI_QueueMouseButtons(flags, wheelDelta, eventTime, x := "", y := "") {
     ; 高精度滚轮可能小于一格，也可能一次上报多格。两轴独立累积。
     Loop 2 {
         axis := A_Index
-        if (!(flags & (0x0400 << (axis - 1))) || !wheelDelta)
+        if (!(flags & (RecordingPolicy.VerticalWheelFlag << (axis - 1))) || !wheelDelta)
             continue
         sum := RI_wheelRemainder[axis] + wheelDelta
-        turns := Abs(sum) // 120
-        RI_wheelRemainder[axis] := sum - (sum < 0 ? -1 : 1) * turns * 120
+        turns := Abs(sum) // RecordingPolicy.WheelDelta
+        RI_wheelRemainder[axis] := sum - (sum < 0 ? -1 : 1) * turns * RecordingPolicy.WheelDelta
         name := axis = 1 ? (sum > 0 ? "WheelUp" : "WheelDown") : (sum > 0 ? "WheelRight" : "WheelLeft")
         Loop turns
             RI_eventQueue.Push(Map("type", "mouse", "name", name, "state", GetLang("按下"), "t", eventTime, "x", x, "y", y))
@@ -512,10 +525,10 @@ RI_DiscardStopClick(x, y, tick) {
             continue
         }
         if (e["type"] != "mouse" || e["name"] != "LButton" || !e.Has("x")
-            || e["x"] = "" || Abs(e["x"] - x) > 4 || Abs(e["y"] - y) > 4)
+            || e["x"] = "" || Abs(e["x"] - x) > RecordingPolicy.StopClickRadiusPx || Abs(e["y"] - y) > RecordingPolicy.StopClickRadiusPx)
             return false
         if (!up) {
-            if (e["state"] != GetLang("松开") || Abs(tick - e["t"]) > 500)
+            if (e["state"] != GetLang("松开") || Abs(tick - e["t"]) > RecordingPolicy.StopClickMaxAgeMs)
                 return false
             up := i
         } else {
@@ -712,7 +725,7 @@ FilterMoveCmd(macroStr) {
     if (macroStr == "")
         return ""
 
-    trailMode := MainSoftData.RecordMouseTrail
+    trailMode := RuntimeChoice.Key("RecordMouseTrail", MainSoftData.RecordMouseTrail)
     ; §20 改名兼容：旧名「移动」/新名「鼠标移动」都识别（录制出的新宏用新名）
     moveKey := GetLang("移动")
     spanKey := GetLang("间隔")
@@ -724,12 +737,12 @@ FilterMoveCmd(macroStr) {
         paramArr := SplitCommand(cmd)
         isZeroSpan := (paramArr[1] == spanKey && paramArr[2] == "0")
 
-        if (trailMode == 0) {
+        if (trailMode == "不录制") {
             if (isZeroSpan || IsMoveCmd(paramArr[1]))
                 continue
             filteredArr.Push(cmd)
         }
-        else if (trailMode == 3) {
+        else if (trailMode == "全量") {
             isSnapMove := (IsMoveCmd(paramArr[1]) && !(paramArr.Length >= 4 && paramArr[paramArr.Length] == "2"))
             if (!isZeroSpan && !isSnapMove)
                 filteredArr.Push(cmd)
@@ -740,16 +753,16 @@ FilterMoveCmd(macroStr) {
         }
     }
 
-    if (trailMode == 0)
+    if (trailMode == "不录制")
         return CleanOrphanSpan(filteredArr)
 
-    if (trailMode == 1)
+    if (trailMode == "关键点位")
         return FillMoveSpeed(filteredArr, MainSoftData.RecordMouseTrailSpeed)
 
-    if (trailMode == 3)
+    if (trailMode == "全量")
         return CompressFullMoves(filteredArr)
 
-    if (trailMode == 2)
+    if (trailMode == "关键点相对位移")
         return CleanOrphanSpan(ConvertToRelative(filteredArr, MainSoftData.RecordMouseTrailSpeed))
 
     return macroStr

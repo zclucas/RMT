@@ -232,7 +232,7 @@ class SubMacroGui {
 
     Init(cmd) {
         cmdArr := cmd != "" ? SplitCommand(cmd) : []
-        this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : GetCMDSerialStr("宏操作")
+        this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : AllocateCommandSerial("宏操作")
         this._ComboPush("RemarkCon", "Text", cmdArr.Length >= 2 ? cmdArr[2] : "")
         this.Data := GetMacroCMDData(this.SerialStr)
         this._autoRemark := ReadCommandAutoRemark(this.Data, this._GenerateRemark.Bind(this))
@@ -353,7 +353,7 @@ class SubMacroGui {
             return
         CommandStr := this.SaveSubMacroData()
         if (CommandStr != "" && this.ui == ui)
-            OnTriggerSepcialItemMacro(CommandStr)
+            RunEditorMacroPreview(CommandStr)
     }
 
     _GenerateRemark(data) {

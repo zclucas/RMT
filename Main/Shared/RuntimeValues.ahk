@@ -1,51 +1,39 @@
 ; 时间浮动按原值的百分比计算，坐标浮动使用绝对偏移。
 ; 配置中的 + 或 - 限定浮动方向。两者都没有时允许向两边浮动。
-RandomizeDurationByPercent(oriTime, floatValue) {
-    hasAdd := InStr(floatValue, "+")
-    hasReduce := InStr(floatValue, "-")
-    if (!hasAdd && !hasReduce) {
-        hasAdd := true
-        hasReduce := true
+RandomizeDurationByPercent(durationMs, jitterPercent) {
+    allowIncrease := InStr(jitterPercent, "+")
+    allowDecrease := InStr(jitterPercent, "-")
+    if (!allowIncrease && !allowDecrease) {
+        allowIncrease := true
+        allowDecrease := true
     }
 
-    oriTime := Integer(oriTime)
-    floatValue := Integer(floatValue)
-    value := Abs(oriTime * (floatValue * 0.01))
-    maxValue := hasAdd ? oriTime + value : oriTime
-    minValue := hasReduce ? oriTime - value : oriTime
-    result := Max(0, Random(minValue, maxValue))
-    return result
+    durationMs := Integer(durationMs)
+    jitterPercent := Integer(jitterPercent)
+    jitterMs := Abs(durationMs * (jitterPercent * 0.01))
+    maximumMs := allowIncrease ? durationMs + jitterMs : durationMs
+    minimumMs := allowDecrease ? durationMs - jitterMs : durationMs
+    randomizedMs := Max(0, Random(minimumMs, maximumMs))
+    return randomizedMs
 }
 
-RandomizeValueByOffset(oriValue, floatValue) {
-    hasAdd := InStr(floatValue, "+")
-    hasReduce := InStr(floatValue, "-")
-    if (!hasAdd && !hasReduce) {
-        hasAdd := true
-        hasReduce := true
+RandomizeValueByOffset(baseValue, offset) {
+    allowIncrease := InStr(offset, "+")
+    allowDecrease := InStr(offset, "-")
+    if (!allowIncrease && !allowDecrease) {
+        allowIncrease := true
+        allowDecrease := true
     }
 
-    oriValue := Integer(oriValue)
-    value := Abs(floatValue)
-    maxValue := hasAdd ? oriValue + value : oriValue
-    minValue := hasReduce ? oriValue - value : oriValue
-    return Random(minValue, maxValue)
+    baseValue := Integer(baseValue)
+    offsetMagnitude := Abs(offset)
+    maximumValue := allowIncrease ? baseValue + offsetMagnitude : baseValue
+    minimumValue := allowDecrease ? baseValue - offsetMagnitude : baseValue
+    return Random(minimumValue, maximumValue)
 }
 
-; 本地时钟跨午夜会归零。计算耗时应使用 A_TickCount。
-GetMillisecondsSinceMidnight() {
-    return A_Hour * 3600 * 1000 + A_Min * 60 * 1000 + A_Sec * 1000 + A_mSec
-}
-
-StrToHex(str) {
-    hex := ""
-    loop parse str {
-        hex .= Format("{:02X}", Ord(A_LoopField))
-    }
-    return hex
-}
-
-GetWinPos(ScreenX, ScreenY, hwnd := 0) {
+; 将屏幕点转换为目标顶层窗口的客户区坐标；未命中窗口时返回 [0, 0]。
+ScreenPointToWindowClient(ScreenX, ScreenY, hwnd := 0) {
     DllCall("SetProcessDPIAware")
     if (hwnd == 0) {
         hwnd := DllCall("User32\WindowFromPoint", "int64", (ScreenY << 32) | (ScreenX & 0xFFFFFFFF), "ptr")
@@ -60,8 +48,8 @@ GetWinPos(ScreenX, ScreenY, hwnd := 0) {
     return [ScreenX - clientX, ScreenY - clientY]
 }
 
-GetCurWinPos() {
+GetMouseWindowClientPosition() {
     CoordMode("Mouse", "Screen")
     MouseGetPos &mouseX, &mouseY
-    return GetWinPos(mouseX, mouseY)
+    return ScreenPointToWindowClient(mouseX, mouseY)
 }

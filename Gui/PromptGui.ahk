@@ -471,7 +471,7 @@ class PromptGui {
     RefreshInsertNames(*) {
         if (!IsObject(this.ui) || !this.ui.wpfHwnd)
             return
-        names := this.ui.Query("InsertKind") == GetLang("数组") ? GetGuiArrNameArr() : GetGuiVarArr("all")
+        names := this.ui.Query("InsertKind") == GetLang("数组") ? GetArrayVariableNames() : GetGuiVarArr("all")
         changes := [{ControlName: "InsertValue", PropertyName: "ClearItems", Value: ""}]
         for name in names {
             if (name != "")
@@ -691,10 +691,10 @@ class PromptGui {
     GetCommand(data, preview := false) {
         if (preview) {
             if (this.previewSerial == "")
-                this.previewSerial := GetCMDSerialStr("提示")
+                this.previewSerial := AllocateCommandSerial("提示")
             data.SerialStr := this.previewSerial
         } else if (data.SerialStr == "")
-            data.SerialStr := GetCMDSerialStr("提示")
+            data.SerialStr := AllocateCommandSerial("提示")
         command := FormatCommandAutoRemark(data, this.ui.Query("Remark"), this._autoRemark, GenerateCommandAutoRemark, !preview)
         SaveMacroCMDData(data)
         return command
@@ -717,7 +717,7 @@ class PromptGui {
             RmtDialog.Info(err.Message, "", "Owner" this.ui.wpfHwnd)
             return
         }
-        try OnTriggerSepcialItemMacro(command)
+        try RunEditorMacroPreview(command)
         finally {
             CfgDelete(PromptFile, SettingSection, this.previewSerial)
             if (MySoftData.DataCacheMap.Has(this.previewSerial))

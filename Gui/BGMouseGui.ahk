@@ -240,7 +240,7 @@ class BGMouseGui {
 
     Init(cmd) {
         cmdArr := cmd != "" ? StrSplit(cmd, "_") : []
-        this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : GetCMDSerialStr("后台鼠标")
+        this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : AllocateCommandSerial("后台鼠标")
         this.ui.Update("RemarkCon", "Text", cmdArr.Length >= 2 ? cmdArr[2] : "")
         this.Data := GetMacroCMDData(this.SerialStr)
         this._autoRemark := ReadCommandAutoRemark(this.Data, GenerateCommandAutoRemark)
@@ -337,7 +337,7 @@ class BGMouseGui {
             }
         }
         ; 換算頂層窗口客戶區座標
-        PosArr := GetWinPos(x, y, winId)
+        PosArr := ScreenPointToWindowClient(x, y, winId)
         this.ui.BatchUpdate([
             {ControlName: "PosVarX", PropertyName: "Text", Value: String(PosArr[1])},
             {ControlName: "PosVarY", PropertyName: "Text", Value: String(PosArr[2])}
@@ -380,7 +380,7 @@ class BGMouseGui {
     RefreshInfo() {
         if (!IsObject(this.ui))
             return
-        PosArr := GetCurWinPos()
+        PosArr := GetMouseWindowClientPosition()
         try this.ui.Update("CurPosCon", "Text", Format("{}{},{}", GetLang("当前窗口坐标:"), PosArr[1], PosArr[2]))
     }
 
@@ -420,7 +420,7 @@ class BGMouseGui {
             return
         }
         this.SaveBGMouseData()
-        OnTriggerSepcialItemMacro(this.GetCommandStr())
+        RunEditorMacroPreview(this.GetCommandStr())
     }
 
     GetCommandStr() {

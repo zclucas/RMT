@@ -265,9 +265,10 @@
         this.MarkSettingDirty(field "Con")
     }
 
-    ; 0 基索引下拉（配置值即索引，如 RecordMouseTrail / CMDLogAutoClear）
+    ; 旧 0 基配置下拉：按当前选项文本保存固定编号，显示顺序可以独立调整。
     OnComboIndex0(fieldName, state, ctrl, event) {
-        MainSoftData.%fieldName% := Integer(this.ui.Query(ctrl ">SelectedIndex"))
+        MainSoftData.%fieldName% := RuntimeChoice.Definitions.Has(fieldName)
+            ? RuntimeChoice.Code(fieldName, this.ui.Query(ctrl)) : Integer(this.ui.Query(ctrl ">SelectedIndex"))
         this.MarkSettingDirty(ctrl)
     }
 
@@ -890,7 +891,8 @@
     }
 
     OnComboIndex(fieldName, state, ctrl, event) {
-        MainSoftData.%fieldName% := Integer(this.ui.Query(ctrl ">SelectedIndex")) + 1
+        MainSoftData.%fieldName% := RuntimeChoice.Definitions.Has(fieldName)
+            ? RuntimeChoice.Code(fieldName, this.ui.Query(ctrl)) : Integer(this.ui.Query(ctrl ">SelectedIndex")) + 1
         this.MarkSettingDirty(ctrl)
     }
 

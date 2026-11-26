@@ -156,7 +156,7 @@ class RunGui {
 
     Init(cmd) {
         cmdArr := cmd != "" ? StrSplit(cmd, "_") : []
-        this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : GetCMDSerialStr("运行")
+        this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : AllocateCommandSerial("运行")
         this.ui.Update("RemarkCon", "Text", cmdArr.Length >= 2 ? cmdArr[2] : "")
         this.Data := GetMacroCMDData(this.SerialStr)
         this.ui.Update("PathTextCon", "Text", UnescapeVarText(this.Data.Target))
@@ -201,7 +201,7 @@ class RunGui {
 
     TriggerMacro(state := "", ctrl := "", event := "") {
         this.SaveRunData()
-        OnTriggerSepcialItemMacro(this.GetCommandStr())
+        RunEditorMacroPreview(this.GetCommandStr())
     }
 
     SaveRunData() {

@@ -243,7 +243,7 @@ class DeltaMoveGui {
             return
         }
         CommandStr := this.GetCmdStr()
-        OnTriggerSepcialItemMacro(CommandStr)
+        RunEditorMacroPreview(CommandStr)
     }
 
     OnSureBtnClick(state, ctrl, event) {
@@ -264,7 +264,7 @@ class DeltaMoveGui {
         this.Data.Interval := this.ui.Query("IntervalCon")
 
         if (this.Data.SerialStr == "")
-            this.Data.SerialStr := GetCMDSerialStr(GetLang("增量移动"))
+            this.Data.SerialStr := AllocateCommandSerial(GetLang("增量移动"))
         SaveMacroCMDData(this.Data)
         remark := Trim(this.ui.Query("RemarkCon"))
         if (remark == "")

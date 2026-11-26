@@ -965,7 +965,7 @@ class MacroGraphFormalMixin {
         this._AddEditableComboRow(body, "FIOColEndRow_" id, GetLang("终止列："), "FIOColEnd_" id, GetGuiVarArr("count"), GetLang(d.HasOwnProp("colEndVar") ? d.colEndVar : 1), HasRegion, lw, cw)
         this._AddEditableComboRow(body, "FIOTxtRowRow_" id, GetLang("文本行："), "FIOTxtRow_" id, GetGuiVarArr("count"), GetLang(d.HasOwnProp("textRowVar") ? d.textRowVar : 1), HasTextRow, lw, cw)
         this._AddMultilineFieldBlock(body, "FIOContentBlock_" id, GetLang("写入内容："), "FIOContent_" id, d.HasOwnProp("content") ? d.content : GetLang("写入的内容"), HasWriteContent, this._FormalContentW())
-        this._AddEditableComboRow(body, "FIOArrRow_" id, GetLang("数组名："), "FIOArr_" id, GetGuiArrNameArr(), d.HasOwnProp("arrName") ? d.arrName : "Arr", HasWriteArr, lw, cw)
+        this._AddEditableComboRow(body, "FIOArrRow_" id, GetLang("数组名："), "FIOArr_" id, GetArrayVariableNames(), d.HasOwnProp("arrName") ? d.arrName : "Arr", HasWriteArr, lw, cw)
         ; 保存类型：根据模式和操作类型自动固定（结果保存仅读取时出现，与编辑器一致）
         ; 读取Excel+单元格 → 变量；读取Excel+其他模式 → 数组；读取文本+全部/指定行 → 变量；其他 → 数组
         showSave := IsRead
@@ -973,7 +973,7 @@ class MacroGraphFormalMixin {
         autoSaveType := IsResOnlyVar ? GetLang("变量") : GetLang("数组")
         this._AddFieldRow(body, "FIOSaveTypeRow_" id, GetLang("保存类型："), "FIOSaveType_" id, autoSaveType, showSave, false)
         ; 保存类型是变量时用变量列表，是数组时用数组列表
-        saveNameList := IsResOnlyVar ? GetGuiVarArr() : GetGuiArrNameArr()
+        saveNameList := IsResOnlyVar ? GetGuiVarArr() : GetArrayVariableNames()
         this._AddEditableComboRow(body, "FIOSaveRow_" id, GetLang("保存名："), "FIOSave_" id, saveNameList, sn, showSave, lw, cw)
     }
 
@@ -994,7 +994,7 @@ class MacroGraphFormalMixin {
         isArraySource := tt == "文本拼接" && at == "数组"
         sourceOptions := this._FormalTextOpsSourceOptions(tt, at)
         argsOptions := this._FormalTextOpsArgsOptions(tt, at)
-        saveOptions := fixedSt == "数组" ? GetGuiArrNameArr() : GetGuiVarArr()
+        saveOptions := fixedSt == "数组" ? GetArrayVariableNames() : GetGuiVarArr()
         componentIndex := TextOpsTimestampComponentIndex(an)
         this._AddComboRow(body, "TxtTypeRow_" id, GetLang("类型："), "TxtTypeCmb_" id, typeNames, this._IndexInLangArr(typeNames, tt), true, true, lw, cw)
         this._AddTextOpsArgsTypeRow(body, id, tt, at, this._FormalTextOpsArgsTypes(tt).Length > 0, lw, cw)
@@ -1035,10 +1035,10 @@ class MacroGraphFormalMixin {
         effSt := fixedSt != "" ? fixedSt : st
         showIdx := f.IsShowArgs && !f.OnlyArgsData
         showData := f.IsShowArgs && !f.OnlyArgsIndex
-        argsNameList := (agt == "数组") ? GetGuiArrNameArr() : GetGuiVarArr("all")
-        saveNameList := (effSt == "数组") ? GetGuiArrNameArr() : GetGuiVarArr()
+        argsNameList := (agt == "数组") ? GetArrayVariableNames() : GetGuiVarArr("all")
+        saveNameList := (effSt == "数组") ? GetArrayVariableNames() : GetGuiVarArr()
         this._AddComboRow(body, "ArrTypeRow_" id, GetLang("操作："), "ArrTypeCmb_" id, typeNames, this._IndexInLangArr(typeNames, GetLang(at)), true, true, lw, cw)
-        this._AddEditableComboRow(body, "ArrNameRow_" id, GetLang("数组："), "ArrName_" id, GetGuiArrNameArr(), an, true, lw, cw)
+        this._AddEditableComboRow(body, "ArrNameRow_" id, GetLang("数组："), "ArrName_" id, GetArrayVariableNames(), an, true, lw, cw)
         this._AddCheckRow(body, "ArrIgnRow_" id, "ArrIgn_" id, GetLang("如果数组存在则不改变数据"), (ign == 1 || ign == "1") && f.ShowIgn, f.ShowIgn)
         this._AddFieldRow(body, "ArrInitRow_" id, GetLang("初始值："), "ArrInit_" id, initTxt, f.IsCreate, true, "", "", "", lw, cw)
         this._AddEditableComboRow(body, "ArrMainRow_" id, GetLang("子索引："), "ArrMain_" id, GetGuiVarArr("count"), GetLang(mi), f.IsShowMainIndex, lw, cw)
@@ -1160,7 +1160,7 @@ class MacroGraphFormalMixin {
         Loop 7 {
             prop := "wmResultVar" A_Index
             label := A_Index <= fields.Length ? GetLang(fields[A_Index]) : ""
-            this._AddEditableComboRow(body, "WmResultRow" A_Index "_" id, label, "WmResult" A_Index "_" id, atKey == "匹配窗口列表" ? GetGuiArrNameArr() : varList,
+            this._AddEditableComboRow(body, "WmResultRow" A_Index "_" id, label, "WmResult" A_Index "_" id, atKey == "匹配窗口列表" ? GetArrayVariableNames() : varList,
                 d.HasOwnProp(prop) ? d.%prop% : WindowResultDefaultName(d.HasOwnProp("wmActionType") ? d.wmActionType : "激活窗口", A_Index), A_Index <= fields.Length, lw, cw, "WmResultLabel" A_Index "_" id, GetLang(WindowInfoFieldTip(atKey, A_Index)))
         }
         this._AddEditableComboRow(body, "WmTitleRow_" id, GetLang("新标题："), "WmTitle_" id, GetGuiVarReferences("text"), TranslateBuiltinVarReferences(d.HasOwnProp("wmNewTitle") ? d.wmNewTitle : "", true), isTitle, lw, cw)

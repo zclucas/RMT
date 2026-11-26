@@ -111,7 +111,7 @@ ExcelDllWriteCells(mode, values) {
         } else {
             cells[index++] := byRow ? 0 : i - 1
             cells[index++] := byRow ? i - 1 : 0
-            cells[index++] := IsObject(value) ? GetArrayStr(value) : value
+            cells[index++] := IsObject(value) ? FormatArrayText(value) : value
         }
     }
     return cells
@@ -236,7 +236,7 @@ ExcelCloseBackgroundWorkbook(workbook, app) {
 }
 
 ExcelCellToWrite(wbPath, sheetIdentifier, row, col, value, item := "") {
-    if (MainSoftData.ExcelBackend != 2)
+    if (RuntimeChoice.Key("ExcelBackend", MainSoftData.ExcelBackend) != "AHK（兼容）")
         return ExcelDllWrite(wbPath, sheetIdentifier, "Cell", row, col, value, item)
     try {
         lock := ExcelWorkbookLock(wbPath, item)
@@ -266,7 +266,7 @@ ExcelCellToWrite(wbPath, sheetIdentifier, row, col, value, item := "") {
 }
 
 ExcelRowToWrite(wbPath, sheetIdentifier, row, col, value, item := "") {
-    if (MainSoftData.ExcelBackend != 2)
+    if (RuntimeChoice.Key("ExcelBackend", MainSoftData.ExcelBackend) != "AHK（兼容）")
         return ExcelDllWrite(wbPath, sheetIdentifier, "Row", row, col, value, item)
     try {
         lock := ExcelWorkbookLock(wbPath, item)
@@ -303,7 +303,7 @@ ExcelRowToWrite(wbPath, sheetIdentifier, row, col, value, item := "") {
 }
 
 ExcelColToWrite(wbPath, sheetIdentifier, row, col,  value, item := "") {
-    if (MainSoftData.ExcelBackend != 2)
+    if (RuntimeChoice.Key("ExcelBackend", MainSoftData.ExcelBackend) != "AHK（兼容）")
         return ExcelDllWrite(wbPath, sheetIdentifier, "Column", row, col, value, item)
     try {
         lock := ExcelWorkbookLock(wbPath, item)
@@ -340,7 +340,7 @@ ExcelColToWrite(wbPath, sheetIdentifier, row, col,  value, item := "") {
 }
 
 ExcelRangeRowToWrite(xlPath, SheetIdentifier, Row, Col, Arr, item := "") {
-    if (MainSoftData.ExcelBackend != 2)
+    if (RuntimeChoice.Key("ExcelBackend", MainSoftData.ExcelBackend) != "AHK（兼容）")
         return ExcelDllWrite(xlPath, SheetIdentifier, "RowRange", Row, Col, Arr, item)
     try {
         lock := ExcelWorkbookLock(xlPath, item)
@@ -355,7 +355,7 @@ ExcelRangeRowToWrite(xlPath, SheetIdentifier, Row, Col, Arr, item := "") {
         if (!IsDoubleArr) {
             loop Arr.Length {
                 CurCol := Col + A_Index - 1
-                Value := IsObject(Arr[A_Index]) ? GetArrayStr(Arr[A_Index]) : Arr[A_Index]
+                Value := IsObject(Arr[A_Index]) ? FormatArrayText(Arr[A_Index]) : Arr[A_Index]
                 sheet.Cells(Row, CurCol).Value := Value
             }
         }
@@ -389,7 +389,7 @@ ExcelRangeRowToWrite(xlPath, SheetIdentifier, Row, Col, Arr, item := "") {
 }
 
 ExcelRangeColToWrite(xlPath, SheetIdentifier, Row, Col, Arr, item := "") {
-    if (MainSoftData.ExcelBackend != 2)
+    if (RuntimeChoice.Key("ExcelBackend", MainSoftData.ExcelBackend) != "AHK（兼容）")
         return ExcelDllWrite(xlPath, SheetIdentifier, "ColumnRange", Row, Col, Arr, item)
     try {
         lock := ExcelWorkbookLock(xlPath, item)
@@ -404,7 +404,7 @@ ExcelRangeColToWrite(xlPath, SheetIdentifier, Row, Col, Arr, item := "") {
         if (!IsDoubleArr) {
             loop Arr.Length {
                 CurRow := Row + A_Index - 1
-                Value := IsObject(Arr[A_Index]) ? GetArrayStr(Arr[A_Index]) : Arr[A_Index]
+                Value := IsObject(Arr[A_Index]) ? FormatArrayText(Arr[A_Index]) : Arr[A_Index]
                 sheet.Cells(CurRow, Col).Value := Value
             }
         }
@@ -438,7 +438,7 @@ ExcelRangeColToWrite(xlPath, SheetIdentifier, Row, Col, Arr, item := "") {
 }
 
 ExcelCellToRead(wbPath, sheetIdentifier, row, col, &ResValue, item := "") {
-    if (MainSoftData.ExcelBackend != 2)
+    if (RuntimeChoice.Key("ExcelBackend", MainSoftData.ExcelBackend) != "AHK（兼容）")
         return ExcelDllRead(wbPath, sheetIdentifier, "Cell", row, col, row, col, &ResValue, item)
     try {
         lock := ExcelWorkbookLock(wbPath, item)
@@ -475,7 +475,7 @@ ExcelCellToRead(wbPath, sheetIdentifier, row, col, &ResValue, item := "") {
 }
 
 ExcelRowToRead(xlPath, SheetIdentifier, Row, Col, &ResArr, item := "") {
-    if (MainSoftData.ExcelBackend != 2)
+    if (RuntimeChoice.Key("ExcelBackend", MainSoftData.ExcelBackend) != "AHK（兼容）")
         return ExcelDllRead(xlPath, SheetIdentifier, "Row", Row, Col, Row, Col, &ResArr, item)
     try {
         ResArr := []
@@ -522,7 +522,7 @@ ExcelRowToRead(xlPath, SheetIdentifier, Row, Col, &ResArr, item := "") {
 }
 
 ExcelColToRead(xlPath, SheetIdentifier, Row, Col, &ResArr, item := "") {
-    if (MainSoftData.ExcelBackend != 2)
+    if (RuntimeChoice.Key("ExcelBackend", MainSoftData.ExcelBackend) != "AHK（兼容）")
         return ExcelDllRead(xlPath, SheetIdentifier, "Column", Row, Col, Row, Col, &ResArr, item)
     try {
         ResArr := []
@@ -586,7 +586,7 @@ FlattenExcelRangeIfStrip(&ResArr, Row, Col, EndRow, EndCol) {
 }
 
 ExcelRangeRowToRead(xlPath, SheetIdentifier, Row, Col, EndRow, EndCol, &ResArr, item := "") {
-    if (MainSoftData.ExcelBackend != 2)
+    if (RuntimeChoice.Key("ExcelBackend", MainSoftData.ExcelBackend) != "AHK（兼容）")
         return ExcelDllRead(xlPath, SheetIdentifier, "RowRange", Row, Col, EndRow, EndCol, &ResArr, item)
     try {
         ResArr := []
@@ -635,7 +635,7 @@ ExcelRangeRowToRead(xlPath, SheetIdentifier, Row, Col, EndRow, EndCol, &ResArr, 
 }
 
 ExcelRangeColToRead(xlPath, SheetIdentifier, Row, Col, EndRow, EndCol, &ResArr, item := "") {
-    if (MainSoftData.ExcelBackend != 2)
+    if (RuntimeChoice.Key("ExcelBackend", MainSoftData.ExcelBackend) != "AHK（兼容）")
         return ExcelDllRead(xlPath, SheetIdentifier, "ColumnRange", Row, Col, EndRow, EndCol, &ResArr, item)
     try {
         ResArr := []

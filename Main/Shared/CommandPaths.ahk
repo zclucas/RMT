@@ -7,35 +7,14 @@ IsClipboardText() {
     return false
 }
 
-;没必要删除
-ClearUselessSetting(deleteMacro) {
-    if (deleteMacro == "")
-        return
-    RegExMatch(deleteMacro, "(Compare\d+)", &match)
-    match := match != "" ? match : []
-    for id, value in match {
-        if (value == "")
-            continue
-        CfgDelete(CompareFile, SettingSection, value)
-    }
-
-    RegExMatch(deleteMacro, "(Coord\d+)", &match)
-    match := match != "" ? match : []
-    for id, value in match {
-        if (value == "")
-            continue
-        CfgDelete(MMPROFile, SettingSection, value)
-    }
-}
-
-; 避免写入提示报错
+; 剪贴板可能被其他进程短暂占用；重试 5 次，每次间隔 100 毫秒。
 SetClipboard(Content) {
     loop 5 {  ; 最多重试5次
         try {
             A_Clipboard := Content
             return true
         } catch as err {
-            Sleep(100)  ; 等待50毫秒
+            Sleep(100)
             continue
         }
     }

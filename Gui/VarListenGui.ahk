@@ -335,7 +335,7 @@ class VarListenGui {
         }
         for key, value in MySoftData.ArrayMap {
             this._rowKeys.Push("ε" key)
-            this._AddRow(this._rowKeys.Length, key, GetLang("数组"), GetArrayStr(value), true)
+            this._AddRow(this._rowKeys.Length, key, GetLang("数组"), FormatArrayText(value), true)
         }
     }
 
@@ -387,7 +387,7 @@ class VarListenGui {
         varName := LTrim(rawKey, "ε")
         curValue := ""
         if (isArray && MySoftData.ArrayMap.Has(varName))
-            curValue := GetArrayStr(MySoftData.ArrayMap[varName])
+            curValue := FormatArrayText(MySoftData.ArrayMap[varName])
         else if (MySoftData.VariableMap.Has(varName))
             curValue := String(MySoftData.VariableMap[varName])
 
@@ -402,7 +402,7 @@ class VarListenGui {
             if (Value == "")
                 DeleteGlobalArray(Name)
             else
-                SetGlobalArray(Name, GetArray(Value))
+                SetGlobalArray(Name, ParseArrayText(Value))
         }
         else {
             if (Value == "")

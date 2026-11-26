@@ -37,17 +37,13 @@ class TriggerKeyData {
     }
 
     AddData(info) {
-        static PropNames := ["OriDownArr", "OriLoosenArr", "OriLoosenStopArr", "OriTogArr", "OriHoldArr", "OriDblClickArr"]
-        n := info.GetTriggerType()
-        ; 越界（0/空/下拉清空后 -1+1=0）直接索引会抛异常并中断 InitTriggerKeyMap，后面的菜单宏就进不了映射表，按「按下」兜底。
-        if (!IsInteger(n) || n < 1 || n > PropNames.Length) {
-            RMTLogSys(RMT_LV_WARN, "TriggerKey", Format("非法触发类型 {1}，按「按下」兜底: {2}", n, this.Key))
-            n := 1
-        }
-        this.%PropNames[n]%.Push(info)
+        static properties := Map("按下", "OriDownArr", "松开", "OriLoosenArr", "松止", "OriLoosenStopArr",
+            "开关", "OriTogArr", "长按", "OriHoldArr", "双击", "OriDblClickArr")
+        triggerKey := RuntimeChoice.Key("TriggerType", info.GetTriggerType())
+        this.%properties[triggerKey]%.Push(info)
     }
 
-    UpdataArr(forceUpdate := false) {
+    RefreshTriggerLists(forceUpdate := false) {
         now := A_TickCount
 
         ; 缓存检查：如果缓存有效且不是强制更新，跳过重建
@@ -194,7 +190,7 @@ class TriggerKeyData {
             if (!InStr(this.Key, "joy"))
                 this.StartReleaseWatch()
         }
-        this.UpdataArr()
+        this.RefreshTriggerLists()
 
         ;双击检测逻辑
         currentTime := A_TickCount
@@ -257,7 +253,7 @@ class TriggerKeyData {
         this.NeedReleaseBeforeRetrigger := false
         this.StopReleaseWatch()
         this.ReleaseLoosenStopPress()
-        this.UpdataArr()
+        this.RefreshTriggerLists()
 
         for index, value in this.LoosenArr {
             value.Action()
@@ -316,17 +312,17 @@ class TriggerKeyData {
 
 class TriggerKeyInfo {
     __New() {
-        this.macroType := 1     ; 1:按键/字串等 item  2:菜单宏 fold  3:界面宏 fold
+        this.targetKind := "条目宏"     ; 条目宏、菜单模块、界面模块分别处理触发目标。
         this.tableID := ""      ;表唯一 ID
-        this.itemID := ""       ;条目唯一 ID（macroType==1）
-        this.foldID := ""       ;折叠框唯一 ID（macroType==2/3）
+        this.itemID := ""       ;条目唯一 ID（targetKind==1）
+        this.foldID := ""       ;折叠框唯一 ID（targetKind==2/3）
 
         this.forbidTrigger := false
     }
 
     ; 菜单宏 / 界面宏均为 Fold 级触发键
     IsFoldMacro() {
-        return this.macroType == 2 || this.macroType == 3
+        return this.targetKind == "菜单模块" || this.targetKind == "界面模块"
     }
 
     ; 解析目标表对象（无则 ""）
@@ -334,15 +330,15 @@ class TriggerKeyInfo {
         return GetTableByID(this.tableID)
     }
 
-    ; 解析条目对象（macroType==1；无则 ""）
+    ; 解析条目对象（条目宏；无则 ""）
     GetItem() {
-        if (this.macroType != 1)
+        if (this.targetKind != "条目宏")
             return ""
         t := GetTableByID(this.tableID)
         return t ? t.GetItem(this.itemID) : ""
     }
 
-    ; 解析折叠框对象（macroType==2/3；无则 ""）
+    ; 解析折叠框对象（菜单模块/界面模块；无则 ""）
     GetFold() {
         if (!this.IsFoldMacro())
             return ""
@@ -351,7 +347,7 @@ class TriggerKeyInfo {
     }
 
     GetFrontStr() {
-        if (this.macroType == 1) {
+        if (this.targetKind == "条目宏") {
             t := GetTableByID(this.tableID)
             item := this.GetItem()
             if (!t || !item)
@@ -363,7 +359,7 @@ class TriggerKeyInfo {
     }
 
     GetTK() {
-        if (this.macroType == 1) {
+        if (this.targetKind == "条目宏") {
             item := this.GetItem()
             return item ? item.TK : ""
         }
@@ -372,26 +368,26 @@ class TriggerKeyInfo {
     }
 
     GetTriggerType() {      ;触发类型   "按下", "松开", "松止", "开关", "长按"
-        if (this.macroType == 1) {
+        if (this.targetKind == "条目宏") {
             item := this.GetItem()
             return item ? item.TriggerType : 1
         }
-        if (this.macroType == 2) {
+        if (this.targetKind == "菜单模块") {
             fold := this.GetFold()
             return fold ? fold.TKType : 1
         }
         ; 界面宏固定按「按下」切换面板（与 BindUIPanelHotKey 约定一致）
-        if (this.macroType == 3)
+        if (this.targetKind == "界面模块")
             return 1
         return 1
     }
 
     GetHoldTime() {
-        if (this.macroType == 1) {
+        if (this.targetKind == "条目宏") {
             item := this.GetItem()
             return item ? item.HoldTime : 500
         }
-        if (this.macroType == 2) {
+        if (this.targetKind == "菜单模块") {
             fold := this.GetFold()
             return fold ? fold.HoldTime : 500
         }
@@ -403,11 +399,11 @@ class TriggerKeyInfo {
     }
 
     GetWorkState() {
-        if (this.macroType == 1) {
+        if (this.targetKind == "条目宏") {
             item := this.GetItem()
             return item ? item.IsWorkIndex : false
         }
-        if (this.macroType == 2) {
+        if (this.targetKind == "菜单模块") {
             t := GetTableByID(this.tableID)
             if (t) {
                 for f, fold in t.Folds {
@@ -417,7 +413,7 @@ class TriggerKeyInfo {
             }
             return false
         }
-        if (this.macroType == 3) {
+        if (this.targetKind == "界面模块") {
             ; 有任意该模块面板可见则视为工作中（长按等逻辑用）
             if (!IsSet(MyUIMacroGui) || !IsObject(MyUIMacroGui))
                 return false
@@ -437,14 +433,14 @@ class TriggerKeyInfo {
     Action(press := 0) {
         if (this.forbidTrigger || (press && press.released))
             return
-        triggerType := this.GetTriggerType()
-        if (this.macroType == 1) {
+        triggerType := RuntimeChoice.Key("TriggerType", this.GetTriggerType())
+        if (this.targetKind == "条目宏") {
             t := GetTableByID(this.tableID)
             item := this.GetItem()
             if (!t || !item)
                 return
             itemIndex := GetItemIndexInTable(t, item.ID)
-            if (triggerType == 4) {
+            if (triggerType == "开关") {
                 ; 占用标记或 usePool 中仍有该宏的 Worker，都视为运行中 → 停止（避免脏标记导致误启动）
                 isRunning := item.IsWorkIndex
                 if (!isRunning && WorkPoolEnabled() && MyWorkPool.HasItemWork(t.ID, item.ID))
@@ -459,7 +455,7 @@ class TriggerKeyInfo {
             else
                 StartTriggeredMacro(t, itemIndex, press, this, RegExMatch(this.Key, "i)Joy") ? "手柄" : "快捷键")
         }
-        else if (this.macroType == 2) {
+        else if (this.targetKind == "菜单模块") {
             t := GetTableByID(this.tableID)
             if (!t) {
                 this._WarnOnce("menu-table", "菜单宏触发键找不到菜单表: " this.tableID)
@@ -471,14 +467,14 @@ class TriggerKeyInfo {
                 this._WarnOnce("menu-fold", "菜单宏触发键找不到模块: " this.foldID " (表 " t.ID ")")
                 return
             }
-            if (triggerType == 3) {
+            if (triggerType == "松止") {
                 this.forbidTrigger := true
                 if (press)
                     press.actions[this] := true
             }
-            OpenMenuWheel(foldIndex, triggerType == 4, t.ID)
+            OpenMenuWheel(foldIndex, triggerType == "开关", t.ID)
         }
-        else if (this.macroType == 3) {
+        else if (this.targetKind == "界面模块") {
             ; 界面宏：切换悬浮面板，绝不能误开菜单轮盘
             ; foldID 是折叠框唯一 ID，TogglePanel 要的是表内下标，必须先换算
             if (IsSet(MyUIMacroGui) && IsObject(MyUIMacroGui)) {
@@ -493,7 +489,7 @@ class TriggerKeyInfo {
     }
 
     CancelAction(press) {
-        if (this.macroType == 1) {
+        if (this.targetKind == "条目宏") {
             t := GetTableByID(this.tableID)
             item := this.GetItem()
             if (!t || !item || !item.HasOwnProp("LoosenStopRun") || item.LoosenStopRun != press)
@@ -501,10 +497,10 @@ class TriggerKeyInfo {
             item.DeleteProp("LoosenStopRun")
             MyStopMacro(t, item, false, RegExMatch(this.Key, "i)Joy") ? "手柄" : "快捷键")
         }
-        else if (this.macroType == 2) {
+        else if (this.targetKind == "菜单模块") {
             this.forbidTrigger := false
             CloseMenuWheel()
         }
-        ; macroType 3：按下切换，松开无需额外处理
+        ; 界面模块：按下切换，松开无需额外处理
     }
 }

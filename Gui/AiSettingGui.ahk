@@ -260,8 +260,8 @@ class AiSettingGui {
         providerId := prov["id"]
         aIdx := this.ui.Query("CmbAiAccess>SelectedIndex")
         apIdx := this.ui.Query("CmbAiApproval>SelectedIndex")
-        accessMode := IsNumber(aIdx) ? Integer(aIdx) + 1 : 2
-        approvalMode := IsNumber(apIdx) ? Integer(apIdx) + 1 : 2
+        accessMode := RuntimeChoice.Code("AiAccessMode", this.ui.Query("CmbAiAccess"))
+        approvalMode := RuntimeChoice.Code("AiApprovalMode", this.ui.Query("CmbAiApproval"))
         if (accessMode < 1 || accessMode > 3)
             accessMode := 2
         if (approvalMode < 1 || approvalMode > 3)

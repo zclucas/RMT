@@ -122,7 +122,7 @@ class NetworkServer {
         this.port := port
         this.bindError := ""
         this.running := true
-        SetTimer(this.pollTimerFunc, 50)    ;50ms 轮询（与 TimingScheduler 轮询风格一致）
+        SetTimer(this.pollTimerFunc, NetworkHttpLimits.PollIntervalMs)    ;50ms 轮询（与 TimingScheduler 轮询风格一致）
         RMTLogSysInfo("网络触发", "HTTP 监听已启动: http://127.0.0.1:" port)
     }
 
@@ -142,7 +142,7 @@ class NetworkServer {
                 if (!this.conns.Has(sock))      ;连接已完成/被丢弃（_TryComplete 内处理），转下一连接
                     break
                 conn := this.conns[sock]
-                if (A_TickCount - conn.startTick > 5000) {
+                if (A_TickCount - conn.startTick > NetworkHttpLimits.ReceiveTimeoutMs) {
                     ; 单请求 5s 收包超时：截断为 400 并强制关闭
                     this._RespondAndClose(sock, NetworkCode.BAD_REQUEST, "接收请求超时（5 秒未收完整请求）")
                     break
@@ -155,7 +155,7 @@ class NetworkServer {
 
     ; 非阻塞 accept：本 tick 内取空所有就绪连接
     Accept() {
-        loop 64 {
+        loop NetworkHttpLimits.AcceptsPerPoll {
             clientIP := ""
             client := TcpAccept(this.listenSocket, &clientIP)
             if (!client)
@@ -182,7 +182,7 @@ class NetworkServer {
     _TryComplete(conn, isClosed) {
         headerEnd := NetworkHttpFindHeaderEnd(conn.buf)
         if (headerEnd < 0) {
-            if (conn.buf.Size > 16384) {
+            if (conn.buf.Size > NetworkHttpLimits.HeaderBytes) {
                 ; 头部超限（架构 §1.5 顺序 0：BAD_REQUEST）
                 this._RespondAndClose(conn.socket, NetworkCode.BAD_REQUEST, "请求头超过 16KB 限制")
                 return true
@@ -191,18 +191,22 @@ class NetworkServer {
                 this._DropConn(conn.socket)
             return false
         }
-        headBytes := headerEnd + 4
+        headerBytes := headerEnd + 4
+        if (headerBytes > NetworkHttpLimits.HeaderBytes) {
+            this._RespondAndClose(conn.socket, NetworkCode.BAD_REQUEST, "请求头超过 16KB 限制")
+            return true
+        }
         ; 头部必为 ASCII，按 UTF-8 解码安全
-        headStr := StrGet(conn.buf.Ptr, headBytes, "UTF-8")
+        headerText := StrGet(conn.buf.Ptr, headerBytes, "UTF-8")
         contentLength := 0
-        if (RegExMatch(headStr, "im)^\s*Content-Length\s*:\s*(\d+)", &m))
+        if (RegExMatch(headerText, "im)^\s*Content-Length\s*:\s*(\d+)", &m))
             contentLength := Integer(m[1])
-        if (contentLength > 1048576) {
+        if (contentLength > NetworkHttpLimits.BodyBytes) {
             this._RespondAndClose(conn.socket, NetworkCode.BAD_REQUEST, "请求体超过 1MB 限制")
             return true
         }
-        total := headBytes + contentLength
-        if (conn.buf.Size < total) {
+        requestBytes := headerBytes + contentLength
+        if (conn.buf.Size < requestBytes) {
             if (isClosed) {
                 ; 对端关闭但 body 未收满：body 超时/截断
                 this._RespondAndClose(conn.socket, NetworkCode.BAD_REQUEST, "请求体不完整（连接提前关闭）")
@@ -210,11 +214,11 @@ class NetworkServer {
             }
             return false    ;body 未收满，等下一个 tick
         }
-        bodyStr := (contentLength > 0) ? StrGet(conn.buf.Ptr + headBytes, contentLength, "UTF-8") : ""
-        raw := headStr . bodyStr
+        bodyText := (contentLength > 0) ? StrGet(conn.buf.Ptr + headerBytes, contentLength, "UTF-8") : ""
+        requestText := headerText . bodyText
         req := ""
         try
-            req := ParseHttpRequest(raw, conn.clientIP)
+            req := ParseHttpRequest(requestText, conn.clientIP)
         catch as e {
             ; 请求解析层（架构 §1.5 顺序 0，先于功能门控）
             this._RespondAndClose(conn.socket, NetworkCode.BAD_REQUEST, e.Message)

@@ -218,12 +218,12 @@ class InputGui {
 
     Init(cmd) {
         cmdArr := cmd != "" ? StrSplit(cmd, "_") : []
-        this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : GetCMDSerialStr("输入")
+        this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : AllocateCommandSerial("输入")
         this.ui.Update("RemarkCon", "Text", cmdArr.Length >= 2 ? cmdArr[2] : "")
         this.Data := GetMacroCMDData(this.SerialStr)
         this._autoRemark := ReadCommandAutoRemark(this.Data, this._GenerateRemark.Bind(this))
         EnsureInputData(this.Data)
-        this.DLArrayArr := GetGuiArrNameArr()
+        this.DLArrayArr := GetArrayVariableNames()
 
         this._SetDDL("TypeCombo", GetLangArr(InputTypeKeys(this.Data.Type)), GetLang(this.Data.Type))
         this._SetDDL("PauseTypeCombo", GetLangArr(["暂停当前宏", "暂停所有宏"]), GetLang(this.Data.PauseType))
@@ -321,7 +321,7 @@ class InputGui {
         if (!this._CheckTimeout())
             return
         CommandStr := this.SaveData()
-        OnTriggerSepcialItemMacro(CommandStr)
+        RunEditorMacroPreview(CommandStr)
 
         typeText := this.ui.Query("TypeCombo")
         HasRes := InputHasResult(GetLangKey(typeText))

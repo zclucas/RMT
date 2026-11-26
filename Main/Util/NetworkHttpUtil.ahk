@@ -18,6 +18,17 @@
 ; =====================================================================
 
 ; ---------------- 错误码常量（架构文档 §7-3：集中定义，禁止散落字面量） ----------------
+class NetworkHttpLimits {
+    static HeaderBytes := 16 * 1024
+    static BodyBytes := 1024 * 1024
+    static ReceiveChunkBytes := 4096
+    static ReceiveTimeoutMs := 5000
+    static PollIntervalMs := 50
+    static AcceptsPerPoll := 64
+    static SendAttempts := 1000
+    static ListenBacklog := 8
+}
+
 class NetworkCode {
     static OK := "OK"
     static MACRO_NOT_FOUND := "MACRO_NOT_FOUND"
@@ -127,20 +138,20 @@ TcpAccept(listenSocket, &clientIP := "") {
 ; 非阻塞 recv 一块数据并追加到 conn.buf（字节级，防 UTF-8 分包截断）
 ; 返回 "data" | "closed"（对端关闭） | "again"（WOULDBLOCK 无数据） | "error"
 TcpRecv(socket, conn) {
-    chunk := Buffer(4096)
-    r := DllCall("ws2_32\recv", "Ptr", socket, "Ptr", chunk, "Int", 4096, "Int", 0, "Int")
-    if (r == -1) {
+    chunk := Buffer(NetworkHttpLimits.ReceiveChunkBytes)
+    receivedBytes := DllCall("ws2_32\recv", "Ptr", socket, "Ptr", chunk, "Int", chunk.Size, "Int", 0, "Int")
+    if (receivedBytes == -1) {
         err := DllCall("ws2_32\WSAGetLastError")
         return (err == 10035) ? "again" : "error"   ;10035=WSAEWOULDBLOCK
     }
-    if (r == 0)
+    if (receivedBytes == 0)
         return "closed"
-    old := conn.buf
-    merged := Buffer(old.Size + r)
-    if (old.Size > 0) {
-        DllCall("RtlMoveMemory", "Ptr", merged.Ptr, "Ptr", old.Ptr, "Ptr", old.Size)
+    previousBuffer := conn.buf
+    merged := Buffer(previousBuffer.Size + receivedBytes)
+    if (previousBuffer.Size > 0) {
+        DllCall("RtlMoveMemory", "Ptr", merged.Ptr, "Ptr", previousBuffer.Ptr, "Ptr", previousBuffer.Size)
     }
-    DllCall("RtlMoveMemory", "Ptr", merged.Ptr + old.Size, "Ptr", chunk.Ptr, "Ptr", r)
+    DllCall("RtlMoveMemory", "Ptr", merged.Ptr + previousBuffer.Size, "Ptr", chunk.Ptr, "Ptr", receivedBytes)
     conn.buf := merged
     return "data"
 }
@@ -154,7 +165,7 @@ TcpSendAll(socket, data) {
     buf := Buffer(size)
     StrPut(data, buf, "UTF-8")
     sent := 0
-    loop 1000 {
+    loop NetworkHttpLimits.SendAttempts {
         n := DllCall("ws2_32\send", "Ptr", socket, "Ptr", buf.Ptr + sent, "Int", size - sent, "Int", 0, "Int")
         if (n == -1) {
             if (DllCall("ws2_32\WSAGetLastError") == 10035)
@@ -198,7 +209,8 @@ ParseHttpRequest(raw, clientIP) {
         throw Error(NetworkCode.BAD_REQUEST, , "请求缺少头部终止符")
     headerPart := SubStr(raw, 1, headerEnd - 1)
     body := SubStr(raw, headerEnd + 4)
-    if (StrLen(headerPart) > 16384)
+    ; 限额按 UTF-8 字节计，包含头部结束符，与分包接收层一致。
+    if (StrPut(headerPart, "UTF-8") - 1 + 4 > NetworkHttpLimits.HeaderBytes)
         throw Error(NetworkCode.BAD_REQUEST, , "请求头超过 16KB 限制")
 
     lines := StrSplit(headerPart, "`r`n")

@@ -336,7 +336,7 @@ FindDependentSerials(dataObj) {
 ; ============================================================================
 
 ; 批量生成唯一的序列码（避免与现有配置及同批次内其他配置冲突）
-; 优先走 GetCMDSerialStr 自增，与新建「移动Pro」等指令一致；禁止同秒时间戳撞号
+; 优先走 AllocateCommandSerial 自增，与新建「移动Pro」等指令一致；禁止同秒时间戳撞号
 GenerateUniqueSerialBatch(baseSerial, usedSerials) {
     if (!IsObject(usedSerials))
         usedSerials := Map()
@@ -360,7 +360,7 @@ GenerateUniqueSerialBatch(baseSerial, usedSerials) {
     ; 已知指令类型：直接用全局序号自增（移动Pro74/83/93 粘贴时各拿新号）
     if (MySoftData.DataFileMap.Has(textOnly)) {
         loop 1000 {
-            candidate := GetCMDSerialStr(textOnly)
+            candidate := AllocateCommandSerial(textOnly)
             if (!usedSerials.Has(candidate))
                 return candidate
         }
@@ -376,7 +376,7 @@ GenerateUniqueSerialBatch(baseSerial, usedSerials) {
     loop 10000 {
         candidate := textOnly numbersOnly
         if (!usedSerials.Has(candidate) && !SerialExistsInDataFile(textOnly, candidate)) {
-            try SetSerialByArr([candidate])
+            try RegisterCommandSerials([candidate])
             return candidate
         }
         numbersOnly := String(Integer(numbersOnly) + 1)
@@ -750,8 +750,8 @@ OnItemPasteMacroBtnClick(tableItem, foldIndex, *) {
         item := MacroItem()
         item.FoldID := fold ? fold.ID : ""
         ; 路径身份：按目标模块路径重建（foldSeg.Macro{max+1}）
-        item.ID := (fold && fold.ID != "") ? NewMacroPath(tableItem, fold.ID) : GetCMDSerialStr("Item")
-        item.TimingSerial := GetCMDSerialStr("Timing")
+        item.ID := (fold && fold.ID != "") ? NewMacroPath(tableItem, fold.ID) : AllocateCommandSerial("Item")
+        item.TimingSerial := AllocateCommandSerial("Timing")
         item.Macro := newCmdList
         item.PreMacro := newPreMacro
         item.PostMacro := newPostMacro
@@ -761,8 +761,8 @@ OnItemPasteMacroBtnClick(tableItem, foldIndex, *) {
         item := MacroItem()
         item.FoldID := fold ? fold.ID : ""
         ; 路径身份：按目标模块路径重建（foldSeg.Macro{max+1}）
-        item.ID := (fold && fold.ID != "") ? NewMacroPath(tableItem, fold.ID) : GetCMDSerialStr("Item")
-        item.TimingSerial := GetCMDSerialStr("Timing")
+        item.ID := (fold && fold.ID != "") ? NewMacroPath(tableItem, fold.ID) : AllocateCommandSerial("Item")
+        item.TimingSerial := AllocateCommandSerial("Timing")
         item.Macro := clipboardText
         item.Remark := Format("{} {}", GetLang("从剪贴板导入"), FormatTime(, "HH:mm"))
         tableItem.Items.InsertAt(AddIndex, item)

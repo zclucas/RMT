@@ -1,22 +1,22 @@
 ﻿#Requires AutoHotkey v2.0
 
 ; 数组配置与运行数据、克隆结果之间不能共享内层数组。
-CloneArray(DataArray) {
+CloneNestedArray(DataArray) {
     Result := DataArray.Clone()
     loop DataArray.Length {
         if (DataArray.Has(A_Index) && DataArray[A_Index] is Array)
-            Result[A_Index] := CloneArray(DataArray[A_Index])
+            Result[A_Index] := CloneNestedArray(DataArray[A_Index])
     }
     return Result
 }
 
-GetArrayStr(DataArray) {
+FormatArrayText(DataArray) {
     ResText := ""
     for Index, Value in DataArray {
         if (Index > 1)
             ResText .= ","
         if (Value is Array)
-            ResText .= "[" GetArrayStr(Value) "]"
+            ResText .= "[" FormatArrayText(Value) "]"
         else if (Value == "" && DataArray.Length == 1)
             ; 区分空数组与仅有一个空字符串的数组；字面量 \e 的反斜杠会先转义。
             ResText .= "\e"
@@ -30,7 +30,7 @@ GetArrayStr(DataArray) {
     return ResText
 }
 
-GetArray(Text) {
+ParseArrayText(Text) {
     ResArr := []
     if (Text == "")
         return ResArr
@@ -39,18 +39,18 @@ GetArray(Text) {
     while (Pos <= Length) {
         Char := SubStr(Text, Pos, 1)
         if (Char == "[" || Char == "【") {
-            EndPos := GetArrayEndPos(Text, Pos - 1)
+            EndPos := FindMatchingArrayBracket(Text, Pos - 1)
             if (!EndPos)
                 throw ValueError("数组括号未闭合或不匹配",, Text)
-            ResArr.Push(GetArray(SubStr(Text, Pos + 1, EndPos - Pos - 1)))
+            ResArr.Push(ParseArrayText(SubStr(Text, Pos + 1, EndPos - Pos - 1)))
             Pos := EndPos + 1
             if (Pos <= Length && !InStr(",，", SubStr(Text, Pos, 1)))
                 throw ValueError("子数组后缺少分隔符",, Text)
         } else {
-            EndPos := GetNextSplitPos(Text, Pos - 1)
+            EndPos := FindNextArraySeparator(Text, Pos - 1)
             if (!EndPos)
                 EndPos := Length + 1
-            ResArr.Push(GetEscapeValue(SubStr(Text, Pos, EndPos - Pos)))
+            ResArr.Push(UnescapeArrayElement(SubStr(Text, Pos, EndPos - Pos)))
             Pos := EndPos
         }
         ; 每次处理一个完整元素；末尾分隔符保留一个空元素。
@@ -65,7 +65,7 @@ IsArrayEscapeChar(Char) {
     return Char != "" && InStr("\,，[]【】e", Char, true) != 0
 }
 
-GetNextSplitPos(Text, StartPos) {
+FindNextArraySeparator(Text, StartPos) {
     Pos := StartPos + 1
     while (Pos <= StrLen(Text)) {
         Char := SubStr(Text, Pos, 1)
@@ -79,7 +79,7 @@ GetNextSplitPos(Text, StartPos) {
     return 0
 }
 
-GetArrayEndPos(Text, StartPos) {
+FindMatchingArrayBracket(Text, StartPos) {
     Closers := []
     Pos := StartPos + 1
     while (Pos <= StrLen(Text)) {
@@ -102,7 +102,7 @@ GetArrayEndPos(Text, StartPos) {
 }
 
 ; 一次扫描完成反转义，不用占位符，避免真实文本 ⎖ 或二次替换损坏数据。
-GetEscapeValue(Value) {
+UnescapeArrayElement(Value) {
     if (Value == "\e")
         return ""
     Result := ""
@@ -121,7 +121,7 @@ GetEscapeValue(Value) {
     return Result
 }
 
-GetGuiArrNameArr() {
+GetArrayVariableNames() {
     ResultArr := []
     for Key in MySoftData.GlobalArrMap {
         ResultArr.Push(Key)
@@ -235,10 +235,10 @@ ArrayCheckIfContain(Data, tableItem, index) {
         }
 
         Res := 0
-        ArgsStr := GetArrayStr(MySoftData.ArrayMap[Data.ArgsName])
+        ArgsStr := FormatArrayText(MySoftData.ArrayMap[Data.ArgsName])
         loop SourceArr.Length {
             if (IsObject(SourceArr[A_Index])) {
-                if (GetArrayStr(SourceArr[A_Index]) == ArgsStr) {
+                if (FormatArrayText(SourceArr[A_Index]) == ArgsStr) {
                     Res := 1
                     break
                 }

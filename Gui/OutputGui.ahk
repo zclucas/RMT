@@ -211,7 +211,7 @@ class OutputGui {
 
     Init(cmd) {
         cmdArr := cmd != "" ? StrSplit(cmd, "_") : []
-        this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : GetCMDSerialStr("输出")
+        this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : AllocateCommandSerial("输出")
         this.ui.Update("RemarkCon", "Text", cmdArr.Length >= 2 ? cmdArr[2] : "")
         this.Data := GetMacroCMDData(this.SerialStr)
         this._autoRemark := ReadCommandAutoRemark(this.Data, GenerateCommandAutoRemark)
@@ -246,7 +246,7 @@ class OutputGui {
         if (this.ui != ui || values.Count != 2)
             return
         IsResVar := values["VarTypeCombo"] == GetLang("变量")
-        DLArr := IsResVar ? GetGuiVarArr("all") : GetGuiArrNameArr()
+        DLArr := IsResVar ? GetGuiVarArr("all") : GetArrayVariableNames()
         this._SetDDL("VariCombo", DLArr, values["VariCombo"])
     }
 
@@ -295,7 +295,7 @@ class OutputGui {
             return
         CommandStr := this.SaveOutputData()
         if (CommandStr != "" && this.ui == ui)
-            OnTriggerSepcialItemMacro(CommandStr)
+            RunEditorMacroPreview(CommandStr)
     }
 
     GetCommandStr(remark, commitRemark := false) {

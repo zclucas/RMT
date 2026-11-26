@@ -45,9 +45,9 @@ RunMacroTrigger(tableItem, macro, index, prepared := false) {
             }
         }
 
-        PlayMacroIterationCue(tableItem, index, 1, isFirst, isLast)
+        PlayMacroIterationCue(tableItem, index, "开始", isFirst, isLast)
         RunMacroBodyOnce(tableItem, macro, index)
-        PlayMacroIterationCue(tableItem, index, 2, isFirst, isLast)
+        PlayMacroIterationCue(tableItem, index, "结束", isFirst, isLast)
 
         if (item.VariableMap["循环-跳过本轮"]) {
             item.VariableMap["循环-跳过本轮"] := false
@@ -76,16 +76,16 @@ FinalizeMacroRun(tableItem, macro, index) {
     if (!item)
         return
     ; 提前终止时，补播按「末轮结束」策略配置的提示音。
-    if (item.Killed && item.EndTipSound == 3)
-        PlayTipSound(2)
+    if (item.Killed && RuntimeChoice.Key("EndTipSound", item.EndTipSound) == "循环结束提示")
+        PlayTipSound("结束")
 
-    if (item.TriggerType == 4) { ;开关状态下
+    if (RuntimeChoice.Key("TriggerType", item.TriggerType) == "开关") { ;开关状态下
         item.ToggleState := false
     }
 
     ; 结束时兜底松开仍按住的键：仅终止或开关触发类型需要松开；
     ; 按下/松开/双击/长按正常结束时保持按键按住，不在此松开
-    needRelease := item.Killed || item.TriggerType == 4
+    needRelease := item.Killed || RuntimeChoice.Key("TriggerType", item.TriggerType) == "开关"
     GraphPoolLog("FinalizeMacroRun", Format("tab={1} item={2} killed={3} trig={4} hold={5} needRelease={6}"
         , tableItem.ID, item.ID, item.Killed, item.TriggerType
         , item.HoldKey.Count, needRelease))
@@ -347,7 +347,7 @@ ExecuteMacroCmdOnce(tableItem, cmdStr, index, graphNode := "") {
         cmdKey := mappedKey
 
     if (MySoftData.CMDTip)
-        MyCMDReportAciton(cleanCmdStr)
+        CommandReportHandler(cleanCmdStr)
 
     ok := true
     CommandErrorContext.Frames.Push({table: tableItem, index: index, cmd: cleanCmdStr})
@@ -995,7 +995,7 @@ OnMMProOnce(tableItem, index, Data) {
     ; Speed 为界面速度 0~100（越大越快），由 MouseMoveUtil 按按键类型换算
     Speed := Data.Speed
     MoveMode := CmdEnumMoveMode(ObjHasOwnProp(Data, "MouseMoveMode") ? Data.MouseMoveMode : "绝对移动")
-    keyMode := GetMacroKeyMode(tableItem, index)
+    keyMode := GetMacroInputBackend(tableItem, index)
     IsHumanMouse := ObjHasOwnProp(Data, "IsHumanMouse") ? Data.IsHumanMouse : 0
 
     hasPosVarX := TryGetTabVarValue(&PosX, tableItem, index, Data.PosVarX)
@@ -1008,7 +1008,7 @@ OnMMProOnce(tableItem, index, Data) {
 
     ; 旧配置「游戏视角」已拆为「增量移动」指令，读入后仍按 mouse_event 相对位移执行
     if (MoveMode == "游戏视角")
-        return MouseMoveGameViewByKeyMode(keyMode, PosX, PosY, Speed)
+        return MoveMouseGameView(PosX, PosY)
 
     action := CmdEnumMMAction(Data.ActionType)
     isDrag := action == "A到B拖拽" || action == "拖拽"
@@ -1076,7 +1076,6 @@ OnDeltaMove(tableItem, cmd, index) {
     else
         cnt := Integer(cnt)
 
-    keyMode := GetMacroKeyMode(tableItem, index)
     loop cnt {
         WaitIfPaused(tableItem, index)
         item := tableItem.Items[index]
@@ -1090,7 +1089,7 @@ OnDeltaMove(tableItem, cmd, index) {
         dX := RandomizeValueByOffset(dX, MainSoftData.CoordXFloat)
         dY := RandomizeValueByOffset(dY, MainSoftData.CoordYFloat)
         ; DeltaX/DeltaY 是本次总偏移，分步取整后仍需保留总量。
-        MouseMoveGameViewByKeyMode(keyMode, DeltaMoveStep(dX, cnt, A_Index), DeltaMoveStep(dY, cnt, A_Index), 100)
+        MoveMouseGameView(DeltaMoveStep(dX, cnt, A_Index), DeltaMoveStep(dY, cnt, A_Index))
 
         if (A_Index != cnt) {
             hasInterval := TryGetTabVarValue(&iv, tableItem, index, interval)
@@ -1680,7 +1679,7 @@ OnMouseMove(tableItem, cmd, index) {
 
     PosX := RandomizeValueByOffset(PosX, MainSoftData.CoordXFloat)
     PosY := RandomizeValueByOffset(PosY, MainSoftData.CoordYFloat)
-    keyMode := GetMacroKeyMode(tableItem, index)
+    keyMode := GetMacroInputBackend(tableItem, index)
     MouseMoveByStrategy(keyMode, MoveMode, PosX, PosY, Speed, 0, false, GetItemByIndex(tableItem, index))
 }
 
@@ -1891,8 +1890,8 @@ OnPressKey(tableItem, cmd, index) {
         return
     }
 
-    actionMap := Map(1, SendNormalKey, 2, SendGameModeKey, 3, SendLogicKey, 4, SendAHIKey, 5, SendViiperKey)
-    action := actionMap[Integer(item.Mode)]
+    actionMap := Map("AHK Send", SendNormalKey, "keybd_event", SendGameModeKey, "罗技", SendLogicKey, "AHI", SendAHIKey, "VIIPER", SendViiperKey)
+    action := actionMap[RuntimeChoice.Key("KeyMode", item.Mode)]
     action := isJoyKey ? SendJoyBtnKey : action
     action := isJoyAxis ? SendJoyAxisKey : action
     action := isJoyDpad ? SendJoyDpadKey : action
@@ -1996,13 +1995,11 @@ ReplaceKeySend(tableID, itemID, state) {
     if (MainSoftData.IsSuspend)
         return
     infos := StrSplit(item.Macro, ",")
-    mode := 1
-    try mode := Integer(item.Mode)
-    catch
-        mode := 1
-    actionMap := Map(1, SendNormalKey, 2, SendGameModeKey, 3, SendLogicKey, 4, SendAHIKey, 5, SendViiperKey)
+    mode := "AHK Send"
+    try mode := RuntimeChoice.Key("KeyMode", item.Mode)
+    actionMap := Map("AHK Send", SendNormalKey, "keybd_event", SendGameModeKey, "罗技", SendLogicKey, "AHI", SendAHIKey, "VIIPER", SendViiperKey)
     if (!actionMap.Has(mode))
-        mode := 1
+        mode := "AHK Send"
     baseAction := actionMap[mode]
     loop infos.Length {
         assistKey := Trim(infos[A_Index])
@@ -2122,7 +2119,7 @@ OnArray(tableItem, cmd, index) {
         case "创建":
             if (Data.IsIgnoreExist && MySoftData.ArrayMap.Has(Data.Name))
                 return
-            MySetGlobalArray(Data.Name, CloneArray(Data.InitArr))
+            MySetGlobalArray(Data.Name, CloneNestedArray(Data.InitArr))
         case "克隆":
             SourceArr := GetCmdArray(Data, tableItem, index, true)
             if (SourceArr == "")

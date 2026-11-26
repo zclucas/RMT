@@ -7,7 +7,7 @@ InitTableItemState() {
     tableItem := MySoftData.SpecialTableItem
     if (tableItem.Items.Length == 0) {
         item := MacroItem()
-        item.ID := GetCMDSerialStr("Item")
+        item.ID := AllocateCommandSerial("Item")
         tableItem.Items.Push(item)
         tableItem.RebuildIndex()
     }
@@ -123,7 +123,7 @@ KillTableItemMacro(tableItem, index) {
     ReleaseTableItemHoldKeys(tableItem, index)
 
     ; 如果是开关型按键宏，重置其开关状态
-    if (item.TriggerType == 4) {
+    if (RuntimeChoice.Key("TriggerType", item.TriggerType) == "开关") {
         item.ToggleState := false
     }
 }

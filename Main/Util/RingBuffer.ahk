@@ -1,4 +1,5 @@
 #Requires AutoHotkey v2.0
+#Include ..\Shared\WorkerIpcLayout.ahk
 ; RingBuffer for Single Producer / Single Consumer
 ; Layout:
 ; offset 0:   head (uint)
@@ -6,17 +7,17 @@
 ; offset 128: notifyFlag (int)
 ; offset 192: buf (data area)
 class RingBuffer {
-    __New(ptr, cap) {
-        if (cap < 64 || (cap & (cap - 1)))
+    __New(ptr, capacityBytes) {
+        if (capacityBytes < 64 || (capacityBytes & (capacityBytes - 1)))
             throw Error("RingBuffer capacity must be power of 2")
 
         this.basePtr := ptr
-        this.headPtr := ptr
-        this.tailPtr := ptr + 64
-        this.notifyFlagPtr := ptr + 128
-        this.bufPtr := ptr + 192
-        this.cap := cap
-        this.mask := cap - 1
+        this.headPtr := ptr + WorkerIpcLayout.HeadOffset
+        this.tailPtr := ptr + WorkerIpcLayout.TailOffset
+        this.notifyFlagPtr := ptr + WorkerIpcLayout.NotifyOffset
+        this.bufPtr := ptr + WorkerIpcLayout.RingMetadataBytes
+        this.capacityBytes := capacityBytes
+        this.mask := capacityBytes - 1
         this.valid := true
         this.outbox := []
         this.partial := ""
@@ -29,7 +30,7 @@ class RingBuffer {
         try {
             if (!this.valid)
                 return false
-            this.outbox.Push({type: type, id: id, payload: payload, flags: flags, offset: 1})
+            this.outbox.Push({type: type, id: id, payload: payload, flags: flags, nextCharIndex: 1})
             this.Flush()
             return true
         } finally Critical(previousCritical)
@@ -43,19 +44,19 @@ class RingBuffer {
             while (this.valid && this.outbox.Length) {
                 packet := this.outbox[1]
                 ; 帧最大占用四分之一容量，尾部填充也不会阻塞空缓冲区。
-                chunkSize := Min(32768, (this.cap // 4 - 20) // 2 - 1)
-                chunk := SubStr(packet.payload, packet.offset, Max(2, chunkSize))
-                more := packet.offset + StrLen(chunk) <= StrLen(packet.payload)
+                chunkSize := Min(WorkerIpcLayout.MaxChunkChars, (this.capacityBytes // 4 - WorkerIpcLayout.FrameHeaderBytes) // WorkerIpcLayout.Utf16UnitBytes - 1)
+                chunk := SubStr(packet.payload, packet.nextCharIndex, Max(2, chunkSize))
+                more := packet.nextCharIndex + StrLen(chunk) <= StrLen(packet.payload)
                 if (more) {
                     lastUnit := NumGet(StrPtr(chunk), (StrLen(chunk) - 1) * 2, "UShort")
                     if (lastUnit >= 0xD800 && lastUnit <= 0xDBFF)
                         chunk := SubStr(chunk, 1, -1)
                 }
-                if (!this._Push(more ? 0 : packet.type, packet.id, chunk, packet.flags))
+                if (!this._Push(more ? WorkerIpcLayout.ContinuationType : packet.type, packet.id, chunk, packet.flags))
                     break
                 written := true
                 if (more)
-                    packet.offset += StrLen(chunk)
+                    packet.nextCharIndex += StrLen(chunk)
                 else
                     this.outbox.RemoveAt(1)
             }
@@ -83,59 +84,59 @@ class RingBuffer {
     }
     IsEmpty() => !this.valid || this.GetHead() == this.GetTail()
 
-    ; Push: [Type][ID][hEvent][Len][Payload]
-    Push(type, id, str := "", hEvent := 0) {
+    ; Push: [Type][ID][flags][Len][Payload]
+    Push(type, id, str := "", flags := 0) {
         ; 单生产者/单消费者是按进程划分的；AHK 定时器和消息回调仍可能中断同进程线程。
         previousCritical := A_IsCritical
         Critical("On")
-        try return this._Push(type, id, str, hEvent)
+        try return this._Push(type, id, str, flags)
         finally Critical(previousCritical)
     }
 
-    _Push(type, id, str, hEvent) {
+    _Push(type, id, str, flags) {
         if (!this.valid)
             return false
 
-        len := (StrLen(str) + 1) * 2
-        headerSize := 20
-        total := (headerSize + len + 7) & ~7
+        payloadBytes := (StrLen(str) + 1) * WorkerIpcLayout.Utf16UnitBytes
+        headerSize := WorkerIpcLayout.FrameHeaderBytes
+        frameBytes := (headerSize + payloadBytes + WorkerIpcLayout.AlignmentBytes - 1) & ~(WorkerIpcLayout.AlignmentBytes - 1)
 
         head := this.GetHead()
         tail := this.GetTail()
 
-        size := (head - tail) & 0xFFFFFFFF
-        if (size + total + 8 >= this.cap)
+        usedBytes := (head - tail) & WorkerIpcLayout.CounterMask
+        if (usedBytes + frameBytes + WorkerIpcLayout.AlignmentBytes >= this.capacityBytes)
             return false
 
-        pos := head & this.mask
+        bufferOffset := head & this.mask
 
-        if (pos + total > this.cap) {
-            if (this.cap - pos >= 4)
-                NumPut("Int", -1, this.bufPtr, pos)
-            head += this.cap - pos
-            pos := 0
+        if (bufferOffset + frameBytes > this.capacityBytes) {
+            if (this.capacityBytes - bufferOffset >= 4)
+                NumPut("Int", WorkerIpcLayout.WrapMarker, this.bufPtr, bufferOffset)
+            head += this.capacityBytes - bufferOffset
+            bufferOffset := 0
 
-            size := (head - tail) & 0xFFFFFFFF
-            if (size + total + 8 >= this.cap)
+            usedBytes := (head - tail) & WorkerIpcLayout.CounterMask
+            if (usedBytes + frameBytes + WorkerIpcLayout.AlignmentBytes >= this.capacityBytes)
                 return false
         }
 
-        NumPut("UInt", type, this.bufPtr, pos)
-        NumPut("UInt", id, this.bufPtr, pos + 4)
-        NumPut("Int64", hEvent, this.bufPtr, pos + 8)
-        NumPut("UInt", len, this.bufPtr, pos + 16)
-        StrPut(str, this.bufPtr + pos + 20, "UTF-16")
+        NumPut("UInt", type, this.bufPtr, bufferOffset)
+        NumPut("UInt", id, this.bufPtr, bufferOffset + WorkerIpcLayout.FrameIdOffset)
+        NumPut("Int64", flags, this.bufPtr, bufferOffset + WorkerIpcLayout.FrameFlagsOffset)
+        NumPut("UInt", payloadBytes, this.bufPtr, bufferOffset + WorkerIpcLayout.FrameLengthOffset)
+        StrPut(str, this.bufPtr + bufferOffset + WorkerIpcLayout.FrameHeaderBytes, "UTF-16")
 
-        this.SetHead(head + total)
+        this.SetHead(head + frameBytes)
         return true
     }
 
-    Pop(&type, &id, &str, &hEvent := 0) {
+    Pop(&type, &id, &str, &flags := 0) {
         previousCritical := A_IsCritical
         Critical("On")
         try {
-            while (this._Pop(&type, &id, &str, &hEvent)) {
-                if (type == 0) {
+            while (this._Pop(&type, &id, &str, &flags)) {
+                if (type == WorkerIpcLayout.ContinuationType) {
                     this.partial .= str
                     continue
                 }
@@ -150,7 +151,7 @@ class RingBuffer {
         finally Critical(previousCritical)
     }
 
-    _Pop(&type, &id, &str, &hEvent) {
+    _Pop(&type, &id, &str, &flags) {
         if (!this.valid)
             return false
 
@@ -160,33 +161,33 @@ class RingBuffer {
         if (tail == head)
             return false
 
-        available := (head - tail) & 0xFFFFFFFF
-        if (available >= this.cap || (available & 7) || (tail & 7))
+        available := (head - tail) & WorkerIpcLayout.CounterMask
+        if (available >= this.capacityBytes || (available & (WorkerIpcLayout.AlignmentBytes - 1)) || (tail & (WorkerIpcLayout.AlignmentBytes - 1)))
             throw Error("Invalid IPC buffer cursor")
-        pos := tail & this.mask
+        bufferOffset := tail & this.mask
 
-        type_signed := NumGet(this.bufPtr, pos, "Int")
-        if (type_signed == -1) {
-            if (this.cap - pos >= available)
+        signedType := NumGet(this.bufPtr, bufferOffset, "Int")
+        if (signedType == WorkerIpcLayout.WrapMarker) {
+            if (this.capacityBytes - bufferOffset >= available)
                 throw Error("Invalid IPC wrap marker")
-            tail += (this.cap - pos)
+            tail += (this.capacityBytes - bufferOffset)
             this.SetTail(tail)
-            return this._Pop(&type, &id, &str, &hEvent)
+            return this._Pop(&type, &id, &str, &flags)
         }
 
-        if (Min(available, this.cap - pos) < 24)
+        if (Min(available, this.capacityBytes - bufferOffset) < WorkerIpcLayout.MinimumFrameBytes)
             throw Error("Incomplete IPC frame")
-        type := NumGet(this.bufPtr, pos, "UInt")
-        id := NumGet(this.bufPtr, pos + 4, "UInt")
-        hEvent := NumGet(this.bufPtr, pos + 8, "Int64")
-        len := NumGet(this.bufPtr, pos + 16, "UInt")
-        total := (20 + len + 7) & ~7
-        if (len < 2 || (len & 1) || total > Min(available, this.cap - pos))
+        type := NumGet(this.bufPtr, bufferOffset, "UInt")
+        id := NumGet(this.bufPtr, bufferOffset + WorkerIpcLayout.FrameIdOffset, "UInt")
+        flags := NumGet(this.bufPtr, bufferOffset + WorkerIpcLayout.FrameFlagsOffset, "Int64")
+        payloadBytes := NumGet(this.bufPtr, bufferOffset + WorkerIpcLayout.FrameLengthOffset, "UInt")
+        frameBytes := (WorkerIpcLayout.FrameHeaderBytes + payloadBytes + WorkerIpcLayout.AlignmentBytes - 1) & ~(WorkerIpcLayout.AlignmentBytes - 1)
+        if (payloadBytes < WorkerIpcLayout.Utf16UnitBytes || (payloadBytes & 1) || frameBytes > Min(available, this.capacityBytes - bufferOffset))
             throw Error("Invalid IPC frame length")
-        if (NumGet(this.bufPtr, pos + 20 + len - 2, "UShort") != 0)
+        if (NumGet(this.bufPtr, bufferOffset + WorkerIpcLayout.FrameHeaderBytes + payloadBytes - WorkerIpcLayout.Utf16UnitBytes, "UShort") != 0)
             throw Error("Unterminated IPC frame")
-        str := len == 2 ? "" : StrGet(this.bufPtr + pos + 20, len // 2 - 1, "UTF-16")
-        this.SetTail(tail + total)
+        str := payloadBytes == WorkerIpcLayout.Utf16UnitBytes ? "" : StrGet(this.bufPtr + bufferOffset + WorkerIpcLayout.FrameHeaderBytes, payloadBytes // WorkerIpcLayout.Utf16UnitBytes - 1, "UTF-16")
+        this.SetTail(tail + frameBytes)
         return true
     }
 }
@@ -231,19 +232,19 @@ EscapeIPC(str) {
 
 UnescapeIPC(str) {
     result := ""
-    pos := 1
-    while (esc := InStr(str, IPC_ESC, true, pos)) {
-        result .= SubStr(str, pos, esc - pos)
-        nextChar := SubStr(str, esc + 1, 1)
+    textIndex := 1
+    while (escapeIndex := InStr(str, IPC_ESC, true, textIndex)) {
+        result .= SubStr(str, textIndex, escapeIndex - textIndex)
+        nextChar := SubStr(str, escapeIndex + 1, 1)
         if (nextChar == "1" || nextChar == "2" || nextChar == "3") {
             result .= nextChar == "1" ? IPC_SEP : (nextChar == "2" ? IPC_REC : IPC_ESC)
-            pos := esc + 2
+            textIndex := escapeIndex + 2
         } else {
             result .= IPC_ESC
-            pos := esc + 1
+            textIndex := escapeIndex + 1
         }
     }
-    return result SubStr(str, pos)
+    return result SubStr(str, textIndex)
 }
 
 EncodeCommand(opcode, args*) {

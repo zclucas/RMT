@@ -383,7 +383,7 @@ class BrowserGui extends CommentGui {
 
     Init(cmd) {
         parts := cmd != "" ? StrSplit(cmd, "_") : []
-        this.SerialStr := parts.Length ? parts[1] : GetCMDSerialStr("浏览器")
+        this.SerialStr := parts.Length ? parts[1] : AllocateCommandSerial("浏览器")
         this.Data := GetMacroCMDData(this.SerialStr).Clone()
         this._ComboPush("Remark", "Text", parts.Length >= 2 ? parts[2] : "")
 

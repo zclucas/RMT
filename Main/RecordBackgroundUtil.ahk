@@ -91,7 +91,7 @@ class BackgroundRecorder {
     }
 
     static _Append(key, isDown, point, curTime, &macroStr) {
-        serial := GetCMDSerialStr(point.mouse ? "后台鼠标" : "后台按键")
+        serial := AllocateCommandSerial(point.mouse ? "后台鼠标" : "后台按键")
         data := GetMacroCMDData(serial)
         if (point.mouse) {
             data.TargetTitle := this.TargetWin

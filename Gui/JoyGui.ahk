@@ -1367,7 +1367,7 @@ class JoyGui {
         if (!this.CheckIfValid())
             return
         this.UpdateCommandStr()
-        OnTriggerSepcialItemMacro(this.CommandStr)
+        RunEditorMacroPreview(this.CommandStr)
     }
 
     ToggleFunc(state) {

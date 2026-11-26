@@ -1,4 +1,5 @@
 #Requires AutoHotkey v2.0
+#Include ..\Shared\RuntimeChoice.ahk
 
 ; 指令枚举存中文。names 为存储顺序，base 为旧数字起点（1 或 0）。
 ; 已是中文（或当前语言译文）时原样收成中文键；旧数字按顺序映射。

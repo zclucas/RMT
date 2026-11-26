@@ -378,7 +378,7 @@ SearchImage(Data, X1, Y1, X2, Y2, ImagePath, &ResX, &ResY) {
         return ret == 1
     }
 
-    if (SearchImageDefaultType() == 1) {
+    if (RuntimeChoice.Key("SearchImageType", SearchImageDefaultType()) == "OpenCV") {
         ocvReason := OpenCvEnsure()
         if (ocvReason != "") {
             ; 失败原因已由 OpenCvEnsure 写进日志；启动时的界面提示在主进程 InitNativePlugins 里做
@@ -542,7 +542,7 @@ ApplySearchActions(tableItem, Data, index, ResXList, ResYList, ResHwndList, Imag
 }
 
 DoMouseAction(tableItem, Data, index, Pos, hwnd, Speed, isWin) {
-    keyMode := GetMacroKeyMode(tableItem, index)
+    keyMode := GetMacroInputBackend(tableItem, index)
 
     mouseAct := CmdEnumMouseAct(Data.MouseActionType)
     if (!isWin && (mouseAct == "移动至目标" || mouseAct == "移动至目标点击1次" || mouseAct == "移动至目标点击2次" || mouseAct == "仅移动" || mouseAct == "移动并左击" || mouseAct == "移动至目标右键点击1次")) {

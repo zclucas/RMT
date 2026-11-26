@@ -278,7 +278,7 @@ class MouseMoveGui {
         if (!this.CheckIfValid())
             return
         this.UpdateCommandStr()
-        OnTriggerSepcialItemMacro(this.ui.Query("CommandStrCon"))
+        RunEditorMacroPreview(this.ui.Query("CommandStrCon"))
     }
 
     SureCoord(*) {

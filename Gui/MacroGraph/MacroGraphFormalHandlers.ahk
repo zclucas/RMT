@@ -664,7 +664,7 @@ class MacroGraphFormalHandlersMixin {
             return
         isResOnlyVar := this._FIOResOnlyVar(ot, om)
         this.ui.Update("FIOSaveType_" id, "Text", GetLang(isResOnlyVar ? "变量" : "数组"))
-        saveNameList := isResOnlyVar ? GetGuiVarArr() : GetGuiArrNameArr()
+        saveNameList := isResOnlyVar ? GetGuiVarArr() : GetArrayVariableNames()
         this.ui.Update("FIOSave_" id, "ClearItems", "")
         for name in saveNameList
             this.ui.Update("FIOSave_" id, "AddItem", name)
@@ -696,7 +696,7 @@ class MacroGraphFormalHandlersMixin {
             return
         autoSaveType := TextOpsResultType(tt, at)
         this.ui.Update("TxtSaveTypeTxt_" id, "Text", GetLang(autoSaveType))
-        saveNameList := autoSaveType == "数组" ? GetGuiArrNameArr() : GetGuiVarArr()
+        saveNameList := autoSaveType == "数组" ? GetArrayVariableNames() : GetGuiVarArr()
         this.ui.Update("TxtSave_" id, "ClearItems", "")
         for name in saveNameList
             this.ui.Update("TxtSave_" id, "AddItem", name)
@@ -951,14 +951,14 @@ class MacroGraphFormalHandlersMixin {
         this.ui.Update("ArrSaveTypeCmb_" id, "SelectedIndex", this._IndexInLangArr(saveTypes, GetLang(effSt)))
         this.ui.Update("ArrSaveTypeCmb_" id, "IsEnabled", fixedSt != "" ? "False" : "True")
         ; 参数值列表（变量或值→变量列表；数组→数组列表）
-        argsNameList := (argsType == "数组") ? GetGuiArrNameArr() : GetGuiVarArr("all")
+        argsNameList := (argsType == "数组") ? GetArrayVariableNames() : GetGuiVarArr("all")
         this.ui.Update("ArrArgsName_" id, "ClearItems", "")
         for n in argsNameList
             this.ui.Update("ArrArgsName_" id, "AddItem", n)
         if (argsName != "")
             this.ui.Update("ArrArgsName_" id, "Text", argsName)
         ; 保存名列表（变量→变量列表；数组→数组列表）
-        saveNameList := (effSt == "数组") ? GetGuiArrNameArr() : GetGuiVarArr()
+        saveNameList := (effSt == "数组") ? GetArrayVariableNames() : GetGuiVarArr()
         this.ui.Update("ArrSave_" id, "ClearItems", "")
         for n in saveNameList
             this.ui.Update("ArrSave_" id, "AddItem", n)
@@ -1445,7 +1445,7 @@ class MacroGraphFormalHandlersMixin {
 
     _FormalTextOpsSourceOptions(type, mode) {
         if (type == "文本拼接" && mode == "数组")
-            return GetGuiArrNameArr()
+            return GetArrayVariableNames()
         return type == "时间戳处理" ? GetGuiVarArr("timestamp") : GetGuiVarArr("text")
     }
 
@@ -1918,7 +1918,7 @@ class MacroGraphFormalHandlersMixin {
             data := this._FormalIniData(id)
             value := IsObject(data) ? data.ResultVar1 : ""
             this.ui.Update(name, "ClearItems", "")
-            for item in (isArray ? GetGuiArrNameArr() : GetGuiVarArr())
+            for item in (isArray ? GetArrayVariableNames() : GetGuiVarArr())
                 this.ui.Update(name, "AddItem", item)
             this.ui.Update(name, "Text", value)
         }
@@ -2595,7 +2595,7 @@ class MacroGraphFormalHandlersMixin {
         autoSaveType := IsResOnlyVar ? GetLang("变量") : GetLang("数组")
         this.ui.Update("FIOSaveType_" id, "Text", autoSaveType)
         ; 更新保存名选项列表
-        saveNameList := IsResOnlyVar ? GetGuiVarArr() : GetGuiArrNameArr()
+        saveNameList := IsResOnlyVar ? GetGuiVarArr() : GetArrayVariableNames()
         this.ui.Update("FIOSave_" id, "ClearItems", "")
         for name in saveNameList
             this.ui.Update("FIOSave_" id, "AddItem", name)

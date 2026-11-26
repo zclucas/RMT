@@ -157,7 +157,7 @@ class ColorPanelGui {
             return [this.CoordX, this.CoordY]
         if (!WinExist("ahk_id " this.TargetHwnd))
             return []
-        return GetWinPos(this.CoordX, this.CoordY, this.TargetHwnd)
+        return ScreenPointToWindowClient(this.CoordX, this.CoordY, this.TargetHwnd)
     }
 
     RefreshMapImage() {

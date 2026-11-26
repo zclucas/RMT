@@ -53,7 +53,7 @@
                 else if (InStr(MacroStr, Chr(0x2B50)))
                     MacroStr := StrSplit(MacroStr, Chr(0x2B50), 2)[2]
                 MyCMDTipGui.Hide()
-                if (OnTriggerSepcialItemMacro(MacroStr))
+                if (RunEditorMacroPreview(MacroStr))
                     Toast.Show(GetLang("调试运行结束"))
             }
             case this._ContinueLabel():

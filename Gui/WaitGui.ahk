@@ -345,7 +345,7 @@ class WaitGui {
 
     Init(cmd) {
         cmdArr := cmd != "" ? SplitCommand(cmd) : []
-        this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : GetCMDSerialStr("等待")
+        this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : AllocateCommandSerial("等待")
         this.Data := GetMacroCMDData(this.SerialStr)
         sourceKey := GetLangKey(RegExReplace(this.SerialStr, "\d+"))
         if (sourceKey == "时间") {
@@ -358,7 +358,7 @@ class WaitGui {
                 this.Data.TimeoutMs := old.Timeout
             if (this.Data.WaitType == "等待时间区间")
                 this.Data.TimeConfig.Param4 := TimeNormMismatch(old.HasProp("Param4") ? old.Param4 : "跳过")
-            this.SerialStr := GetCMDSerialStr("等待")
+            this.SerialStr := AllocateCommandSerial("等待")
             this.Data.SerialStr := this.SerialStr
         } else if (sourceKey == "等待确定") {
             old := this.Data
@@ -372,7 +372,7 @@ class WaitGui {
                 property := option[1]
                 this.Data.ConfirmConfig.%property% := InputField(old, property, option[3][1])
             }
-            this.SerialStr := GetCMDSerialStr("等待")
+            this.SerialStr := AllocateCommandSerial("等待")
             this.Data.SerialStr := this.SerialStr
         }
         WaitEnsureData(this.Data)
@@ -705,7 +705,7 @@ class WaitGui {
 
     TriggerConfirmation(*) {
         if (this._TypeValue() == "等待确定" && this.CheckIfValid()) {
-            OnTriggerSepcialItemMacro(this.SaveWaitData())
+            RunEditorMacroPreview(this.SaveWaitData())
         }
     }
 

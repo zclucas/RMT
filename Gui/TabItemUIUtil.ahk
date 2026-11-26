@@ -51,8 +51,8 @@ OnItemAddMacroBtnClick(tableItem, foldIndex, *) {
     item := MacroItem()
     item.FoldID := (foldIndex >= 1 && foldIndex <= tableItem.Folds.Length) ? tableItem.Folds[foldIndex].ID : ""
     ; 路径身份：新宏 = foldSeg.Macro{max+1}（父模块路径）
-    item.ID := (item.FoldID != "") ? NewMacroPath(tableItem, item.FoldID) : GetCMDSerialStr("Item")
-    item.TimingSerial := GetCMDSerialStr("Timing")
+    item.ID := (item.FoldID != "") ? NewMacroPath(tableItem, item.FoldID) : AllocateCommandSerial("Item")
+    item.TimingSerial := AllocateCommandSerial("Timing")
     tableItem.Items.InsertAt(AddIndex, item)
 
     tableItem.RebuildIndex()
@@ -121,7 +121,7 @@ OnItemAddMenuItem(tableItem, foldIndex, count := 4) {
         item.FoldID := fold.ID
         ; 路径身份：新宏 = foldSeg.Macro{max+1}（父模块路径）
         item.ID := NewMacroPath(tableItem, fold.ID)
-        item.TimingSerial := GetCMDSerialStr("Timing")
+        item.TimingSerial := AllocateCommandSerial("Timing")
         tableItem.Items.InsertAt(AddIndex, item)
     }
     tableItem.RebuildIndex()
@@ -256,7 +256,7 @@ OnItemEditTiming(tableItem, index, *) {
     item := tableItem.Items[index]
     SerialStr := item.TimingSerial
     if (!RegExMatch(SerialStr, "^Timing\d+$")) {
-        SerialStr := GetCMDSerialStr("Timing")
+        SerialStr := AllocateCommandSerial("Timing")
         item.TimingSerial := SerialStr
     }
     MyTimingGui.ShowGui(SerialStr, tableItem, index)
@@ -332,7 +332,7 @@ OnItemEditMacro(tableItem, index, *) {
 
     useGraph := false
     if (IsEmptyMacroStr(macro))
-        useGraph := (Integer(MainSoftData.PreferredMacroEditor) == 2)
+        useGraph := (RuntimeChoice.Key("PreferredMacroEditor", MainSoftData.PreferredMacroEditor) == "图形节点")
     else
         useGraph := IsMacroFirstCmdGraphStart(macro)
 

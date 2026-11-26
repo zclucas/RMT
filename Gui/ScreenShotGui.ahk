@@ -206,7 +206,7 @@ class ScreenShotGui {
 
     Init(cmd) {
         cmdArr := cmd != "" ? StrSplit(cmd, "_") : []
-        this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : GetCMDSerialStr("抓图")
+        this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : AllocateCommandSerial("抓图")
         this._ComboPush("RemarkCon", "Text", cmdArr.Length >= 2 ? cmdArr[2] : "")
         this.Data := GetMacroCMDData(this.SerialStr)
         this.DLVariableArr := GetGuiVarArr()
@@ -291,7 +291,7 @@ class ScreenShotGui {
             CoordMode("Mouse", "Screen")
             MouseGetPos &mouseX, &mouseY
             this.ui.Update("MousePosCon", "Text", Format("{},{}", mouseX, mouseY))
-            PosArr := GetCurWinPos()
+            PosArr := GetMouseWindowClientPosition()
             this.ui.Update("MouseWinPosCon", "Text", Format("{},{}", PosArr[1], PosArr[2]))
         }
     }
@@ -327,7 +327,7 @@ class ScreenShotGui {
         if (!this.CheckIfValid())
             return
         this.SaveData()
-        OnTriggerSepcialItemMacro(this.GetCommandStr())
+        RunEditorMacroPreview(this.GetCommandStr())
     }
 
     OnF1(state := "", ctrl := "", event := "") {
@@ -339,8 +339,8 @@ class ScreenShotGui {
             return
         curType := this._ShotType()
         isWin := curType == "窗口抓图"
-        Point1 := isWin ? GetWinPos(x1, y1) : [x1, y1]
-        Point2 := isWin ? GetWinPos(x2, y2) : [x2, y2]
+        Point1 := isWin ? ScreenPointToWindowClient(x1, y1) : [x1, y1]
+        Point2 := isWin ? ScreenPointToWindowClient(x2, y2) : [x2, y2]
         this.ui.Update("StartPosX", "Text", Point1[1])
         this.ui.Update("StartPosY", "Text", Point1[2])
         this.ui.Update("EndPosX", "Text", Point2[1])

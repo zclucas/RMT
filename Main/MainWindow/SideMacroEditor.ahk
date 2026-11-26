@@ -86,7 +86,7 @@
     }
 
     _ApplySidePanelMode() {
-        isTree := this.sidePanelMode == 1
+        isTree := this.sidePanelMode == "逻辑树"
         treeVis := isTree ? "Visible" : "Collapsed"
         aiVis := isTree ? "Collapsed" : "Visible"
         for t in this._useVirtual {
@@ -339,7 +339,7 @@
         opened := false
         if (doOpen && !this._IsAiPanelOpen()) {
             this.aiAssistOpen := true
-            this.sidePanelMode := 1
+            this.sidePanelMode := "逻辑树"
             this._ApplyAiPanelUi()
             this._ApplySidePanelMode()
             opened := true
@@ -350,7 +350,7 @@
         same := this._sideTreeSel.Has(t) && this._sideTreeSel[t] == item.ID
         this._sideTreeSel[t] := item.ID
         this._ApplyRowSel(t, index)
-        if (this._IsAiPanelOpen() && this.sidePanelMode == 1 && (!same || opened)) {
+        if (this._IsAiPanelOpen() && this.sidePanelMode == "逻辑树" && (!same || opened)) {
             if (deferTree == true)
                 SetTimer(ObjBindMethod(this, "RefreshSideTree", t), -1)
             else
@@ -369,7 +369,7 @@
         if (!item)
             return
         same := this._dblOpenMacro.Has(t) && this._dblOpenMacro[t] == item.ID
-        if (same && this._IsAiPanelOpen() && this.sidePanelMode == 1) {
+        if (same && this._IsAiPanelOpen() && this.sidePanelMode == "逻辑树") {
             this._dblOpenMacro.Delete(t)
             this.aiAssistOpen := false
             this._ApplyAiPanelUi()
@@ -377,9 +377,9 @@
         }
         this._dblOpenMacro[t] := item.ID
         ; 双击要看到的是逻辑树：侧栏没开、或停在 AI 分支时先切过去
-        if (!this._IsAiPanelOpen() || this.sidePanelMode != 1) {
+        if (!this._IsAiPanelOpen() || this.sidePanelMode != "逻辑树") {
             this.aiAssistOpen := true
-            this.sidePanelMode := 1
+            this.sidePanelMode := "逻辑树"
             this._ApplyAiPanelUi()
             this._ApplySidePanelMode()
         }

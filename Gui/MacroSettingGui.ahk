@@ -6,6 +6,11 @@
 ; =====================================================================
 
 class MacroSettingGui {
+    ; 显示列表可调整顺序，保存时按文本映射为固定的历史配置值。
+    static KeyModeOptions := ["AHK Send", "keybd_event", "罗技", "AHI", "VIIPER"]
+    static StartCueOptions := ["无", "触发提示", "循环首次提示"]
+    static EndCueOptions := ["无", "结束提示", "循环结束提示"]
+    static StopCueOptions := ["无", "终止提示"]
     __new() {
         this.ui := ""
         this.Gui := ""
@@ -85,7 +90,7 @@ class MacroSettingGui {
         tkRow := body.Add("StackPanel").Grid_Row(1).Orientation("Horizontal").VerticalAlignment("Center")
         tkRow.Add("TextBlock").Text(GetLang("按键类型：")).Width(90).VerticalAlignment("Center")
         tk := tkRow.Add("ComboBox").Name("TKTypeCombo").Width(125).Height(26).MinHeight(26)
-        for t in GetLangArr(["AHK Send", "keybd_event", "罗技", "AHI", "VIIPER"])
+        for t in GetLangArr(MacroSettingGui.KeyModeOptions)
             tk.Add("ComboBoxItem").Content(t)
         helpBtn := FrontInfoGui._AddSquareHelpBtn(tkRow, "BtnHelp")
         helpBtn.InjectResources(toolHover)
@@ -95,18 +100,18 @@ class MacroSettingGui {
         tipGrid.Cols("90", "125", "8", "90", "125")
         tipGrid.Add("TextBlock").Grid_Column(0).Text(GetLang("开始音效：")).VerticalAlignment("Center")
         st := tipGrid.Add("ComboBox").Grid_Column(1).Name("StartTipCombo").Height(26).MinHeight(26)
-        for t in GetLangArr(["无", "触发提示", "循环首次提示"])
+        for t in GetLangArr(MacroSettingGui.StartCueOptions)
             st.Add("ComboBoxItem").Content(t)
         tipGrid.Add("TextBlock").Grid_Column(3).Text(GetLang("结束音效：")).VerticalAlignment("Center").HorizontalAlignment("Right").Margin("0,0,8,0")
         et := tipGrid.Add("ComboBox").Grid_Column(4).Name("EndTipCombo").Height(26).MinHeight(26).HorizontalAlignment("Stretch")
-        for t in GetLangArr(["无", "结束提示", "循环结束提示"])
+        for t in GetLangArr(MacroSettingGui.EndCueOptions)
             et.Add("ComboBoxItem").Content(t)
 
         stopGrid := body.Add("Grid").Grid_Row(3).VerticalAlignment("Center")
         stopGrid.Cols("90", "125", "*")
         stopGrid.Add("TextBlock").Grid_Column(0).Text(GetLang("终止音效：")).VerticalAlignment("Center")
         stop := stopGrid.Add("ComboBox").Grid_Column(1).Name("StopTipCombo").Height(26).MinHeight(26)
-        for t in GetLangArr(["无", "终止提示"])
+        for t in GetLangArr(MacroSettingGui.StopCueOptions)
             stop.Add("ComboBoxItem").Content(t)
 
         ; 执行前 / 执行后钩子：在 Worker 里于主宏循环前后各执行一次的宏串，留空即不启用
@@ -185,10 +190,10 @@ class MacroSettingGui {
     }
 
     Init(item) {
-        this.ui.Update("TKTypeCombo", "SelectedIndex", String(item.Mode - 1))
-        this.ui.Update("StartTipCombo", "SelectedIndex", String(item.StartTipSound - 1))
-        this.ui.Update("EndTipCombo", "SelectedIndex", String(item.EndTipSound - 1))
-        this.ui.Update("StopTipCombo", "SelectedIndex", String(item.StopTipSound - 1))
+        this.ui.Update("TKTypeCombo", "SelectedIndex", String(CmdEnumIndex(RuntimeChoice.Key("KeyMode", item.Mode), MacroSettingGui.KeyModeOptions)))
+        this.ui.Update("StartTipCombo", "SelectedIndex", String(CmdEnumIndex(RuntimeChoice.Key("StartTipSound", item.StartTipSound), MacroSettingGui.StartCueOptions)))
+        this.ui.Update("EndTipCombo", "SelectedIndex", String(CmdEnumIndex(RuntimeChoice.Key("EndTipSound", item.EndTipSound), MacroSettingGui.EndCueOptions)))
+        this.ui.Update("StopTipCombo", "SelectedIndex", String(CmdEnumIndex(RuntimeChoice.Key("StopTipSound", item.StopTipSound), MacroSettingGui.StopCueOptions)))
         ; 未设置时默认继承所属模块。空串是旧数据里的未设置值，不是「所有窗口」。
         bw := ObjHasOwnProp(item, "BindWindow") ? item.BindWindow : "{模块窗口绑定}"
         if (bw == "")
@@ -289,10 +294,10 @@ class MacroSettingGui {
             return
         }
         ui := this.ui
-        mode := this._SelIndex("TKTypeCombo") + 1
-        startSound := this._SelIndex("StartTipCombo") + 1
-        endSound := this._SelIndex("EndTipCombo") + 1
-        stopSound := this._SelIndex("StopTipCombo") + 1
+        mode := RuntimeChoice.Code("KeyMode", ui.Query("TKTypeCombo"))
+        startSound := RuntimeChoice.Code("StartTipSound", ui.Query("StartTipCombo"))
+        endSound := RuntimeChoice.Code("EndTipSound", ui.Query("EndTipCombo"))
+        stopSound := RuntimeChoice.Code("StopTipSound", ui.Query("StopTipCombo"))
         ; 清空窗口绑定时继承所属模块。
         bw := Trim(ui.Query("BindWindowCon"))
         if (mode < 1 || mode > 5 || startSound < 1 || startSound > 3

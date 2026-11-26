@@ -1024,7 +1024,7 @@ class SearchComboGui {
             CoordMode("Mouse", "Screen")
             MouseGetPos &mouseX, &mouseY
             this.ui.Update("MousePosCon", "Text", Format("{},{}", mouseX, mouseY))
-            PosArr := GetCurWinPos()
+            PosArr := GetMouseWindowClientPosition()
             this.ui.Update("MouseWinPosCon", "Text", Format("{},{}", PosArr[1], PosArr[2]))
             CoordMode("Pixel", "Screen")
             Color := PixelGetColor(mouseX, mouseY, "Slow")
@@ -1249,7 +1249,7 @@ class SearchComboGui {
         if (!valid)
             return
         this.SaveSearchData()
-        OnTriggerSepcialItemMacro(this.GetCommandStr(), false, this.WindowBindingContext)
+        RunEditorMacroPreview(this.GetCommandStr(), false, this.WindowBindingContext)
     }
 
     OnF1() {
@@ -1263,8 +1263,8 @@ class SearchComboGui {
         hwnd := isWin ? this.FindSearchTargetWindow(n) : 0
         if (isWin && !hwnd)
             return
-        Point1 := isWin ? GetWinPos(x1, y1, hwnd) : [x1, y1]
-        Point2 := isWin ? GetWinPos(x2, y2, hwnd) : [x2, y2]
+        Point1 := isWin ? ScreenPointToWindowClient(x1, y1, hwnd) : [x1, y1]
+        Point2 := isWin ? ScreenPointToWindowClient(x2, y2, hwnd) : [x2, y2]
         this.OnSetSearchArea(Point1[1], Point1[2], Point2[1], Point2[2])
     }
 
@@ -1289,7 +1289,7 @@ class SearchComboGui {
                 RmtDialog.Info(GetLang("取色未找到目标窗口。"))
                 return
             }
-            point := GetWinPos(mouseX, mouseY, hwnd)
+            point := ScreenPointToWindowClient(mouseX, mouseY, hwnd)
             mouseX := point[1], mouseY := point[2]
         }
         this.OnSureTarget(n, mouseX, mouseY, Color)
@@ -1557,7 +1557,7 @@ class SearchComboGui {
 
     Init(cmd) {
         cmdArr := cmd != "" ? StrSplit(cmd, "_") : []
-        this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : GetCMDSerialStr("搜索Combo")
+        this.SerialStr := cmdArr.Length >= 1 ? cmdArr[1] : AllocateCommandSerial("搜索Combo")
         this.ui.Update("RemarkCon", "Text", cmdArr.Length >= 2 ? cmdArr[2] : "")
         this.Data := GetMacroCMDData(this.SerialStr)
         this.DLVariableArr := GetGuiVarArr()

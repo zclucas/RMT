@@ -495,7 +495,7 @@
             this.aiAssistOpen := true
             this._ApplyAiPanelUi()
         }
-        this.sidePanelMode := 1
+        this.sidePanelMode := "逻辑树"
         this._ApplySidePanelMode()
         sameTab := (tab == MainSoftData.TableIndex)
         this._pendingMacroNav := {tab: tab, idx: index}

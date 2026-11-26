@@ -98,7 +98,7 @@
 
     ; 把某命令的 Data 快照写回数据文件并清缓存（与 SaveMacroCMDData 同链路）
     ; 注意：快照 serial 来自显示文本（英文模式可能是 "Key004"），
-    ; 但数据文件键恒为中文序列码（"按键004"，GetCMDSerialStr 内部 GetLangKey 转回），
+    ; 但数据文件键恒为中文序列码（"按键004"，AllocateCommandSerial 内部 GetLangKey 转回），
     ; 落盘与清缓存都必须用规范化键 cmdKey+序号。
     _RestoreCmdData(serial, json) {
         dummy := ""

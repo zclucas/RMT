@@ -250,7 +250,7 @@ class ToolRecordSettingGui {
             this.ui.Update("HoldMutiCon", "IsChecked", this._holdMuti ? "True" : "False")
             this.ui.Update("KeyboardTogCon", "IsChecked", this._keyboard ? "True" : "False")
             this.ui.Update("MouseTogCon", "IsChecked", this._mouse ? "True" : "False")
-            this.ui.Update("MouseTrailModeCon", "SelectedIndex", String(this._trailMode))
+            this.ui.Update("MouseTrailModeCon", "SelectedIndex", String(CmdEnumIndex(RuntimeChoice.Key("RecordMouseTrail", this._trailMode), ToolRecordSettingGui.TrailModes)))
             this.ui.Update("MouseTrailSpeedCon", "Text", String(this._trailSpeed))
             this.ui.Update("JoyTogCon", "IsChecked", this._joy ? "True" : "False")
             this.ui.Update("JoyIntervalCon", "Text", String(this._joyInterval))
@@ -345,7 +345,7 @@ class ToolRecordSettingGui {
         text := state.Has("MouseTrailModeCon") ? state["MouseTrailModeCon"] : ""
         for i, name in ToolRecordSettingGui.TrailModes {
             if (text == GetLang(name) || text == name) {
-                this._trailMode := i - 1
+                this._trailMode := RuntimeChoice.Code("RecordMouseTrail", name)
                 break
             }
         }

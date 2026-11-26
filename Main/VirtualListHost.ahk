@@ -258,7 +258,7 @@ class VirtualListHost {
     }
 
     _IsLoopLocked(tableItem, item) {
-        return tableItem.Symbol == "Normal" && item.TriggerType == 3
+        return tableItem.Symbol == "Normal" && RuntimeChoice.Key("TriggerType", item.TriggerType) == "松止"
     }
 
     _Color(tableItem, i) {

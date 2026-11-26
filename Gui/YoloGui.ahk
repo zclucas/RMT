@@ -278,7 +278,7 @@ class YoloGui {
 
     Init(cmd) {
         parts := cmd == "" ? [] : StrSplit(cmd, "_")
-        this.SerialStr := parts.Length ? parts[1] : GetCMDSerialStr(this.CmdKey)
+        this.SerialStr := parts.Length ? parts[1] : AllocateCommandSerial(this.CmdKey)
         this.Data := Yolo.Normalize(GetMacroCMDData(this.SerialStr))
         this._ComboPush("Remark", "Text", parts.Length >= 2 ? parts[2] : "")
 

@@ -320,7 +320,7 @@ TextOpsConcat(Data, tableItem, index) {
             if (A_Index > 1)
                 result .= separator
             value := source.Has(A_Index) ? source[A_Index] : ""
-            result .= value is Array ? "[" GetArrayStr(value) "]" : value
+            result .= value is Array ? "[" FormatArrayText(value) "]" : value
         }
         MySetGlobalVariable([Data.SaveName], [result], false)
         return

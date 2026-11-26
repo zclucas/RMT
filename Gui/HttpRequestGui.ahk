@@ -126,7 +126,7 @@ class HttpRequestGui extends CommentGui {
 
     Init(cmd) {
         parts := cmd != "" ? StrSplit(cmd, "_") : []
-        this.SerialStr := parts.Length ? parts[1] : GetCMDSerialStr("网络请求")
+        this.SerialStr := parts.Length ? parts[1] : AllocateCommandSerial("网络请求")
         this.Data := GetMacroCMDData(this.SerialStr)
         this._ComboPush("Remark", "Text", parts.Length >= 2 ? parts[2] : "")
         action := TimeoutPolicy.Get(this.Data)
