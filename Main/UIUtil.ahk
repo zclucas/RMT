@@ -343,6 +343,8 @@ CmdEditorPlayTip(hotkey := "!l") {
 BindCmdEditorChrome(ui, helpRoute := "", playAction := "", playHotkey := "!l", targeterAction := "", f1Action := "", f2Action := "", f3Action := "") {
     if (!IsObject(ui))
         return
+    ; 所有指令编辑器（含动态卡片）的类型切换共用事件级刷新合并。
+    ui._batchEditorRefresh := true
     hash := "#指令手册"
     helpRoute := Trim(helpRoute)
     if (helpRoute != "")

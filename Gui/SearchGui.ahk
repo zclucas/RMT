@@ -180,7 +180,7 @@ class SearchGui {
             .HorizontalAlignment("Left").VerticalAlignment("Center").VerticalContentAlignment("Center").FontSize("11")
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1")
-        for t in GetLangArr(["无动作", "移动至目标", "移动至目标点击1次", "移动至目标点击2次"])
+        for t in GetLangArr(CmdEnumSearchMouseActItems())
             mac.Add("ComboBoxItem").Content(t)
 
         ; 行3：找到 / 未找到（三行高 + 右上角悬浮编辑）
@@ -282,7 +282,7 @@ class SearchGui {
         this.ui.Update("StartPosYCon", "Text", this.Data.StartPosY)
         this.ui.Update("EndPosXCon", "Text", this.Data.EndPosX)
         this.ui.Update("EndPosYCon", "Text", this.Data.EndPosY)
-        this.ui.Update("MouseActionTypeCon", "SelectedIndex", String(CmdEnumIndex(this.Data.MouseActionType, CmdEnumMouseActNames())))
+        this.ui.Update("MouseActionTypeCon", "SelectedIndex", String(CmdEnumSearchMouseActIndex(this.Data.MouseActionType)))
         this.ui.Update("TrueMacroCon", "Text", GetLangMacro(this.Data.TrueMacro, 1))
         this.ui.Update("FalseMacroCon", "Text", GetLangMacro(this.Data.FalseMacro, 1))
         this.PreviewShowing := false
@@ -379,7 +379,8 @@ class SearchGui {
         data.EndPosX := this.ui.Query("EndPosXCon")
         data.EndPosY := this.ui.Query("EndPosYCon")
         mIdx := IsObject(this.ui) ? this.ui.Query("MouseActionTypeCon>SelectedIndex") : ""
-        data.MouseActionType := CmdEnumFromIndex(mIdx, CmdEnumMouseActNames())
+        data.MouseActionType := CmdEnumFromIndex(mIdx, CmdEnumSearchMouseActValues())
+        data.ClickCount := 1
         data.TrueMacro := GetLangMacro(this.ui.Query("TrueMacroCon"), 2)
         data.FalseMacro := GetLangMacro(this.ui.Query("FalseMacroCon"), 2)
         SaveMacroCMDData(data)

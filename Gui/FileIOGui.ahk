@@ -460,6 +460,7 @@ class FileIOGui {
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)
         owner := (this.Hwnd() ? this.Hwnd() : this.OwnerHwnd)
         this.ContentEditGui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", owner)
+        this.ContentEditGui._batchEditorRefresh := true
         this.ContentEditGui.xaml := StrReplace(this.ContentEditGui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="580" SizeToContent="Height"')
         this.ContentEditGui.xaml := StrReplace(this.ContentEditGui.xaml, 'FontFamily="Segoe UI Variable Display, Segoe UI, sans-serif"', 'FontFamily="' MainSoftData.FontType '"')
         this.ContentEditGui.xaml := StrReplace(this.ContentEditGui.xaml, '%resources%', '')

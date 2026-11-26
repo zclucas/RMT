@@ -984,6 +984,13 @@ class ControlOperationGui extends WindowControlGui {
     }
 
     _RefreshConditionFields(*) {
+        if (this._batching)
+            this._ApplyConditionFields()
+        else
+            this.ui.RunEditorRefresh(this._ApplyConditionFields.Bind(this))
+    }
+
+    _ApplyConditionFields() {
         if (this._batching || this._rebuildingWaitConditions) {
             this._ComboPush("WaitConditionPanel", "Visibility", "Collapsed")
             this._ComboPush("WaitLogicRow", "Visibility", "Collapsed")
@@ -1014,9 +1021,12 @@ class ControlOperationGui extends WindowControlGui {
         signature := kind "|" allowHalf
         this._conditionAllowsHalf := allowHalf
         if (this._conditionOperatorsKind != signature)
+            ; 重填选项时已按目标比较符设置值框显隐，不查询尚未提交的旧选项。
             this._FillConditionOptions(kind, allowHalf, this._ReadWaitConditions())
-        loop this._waitConditionCount
-            this._RefreshWaitConditionValue(A_Index)
+        else {
+            loop this._waitConditionCount
+                this._RefreshWaitConditionValue(A_Index)
+        }
         this._ComboPush("WaitValueHintRow", "Visibility", hint == "" ? "Collapsed" : "Visible")
         this._ComboPush("WaitValueHint", "Text", hint)
     }

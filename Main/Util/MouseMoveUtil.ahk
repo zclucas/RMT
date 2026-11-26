@@ -86,16 +86,16 @@ EnsureMouseBackend(keyMode, relative, usesButtons := false) {
     return true
 }
 
-; 按按键类型点击左键
-MouseClickByKeyMode(keyMode, clickCount := 1) {
+; 按按键类型点击鼠标，默认左键。
+MouseClickByKeyMode(keyMode, clickCount := 1, button := "LButton") {
     keyMode := Integer(keyMode)
     clickCount := Max(1, Integer(clickCount))
     if (keyMode == 5) {
         loop clickCount {
             try {
-                ViiperInput.Key("LButton", true)
+                ViiperInput.Key(button, true)
                 Sleep(30)
-            } finally ViiperInput.Key("LButton", false)
+            } finally ViiperInput.Key(button, false)
             Sleep(30)
         }
         return true
@@ -103,14 +103,14 @@ MouseClickByKeyMode(keyMode, clickCount := 1) {
     if (keyMode == 3) {
         if (!InitLogitechGHubNew())
             return false
-        IbClick("Left", , , clickCount)
+        IbClick(button == "RButton" ? "Right" : "Left", , , clickCount)
         return true
     }
     if (keyMode == 4) {
-        AhiClick("L", clickCount)
+        AhiClick(button == "RButton" ? "R" : "L", clickCount)
         return true
     }
-    Click(, , , clickCount)
+    Click(Format("{} {}", button == "RButton" ? "Right" : "Left", clickCount))
     return true
 }
 
@@ -335,29 +335,29 @@ MouseMoveByStrategy(keyMode, moveMode, x, y, speed := 90, clickCount := 0, isHum
     return true
 }
 
-; 搜索等场景：屏幕绝对坐标移动，可选点击/双击
-; actionType: 移动至目标 | 移动至目标点击1次 | 移动至目标点击2次
+; 搜索等场景：屏幕绝对坐标移动，可选左击、右击；兼容旧动作名。
 ; speed: 界面速度 0~100
 SearchMouseActionByStrategy(keyMode, actionType, x, y, speed := 90, clickCount := 1) {
     keyMode := Integer(keyMode)
     actionType := CmdEnumMouseAct(actionType)
     uiSpeed := NormalizeUiMouseSpeed(speed)
-    if (!EnsureMouseBackend(keyMode, false, actionType != "移动至目标"))
+    if (!EnsureMouseBackend(keyMode, false, actionType != "移动至目标" && actionType != "仅移动"))
         return false
 
-    if (actionType == "移动至目标")
+    if (actionType == "移动至目标" || actionType == "仅移动")
         return MouseMoveAbsByKeyMode(keyMode, x, y, uiSpeed, false)
 
+    button := actionType == "移动至目标右键点击1次" ? "RButton" : "LButton"
     n := (actionType == "移动至目标点击2次") ? 2 : Max(1, Integer(clickCount))
     if (keyMode == 3 || keyMode == 4 || keyMode == 5) {
         if (!MouseMoveAbsByKeyMode(keyMode, x, y, uiSpeed, false))
             return false
-        return MouseClickByKeyMode(keyMode, n)
+        return MouseClickByKeyMode(keyMode, n, button)
     }
     SendMode("Event")
     CoordMode("Mouse", "Screen")
     SetDefaultMouseSpeed(UiSpeedToAhkSpeed(uiSpeed))
-    Click(Format("{} {} {}", Round(x), Round(y), n))
+    Click(Format("{} {} {} {}", button == "RButton" ? "Right" : "Left", Round(x), Round(y), n))
     return true
 }
 

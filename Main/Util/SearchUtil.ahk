@@ -545,8 +545,24 @@ DoMouseAction(tableItem, Data, index, Pos, hwnd, Speed, isWin) {
     keyMode := GetMacroKeyMode(tableItem, index)
 
     mouseAct := CmdEnumMouseAct(Data.MouseActionType)
-    if (!isWin && (mouseAct == "移动至目标" || mouseAct == "移动至目标点击1次" || mouseAct == "移动至目标点击2次")) {
+    if (!isWin && (mouseAct == "移动至目标" || mouseAct == "移动至目标点击1次" || mouseAct == "移动至目标点击2次" || mouseAct == "仅移动" || mouseAct == "移动并左击" || mouseAct == "移动至目标右键点击1次")) {
         SearchMouseActionByStrategy(keyMode, mouseAct, Pos[1], Pos[2], Speed, Data.ClickCount)
+        return
+    }
+
+    if (isWin && mouseAct == "仅移动") {
+        PostMessage 0x200, 0, (Pos[2] << 16) | (Pos[1] & 0xFFFF), , "ahk_id " hwnd
+        return
+    }
+    if (isWin && (mouseAct == "移动并左击" || mouseAct == "移动至目标右键点击1次")) {
+        right := mouseAct == "移动至目标右键点击1次"
+        lParam := (Pos[2] << 16) | (Pos[1] & 0xFFFF)
+        loop Max(1, Integer(Data.ClickCount)) {
+            PostMessage right ? 0x204 : 0x201, right ? 2 : 1, lParam, , "ahk_id " hwnd
+            Sleep 30
+            PostMessage right ? 0x205 : 0x202, 0, lParam, , "ahk_id " hwnd
+            Sleep 30
+        }
         return
     }
 
