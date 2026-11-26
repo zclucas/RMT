@@ -46,6 +46,8 @@ LoadMainSetting() {
     MainSoftData.RecordAutoLoosen := CfgRead(SettingFile, SettingSection, "RecordAutoLoosen", true)
     MainSoftData.RecordJoyInterval := CfgRead(SettingFile, SettingSection, "RecordJoyInterval", 50)
     MainSoftData.RecordShowBorder := CfgRead(SettingFile, SettingSection, "RecordShowBorder", true)
+    MainSoftData.RecordBackground := CfgRead(SettingFile, SettingSection, "RecordBackground", false)
+    MainSoftData.RecordBackgroundWin := CfgRead(SettingFile, SettingSection, "RecordBackgroundWin", "{宏设置窗口绑定}")
     MainSoftData.OCRTypeValue := CfgRead(SettingFile, SettingSection, "OCRType", 1) == 2 ? 2 : 1
     MainSoftData.ExcelBackend := CfgRead(SettingFile, SettingSection, "ExcelBackend", 1) == 2 ? 2 : 1
     MainSoftData.IsBootStart := CfgRead(SettingFile, SettingSection, "IsBootStart", false)

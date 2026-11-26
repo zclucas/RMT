@@ -365,6 +365,8 @@ class MainConfig {
         this.RecordJoy := false         ; 是否录制手柄
         this.RecordJoyInterval := 100   ; 手柄录制间隔 (ms)
         this.RecordShowBorder := true   ; 录制时是否显示边框 (0=关闭, 1=开启)
+        this.RecordBackground := false  ; 是否启用背景录制（录制操作转为后台指令）
+        this.RecordBackgroundWin := "{宏设置窗口绑定}" ; 背景录制绑定的窗口联系方式
 
         ; ---------- OCR ----------
         this.OCRTypeValue := 1          ; OCR 引擎类型 (1=RapidOCR, 2=Tesseract OCR)
