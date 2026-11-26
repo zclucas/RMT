@@ -15,7 +15,7 @@
             pageId := "macro"
         else if (RegExMatch(ctrl, "i)^(Wheel|UIPanel|CountDown)") )
             pageId := "trigger"
-        else if (RegExMatch(ctrl, "i)^(ShowBorder|HoldMuti|AutoLoosenCon|KeyboardTog|MouseTog|MouseTrail|JoyTog|JoyInterval)") )
+        else if (RegExMatch(ctrl, "i)^(ShowBorder|HoldMuti|AutoLoosenCon|BackgroundTog|BackgroundWin|KeyboardTog|MouseTog|MouseTrail|JoyTog|JoyInterval)") )
             pageId := "record"
         else if (RegExMatch(ctrl, "i)^(LogLevel_|ChkLog|ChkCMD|CmdTip|Val_)") )
             pageId := (InStr(ctrl, "Val_") = 1) ? "hotkey" : "diagnostic"
@@ -55,6 +55,7 @@
             {id: "joy", fields: [{key: "TriggerJoyType", def: "Xbox", ctrl: "CmbTriggerJoyType", kind: "cmbText"}, {key: "JoyType", def: "Xbox", ctrl: "CmbJoyType", kind: "cmbText"}, {key: "JoyLtRtAsButton", def: true, ctrl: "ChkJoyLtRtAsButton", kind: "chk"}]},
             {id: "float", fields: [{key: "HoldFloat", def: 0, ctrl: "EditHoldFloat", kind: "num"}, {key: "PreIntervalFloat", def: 0, ctrl: "EditPreIntervalFloat", kind: "num"}, {key: "IntervalFloat", def: 0, ctrl: "EditIntervalFloat", kind: "num"}, {key: "CoordXFloat", def: 0, ctrl: "EditCoordXFloat", kind: "num"}, {key: "CoordYFloat", def: 0, ctrl: "EditCoordYFloat", kind: "num"}]},
             {id: "recCommon", fields: [{key: "RecordShowBorder", def: true, ctrl: "ShowBorderCon", kind: "chk"}, {key: "RecordHoldMuti", def: true, ctrl: "HoldMutiCon", kind: "chk"}, {key: "RecordAutoLoosen", def: true, ctrl: "AutoLoosenCon", kind: "chk"}]},
+            {id: "recBg", fields: [{key: "RecordBackground", def: false, ctrl: "BackgroundTogCon", kind: "chk"}, {key: "RecordBackgroundWin", def: "{宏设置窗口绑定}", ctrl: "BackgroundWinCon", kind: "txt"}]},
             {id: "recKey", fields: [{key: "RecordKeyboard", def: true, ctrl: "KeyboardTogCon", kind: "chk"}]},
             {id: "recMouse", fields: [{key: "RecordMouse", def: true, ctrl: "MouseTogCon", kind: "chk"}, {key: "RecordMouseTrail", def: 1, ctrl: "MouseTrailModeCon", kind: "cmb0"}, {key: "RecordMouseTrailSpeed", def: 95, ctrl: "MouseTrailSpeedCon", kind: "num"}]},
             {id: "recJoy", fields: [{key: "RecordJoy", def: false, ctrl: "JoyTogCon", kind: "chk"}, {key: "RecordJoyInterval", def: 100, ctrl: "JoyIntervalCon", kind: "num"}]},

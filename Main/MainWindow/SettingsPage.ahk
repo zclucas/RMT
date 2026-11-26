@@ -121,6 +121,12 @@
                 ctrl := afterHint(ctrl, "{Binding SelectedItem.Tag, ElementName=" name "}")
             return row(label, ctrl, tip)
         }
+        txtRow(label, name, val, tip := "") {
+            escaped := this._XmlEsc(String(val))
+            if (SubStr(escaped, 1, 1) == "{")
+                escaped := "{}" escaped
+            return row(label, '<TextBox Name="' name '" Text="' escaped '" Height="33" MinHeight="33" Padding="10,0" VerticalContentAlignment="Center" FontSize="12" Foreground="{DynamicResource InputText}" Background="{DynamicResource InputBg}" BorderBrush="{DynamicResource InputStroke}" BorderThickness="1"/>', tip)
+        }
         num(label, name, val, tip := "", help := "", singleLineStyle := false) {
             style := singleLineStyle ? ' Style="{StaticResource RmtSingleLineTextBox}"' : ""
             padding := singleLineStyle ? "" : ' Padding="10,0" TextAlignment="Center"'
@@ -230,6 +236,8 @@
             card(GetLang("通用"), "&#xE7C8;", tog(GetLang("录制显示边框"), "ShowBorderCon", MainSoftData.RecordShowBorder, GetLang("录制时显示范围边框"))
                 . tog(GetLang("长按多次录制"), "HoldMutiCon", MainSoftData.RecordHoldMuti, GetLang("按住时连续录制"))
                 . tog(GetLang("结束自动添加按键松开"), "AutoLoosenCon", MainSoftData.RecordAutoLoosen, GetLang("录制结束后补充松开指令")), "0", "", "recCommon")
+            . card(GetLang("背景录制"), "&#xE771;", tog(GetLang("开启背景录制"), "BackgroundTogCon", MainSoftData.RecordBackground, GetLang("录制时将正常操作转换为后台指令"))
+                . row(GetLang("绑定窗口"), '<Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="58"/></Grid.ColumnDefinitions><TextBox Name="BackgroundWinCon" Text="' (SubStr(this._XmlEsc(String(MainSoftData.RecordBackgroundWin)), 1, 1) == "{" ? "{}" : "") this._XmlEsc(String(MainSoftData.RecordBackgroundWin)) '" Padding="5,0"/><Button Grid.Column="1" Name="BtnBgWinEdit" Content="' GetLang("编辑") '" Margin="6,0,0,0" Padding="4,0"/></Grid>', GetLang("目标窗口标识（如标题/类名/进程/句柄）")), "0,18,0,0", "", "recBg")
             . card(GetLang("键盘"), "&#xE765;", tog(GetLang("键盘录制"), "KeyboardTogCon", MainSoftData.RecordKeyboard, GetLang("记录键盘操作")), "0,18,0,0", "", "recKey")
             , card(GetLang("鼠标"), "&#xE962;", tog(GetLang("鼠标录制"), "MouseTogCon", MainSoftData.RecordMouse, GetLang("记录鼠标操作"))
                 . cmb(GetLang("鼠标轨迹"), "MouseTrailModeCon", GetLangArr(["不录制", "关键点位", "关键点相对位移", "全量"]), MainSoftData.RecordMouseTrail, true)
@@ -466,6 +474,9 @@
         this._Bind("ShowBorderCon", "Click", ObjBindMethod(this, "OnCheckEdit", "RecordShowBorder"))
         this._Bind("HoldMutiCon", "Click", ObjBindMethod(this, "OnCheckEdit", "RecordHoldMuti"))
         this._Bind("AutoLoosenCon", "Click", ObjBindMethod(this, "OnCheckEdit", "RecordAutoLoosen"))
+        this._Bind("BackgroundTogCon", "Click", ObjBindMethod(this, "OnCheckEdit", "RecordBackground"))
+        this._Bind("BackgroundWinCon", "LostFocus", ObjBindMethod(this, "OnTextEdit", "RecordBackgroundWin"))
+        this._Bind("BtnBgWinEdit", "Click", (*) => MyFrontInfoGui.ShowGui(XamlValueBridge(this.ui, "BackgroundWinCon")))
         this._Bind("KeyboardTogCon", "Click", ObjBindMethod(this, "OnCheckEdit", "RecordKeyboard"))
         this._Bind("MouseTogCon", "Click", ObjBindMethod(this, "OnCheckEdit", "RecordMouse"))
         this._Bind("MouseTrailModeCon", "SelectionChanged", ObjBindMethod(this, "OnComboIndex0", "RecordMouseTrail"))
