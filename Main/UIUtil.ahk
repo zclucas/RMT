@@ -493,6 +493,11 @@ CmdEditorTitleIcon(title) {
 
 ; 指令编辑器确定按钮：与间隔编辑器同款
 class CmdEditorForm {
+    ; 常规指令表单以控件信息编辑器为基准；专用布局不引用此宽度。
+    static Width := 620
+    static FontSize() => XAMLHost.FontSize()
+    static LabelWidth() => 6 * XAMLHost.ScaleFontSize(this.FontSize())
+    static PairColumns() => [this.LabelWidth(), "*", 16, this.LabelWidth(), "*"]
     static TimeValueTip(kind) {
         switch kind {
             case "时刻": return GetLang("按时、分、秒填写一天中的时刻。")
@@ -504,14 +509,18 @@ class CmdEditorForm {
         }
     }
 
-    static Row(parent, label, name := "", group := "CommandLabel", alignment := "Center", labelName := "", labelTip := "") {
+    static Row(parent, label, name := "", group := "CommandLabel", alignment := "Center", labelName := "", labelTip := "", fixedLabel := true) {
         row := parent.Add("Grid").Margin("0,4")
         if (name != "")
             row.Name(name)
         columns := row.Add("Grid.ColumnDefinitions")
-        columns.Add("ColumnDefinition").Width("Auto").SharedSizeGroup(group)
+        column := columns.Add("ColumnDefinition").Width(fixedLabel ? this.LabelWidth() : "Auto")
+        if (!fixedLabel)
+            column.SharedSizeGroup(group)
         columns.Add("ColumnDefinition").Width("*")
         caption := this.Label(row, label).VerticalAlignment(alignment)
+        if (fixedLabel)
+            caption.Margin("0")
         if (labelTip != "" && RTrim(labelTip, " ：:") != RTrim(GetLang(label), " ：:"))
             caption.ToolTip(labelTip)
         if (labelName != "")

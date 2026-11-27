@@ -102,7 +102,7 @@ class OperationGui {
         this._title := title
         titleHeight := XAMLHost.CmdTitleBarHeight()
 
-        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(XAMLHost.FontSize())
+        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(CmdEditorForm.FontSize())
         main.Rows(titleHeight, "*")
 
         ; === 标题栏 ===
@@ -115,9 +115,9 @@ class OperationGui {
         ; 行0：备注
         remarkRow := body.Add("StackPanel").Grid_Row(0).Orientation("Horizontal").VerticalAlignment("Center")
         remarkRow.Add("TextBlock").Text(GetLang("备注：")).VerticalAlignment("Center")
-            .Foreground("{DynamicResource TextMain}").FontSize("12")
+            .Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
         remarkRow.Add("TextBox").Name("RemarkCon").Width(180).Height(26).MinHeight(26).Margin("4,0,0,0")
-            .VerticalContentAlignment("Center").Padding("4,0").FontSize("11")
+            .VerticalContentAlignment("Center").Padding("4,0").FontSize(CmdEditorForm.FontSize())
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
 
@@ -130,9 +130,9 @@ class OperationGui {
         head := bdInner.Add("Grid").Grid_Row(0).Margin("0,0,8,4")
         head.Cols("*", "55", "8", "120", "28")
         head.Add("TextBlock").Grid_Column(0).Text(GetLang("运算表达式")).ToolTip(GetLang("提示：实际运行时会使用真实的变量值")).VerticalAlignment("Center")
-            .Foreground("{DynamicResource TextMain}").FontSize("12")
+            .Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
         head.Add("TextBlock").Grid_Column(3).Text(GetLang("结果保存变量")).VerticalAlignment("Center")
-            .Foreground("{DynamicResource TextMain}").FontSize("12")
+            .Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
         sv := bdInner.Add("ScrollViewer").Name("OpScroll").Grid_Row(1).Height(this._OpViewH())
             .VerticalScrollBarVisibility("Auto").HorizontalScrollBarVisibility("Disabled")
             .Padding("0").Margin("0").Style("{StaticResource OpThemedSV}")

@@ -1582,10 +1582,12 @@ class BrowserData {
     __New() {
         this.SerialStr := ""
         this.ActionType := "打开网址"
-        this.BrowserType := "系统默认浏览器" ; 系统默认浏览器/Chrome/Edge/Chromium/自定义路径
-        this.CloseScope := "所有页签"
+        this.BrowserType := "默认浏览器" ; 默认浏览器/Chrome/Edge/Brave/Vivaldi/Opera/Chromium/自定义路径
+        this.CloseScope := "所有标签页"
+        this.CurrentTabAction := "刷新"
+        this.TabMatchMode := "自动匹配"
         this.Url := "https://www.google.com"
-        this.TargetRef := "" ; 留空操作当前分页，否则按索引、ID或关键词定位
+        this.TargetRef := "" ; 留空操作当前标签页，否则按索引、ID或关键词定位
         this.Selector := ""
         this.SelectorType := "CSS" ; CSS / XPath
         this.Condition := "出现" ; 出现(appear) / 消失(disappear) / 可见(visible)
@@ -1609,10 +1611,12 @@ class BrowserData {
         this.TimeoutStatusVar := TimeoutPolicy.DefaultStatusVar
         this.Headless := 0
         this.OpenMode := "默认" ; 默认/新窗口/无痕模式，兼容旧 Incognito 配置
-        this.UseCDP := false
-        this.PageSource := "当前页签"
-        this.PageField := "网址"
-        this.WinInfo := "{宏设置窗口绑定}"
+        this.UseCDP := true
+        this.PageSource := "当前标签页"
+        this.PageIdVar := "PageId"
+        this.PageUrlVar := ""
+        this.PageTitleVar := ""
+        this.PageStateVar := ""
         this.BrowserPort := 9222
         this.BrowserPath := ""
         this.UserDataDir := ""

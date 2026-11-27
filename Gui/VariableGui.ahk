@@ -66,7 +66,7 @@ class VariableGui {
         this._title := title
         titleHeight := XAMLHost.CmdTitleBarHeight()
 
-        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(XAMLHost.FontSize())
+        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(CmdEditorForm.FontSize())
         main.Rows(titleHeight, "*")
 
         ; === 标题栏 ===

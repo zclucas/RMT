@@ -65,7 +65,7 @@ class WaitGui {
         this._title := title
         titleHeight := XAMLHost.CmdTitleBarHeight()
 
-        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(XAMLHost.FontSize())
+        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(CmdEditorForm.FontSize())
         main.Rows(titleHeight, "*")
 
         ; === 标题栏 ===
@@ -204,13 +204,13 @@ class WaitGui {
         for t in GetLangArr(["分钟", "小时", "天", "具体时间", "时间变量"])
             dunit.Add("ComboBoxItem").Content(t)
 
-        CommandTimeoutFields.Add(body, true)
+        CommandTimeoutFields.Add(body, true, , , CmdEditorForm.LabelWidth())
         CmdEditorForm.Footer(body)
 
         ; === 创建 XAMLHost ===
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)
         this.ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", this.OwnerHwnd)
-        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="640" SizeToContent="Height"')
+        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="' CmdEditorForm.Width '" SizeToContent="Height"')
         this.ui.xaml := StrReplace(this.ui.xaml, 'FontFamily="Segoe UI Variable Display, Segoe UI, sans-serif"', 'FontFamily="' MainSoftData.FontType '"')
         this.ui.xaml := StrReplace(this.ui.xaml, '%resources%', '')
 

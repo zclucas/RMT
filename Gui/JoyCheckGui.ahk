@@ -32,7 +32,7 @@ class JoyCheckGui extends JoyGui {
         this._title := title
         titleHeight := XAMLHost.CmdTitleBarHeight()
 
-        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(XAMLHost.FontSize())
+        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(CmdEditorForm.FontSize())
         main.Rows(titleHeight, "*")
         XAMLHost.AddCmdTitleBar(main, title, titleHeight)
 
@@ -52,21 +52,21 @@ class JoyCheckGui extends JoyGui {
 
         check := param.Add("StackPanel").Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center").MinHeight("26")
         if (!this.HasProp("SelectionData")) {
-            check.Add("TextBlock").Text(GetLang("检测模式:")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
+            check.Add("TextBlock").Text(GetLang("检测模式:")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
             cc := check.Add("ComboBox").Name("CheckTypeCon").Width(140).Height(26).MinHeight(26).Margin("4,0,0,0")
-                .VerticalContentAlignment("Center").FontSize("11").Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
+                .VerticalContentAlignment("Center").FontSize(CmdEditorForm.FontSize()).Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
                 .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
             for t in GetLangArr(["同时按下", "有一个按下"])
                 cc.Add("ComboBoxItem").Content(t)
-            check.Add("TextBlock").Text(GetLang("检测类型:")).ToolTip(GetLang("物理状态看实际按键，逻辑状态看系统收到的输入。")).VerticalAlignment("Center").Margin("14,0,0,0").Foreground("{DynamicResource TextMain}").FontSize("12")
+            check.Add("TextBlock").Text(GetLang("检测类型:")).ToolTip(GetLang("物理状态看实际按键，逻辑状态看系统收到的输入。")).VerticalAlignment("Center").Margin("14,0,0,0").Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
             st := check.Add("ComboBox").Name("StateTypeCon").Width(120).Height(26).MinHeight(26).Margin("4,0,0,0")
-                .VerticalContentAlignment("Center").FontSize("11").Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
+                .VerticalContentAlignment("Center").FontSize(CmdEditorForm.FontSize()).Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
                 .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
             for t in GetLangArr(["物理状态", "逻辑状态"])
                 st.Add("ComboBoxItem").Content(t)
-            check.Add("TextBlock").Text(GetLang("结果变量：")).VerticalAlignment("Center").Margin("14,0,0,0").Foreground("{DynamicResource TextMain}").FontSize("12")
+            check.Add("TextBlock").Text(GetLang("结果变量：")).VerticalAlignment("Center").Margin("14,0,0,0").Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
             check.Add("ComboBox").Name("VarNameCon").Width(130).Height(26).MinHeight(26).Margin("4,0,0,0").IsEditable("True")
-                .VerticalContentAlignment("Center").FontSize("11").Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
+                .VerticalContentAlignment("Center").FontSize(CmdEditorForm.FontSize()).Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
                 .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
         }
 
@@ -78,23 +78,23 @@ class JoyCheckGui extends JoyGui {
         }
 
         analogRow := param.Add("StackPanel").Name("AnalogRow").Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center").Margin("0,8,0,0").MinHeight("26").Height("26").Visibility("Hidden")
-        analogRow.Add("TextBlock").Name("AxisTip1").Text("LX").VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12").Width("28")
+        analogRow.Add("TextBlock").Name("AxisTip1").Text("LX").VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize()).Width("28")
         analogRow.Add("Slider").Name("AxisSlider1").Width("180").Height("26").Minimum("-100").Maximum("100").Value("100").IsMoveToPointEnabled("True").VerticalAlignment("Center")
         analogRow.Add("TextBox").Name("AxisVal1").Width("48").Height(26).MinHeight(26).Margin("6,0,16,0")
-            .VerticalContentAlignment("Center").TextAlignment("Center").FontSize("11").Padding("2,0")
+            .VerticalContentAlignment("Center").TextAlignment("Center").FontSize(CmdEditorForm.FontSize()).Padding("2,0")
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
-        analogRow.Add("TextBlock").Name("AxisTip2").Text("LY").VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12").Width("28")
+        analogRow.Add("TextBlock").Name("AxisTip2").Text("LY").VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize()).Width("28")
         analogRow.Add("Slider").Name("AxisSlider2").Width("180").Height("26").Minimum("-100").Maximum("100").Value("0").IsMoveToPointEnabled("True").VerticalAlignment("Center")
         analogRow.Add("TextBox").Name("AxisVal2").Width("48").Height(26).MinHeight(26).Margin("6,0,0,0")
-            .VerticalContentAlignment("Center").TextAlignment("Center").FontSize("11").Padding("2,0")
+            .VerticalContentAlignment("Center").TextAlignment("Center").FontSize(CmdEditorForm.FontSize()).Padding("2,0")
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
 
         btnRow := body.Add("StackPanel").Grid_Row(2).Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center")
         clearBtn := btnRow.Add("Button").Name("BtnClear").Content(GetLang("清空")).Width(88).Height(32).MinHeight(32).Cursor("Hand")
             .Background("{DynamicResource ActionBg}").Foreground("{DynamicResource ActionText}")
-            .BorderBrush("{DynamicResource ActionStroke}").BorderThickness("1").FontSize(13).FontWeight("Bold")
+            .BorderBrush("{DynamicResource ActionStroke}").BorderThickness("1").FontSize(CmdEditorForm.FontSize()).FontWeight("Bold")
             .Margin("0,0,250,0")
         clearBtn.InjectResources(FrontInfoGui._OkBtnHoverStyle())
         AddCmdOkBtn(btnRow, "BtnOk")

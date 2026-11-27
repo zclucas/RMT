@@ -33,8 +33,29 @@ class BrowserActions {
     }
 
     static CloseBrowserTypes := ["Chrome", "Edge", "所有浏览器", "自定义"]
-    static CloseScopes := ["所有页签", "非当前页签", "当前页签"]
+    static CloseScopes := ["所有标签页", "非当前标签页", "当前标签页"]
     static OpenModes := ["默认", "新窗口", "无痕模式"]
+    static BrowserTypes := ["默认浏览器", "Chrome", "Edge", "Brave", "Vivaldi", "Opera", "Chromium", "自定义路径"]
+    static CurrentTabActions := ["刷新", "后退", "前进", "关闭"]
+    static TabMatchModes := ["自动匹配", "标签页ID", "序号", "网址", "标题", "正则表达式-网址", "正则表达式-标题"]
+    ; 仅供历史指令继续执行和编辑，不再作为新增操作提供。
+    static LegacyTabActions := ["当前页跳转", "新建标签页", "获取当前标签页ID", "关闭浏览器", "关闭", "刷新", "后退", "前进"]
+
+    static Normalize(action) {
+        switch action {
+            case "页签信息": return "标签页信息"
+            case "切换分页": return "切换标签页"
+            case "关闭分页", "关闭标签": return "关闭标签页"
+            case "新建分页": return "新建标签页"
+            case "获取分页列表": return "获取标签页列表"
+            case "获取当前分页ID": return "获取当前标签页ID"
+        }
+        return action
+    }
+
+    static Action(value) => this.Normalize(CmdEnumZh(this.Normalize(GetLangKey(value)), this.Names))
+
+    static BrowserType(value) => GetLangKey(value) == "系统默认浏览器" ? "默认浏览器" : GetLangKey(value)
 
     static GetOpenMode(data) {
         if (data.HasOwnProp("OpenMode"))
@@ -45,11 +66,17 @@ class BrowserActions {
     static IsCloseAction(action) => action == "关闭" || action == "关闭浏览器"
 
     static RequiresCDP(action, pageField := "网址") {
-        return action != "打开网址" && action != "关闭"
-            && (action != "页签信息" || pageField == "页签ID")
+        return action != "打开网址" && action != "关闭" && action != "当前标签页"
+            && (this.Normalize(action) != "标签页信息" || pageField == "标签页ID" || pageField == "页签ID" || pageField == "加载状态")
     }
 
     static IsTabAction(action) {
+        action := this.Normalize(action)
+        if (action == "刷新" || action == "后退" || action == "前进")
+            return true
+        for name in this.LegacyTabActions
+            if (name == action)
+                return true
         for group in this.Groups {
             if (group.name != "网页")
                 continue
@@ -78,7 +105,7 @@ class BrowserActions {
     static Groups := [
         {
             name: "网页",
-            actions: ["打开网址", "页签信息", "当前页跳转", "新建分页", "切换分页", "关闭分页", "获取当前分页ID", "刷新", "后退", "前进", "关闭", "关闭浏览器"]
+            actions: ["打开网址", "标签页信息", "当前标签页", "切换标签页", "关闭标签页"]
         },
         {
             name: "等待条件",
@@ -94,7 +121,7 @@ class BrowserActions {
         },
         {
             name: "数据提取",
-            actions: ["提取文本", "提取控件值", "提取属性", "提取HTML", "元素数量", "元素状态", "获取网址", "获取标题", "获取分页列表"]
+            actions: ["提取文本", "提取控件值", "提取属性", "提取HTML", "元素数量", "元素状态", "获取网址", "获取标题", "获取标签页列表"]
         },
         {
             name: "页面工具",

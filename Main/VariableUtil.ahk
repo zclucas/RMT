@@ -92,10 +92,14 @@ SetGlobalData(macroStr, visitMap) {
                 WindowEnsureResults(Data)
                 WindowRegisterResults(Data)
             case "浏览器":
-                if (BrowserActions.UsesTimeout(CmdEnumZh(Data.ActionType, BrowserActions.Names)))
+                if (BrowserActions.Action(Data.ActionType) == "标签页信息")
+                    for field, name in BrowserPageInfo.OutputVariables(Data)
+                        if (name != "")
+                            VariableMap[name] := true
+                if (BrowserActions.UsesTimeout(BrowserActions.Action(Data.ActionType)))
                     TimeoutPolicy.RegisterStatus(Data)
                 if (Data.HasOwnProp("SaveVar") && Data.SaveVar != ""
-                    && !BrowserActions.IsCloseAction(CmdEnumZh(Data.ActionType, BrowserActions.Names)))
+                    && !BrowserActions.IsCloseAction(BrowserActions.Action(Data.ActionType)))
                     for suffix in ["", "_Success", "_Error", "_ElapsedMs"]
                         VariableMap[Data.SaveVar suffix] := true
             case "网络请求":
@@ -345,6 +349,12 @@ RegisterVariableIconTypes(cmd, data) {
                     VariableIconOutput(outputs, data.%field%, glyph)
                 }
             }
+        case "浏览器":
+            if (BrowserActions.Action(data.ActionType) == "标签页信息") {
+                for field, name in BrowserPageInfo.OutputVariables(data)
+                    VariableIconOutput(outputs, name, text)
+            } else if (data.HasOwnProp("SaveVar"))
+                VariableIconOutput(outputs, data.SaveVar, "")
         default:
             ; 其他写入入口先登记为未知，避免同名变量保留另一条指令的类型。
             for field in ["SaveName", "SaveVar", "VarName", "ResultSaveName", "ResultVar", "ErrorVar", "ControlVar",

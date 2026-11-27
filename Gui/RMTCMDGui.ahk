@@ -136,7 +136,7 @@ class RMTCMDGui {
         title := this.ParentTile GetLang("RMT指令编辑器")
         this._title := title
         titleHeight := XAMLHost.CmdTitleBarHeight()
-        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(XAMLHost.FontSize())
+        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(CmdEditorForm.FontSize())
         main.Rows(titleHeight, "Auto")
         XAMLHost.AddCmdTitleBar(main, title, titleHeight)
         this._BuildForm(main).Grid_Row(1)
@@ -144,7 +144,7 @@ class RMTCMDGui {
         template := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)
         this.ui := XAMLHost(StrReplace(template, "%app%", main.ToString()), "", this.OwnerHwnd)
         this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"',
-            'Title="' this._EscapeXml(title) '" Width="400" SizeToContent="Height"')
+            'Title="' this._EscapeXml(title) '" Width="360" SizeToContent="Height"')
         this.ui.xaml := StrReplace(this.ui.xaml, 'FontFamily="Segoe UI Variable Display, Segoe UI, sans-serif"',
             'FontFamily="' MainSoftData.FontType '"')
         this.ui.xaml := StrReplace(this.ui.xaml, '%resources%', '')

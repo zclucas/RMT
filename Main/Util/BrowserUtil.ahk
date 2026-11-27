@@ -84,6 +84,7 @@ class BrowserUtil {
 
         pf  := EnvGet("ProgramFiles")
         pfx := EnvGet("ProgramFiles(x86)")
+        pf64 := EnvGet("ProgramW6432")
         lad := EnvGet("LocalAppData")
 
         ; 1. Chrome
@@ -149,6 +150,23 @@ class BrowserUtil {
             checkAdd("Opera", p)
         }
 
+        ; 补全 Chromium 及其衍生浏览器的 App Paths 注册与常见安装位置。
+        for name, exe in Map("Brave", "brave.exe", "Vivaldi", "vivaldi.exe", "Opera", "opera.exe", "Chromium", "chromium.exe") {
+            for root in ["HKCU\SOFTWARE", "HKLM\SOFTWARE", "HKLM\SOFTWARE\WOW6432Node"]
+                try checkAdd(name, Trim(RegRead(root "\Microsoft\Windows\CurrentVersion\App Paths\" exe), '" '))
+        }
+        for root in [pf, pfx, pf64, lad] {
+            if (root == "")
+                continue
+            checkAdd("Chrome", root "\Google\Chrome\Application\chrome.exe")
+            checkAdd("Edge", root "\Microsoft\Edge\Application\msedge.exe")
+            checkAdd("Brave", root "\BraveSoftware\Brave-Browser\Application\brave.exe")
+            checkAdd("Chromium", root "\Chromium\Application\chrome.exe")
+            checkAdd("Chromium", root "\Chromium\Application\chromium.exe")
+            checkAdd("Vivaldi", root "\Vivaldi\Application\vivaldi.exe")
+            checkAdd("Opera", root "\Opera\opera.exe")
+            checkAdd("Opera", root "\Programs\Opera\opera.exe")
+        }
         return list
     }
 
@@ -167,7 +185,7 @@ class BrowserUtil {
     }
 
     static Launch(browserType := "Chrome", browserPath := "", headless := 0, userDataDir := "", port := 9222) {
-        if (GetLangKey(browserType) == "系统默认浏览器") {
+        if (BrowserActions.BrowserType(browserType) == "默认浏览器") {
             browserPath := this.GetDefaultBrowserPath()
             browserType := "自定义路径"
         }
@@ -205,8 +223,8 @@ class BrowserUtil {
     }
 
     static ResolveBrowserPath(browserType, browserPath := "") {
-        browserType := GetLangKey(browserType)
-        if (browserType == "系统默认浏览器")
+        browserType := BrowserActions.BrowserType(browserType)
+        if (browserType == "默认浏览器")
             browserPath := this.GetDefaultBrowserPath()
         else if (browserType != "自定义路径" && browserType != "自定义") {
             browserPath := ""
@@ -416,7 +434,7 @@ class BrowserUtil {
         return true
     }
 
-    ; --- 分页管理 ---
+    ; --- 标签页管理 ---
 
     static GetTabs() {
         this.EnsureConnection()
@@ -980,13 +998,55 @@ class BrowserUtil {
         return true
     }
 
+    static CurrentTabAction(operation, cancelled := "") {
+        snapshot := "", hwnd := 0
+        for candidate in WinGetList("ahk_class Chrome_WidgetWin_1") {
+            BrowserPageInfo.CheckCancelled(cancelled)
+            if (!BrowserPageInfo.IsBrowser(candidate) || !DllCall("IsWindowVisible", "Ptr", candidate))
+                continue
+            try info := BrowserPageInfo.Snapshot(candidate)
+            catch OSError
+                continue
+            if (info.tabs.Length) {
+                snapshot := info
+                hwnd := candidate
+                break
+            }
+        }
+        if (!IsObject(snapshot))
+            throw TargetError(GetLang("未找到带标签页的浏览器窗口。"))
+        BrowserPageInfo.CheckCancelled(cancelled)
+        if (operation == "关闭") {
+            walker := WindowControl._Object(14, WindowControl._Automation())
+            for tab in snapshot.tabs {
+                if (!tab.selected)
+                    continue
+                BrowserPageInfo.CheckCancelled(cancelled)
+                if (this._InvokeTabClose(tab.element, walker))
+                    return true
+                tab.selection := WindowControl._Pattern(tab.element, "selection")
+                if (tab.selection && this._MiddleClickTab(hwnd, tab, cancelled))
+                    return true
+                throw Error(GetLang("无法关闭当前标签页。"))
+            }
+            throw TargetError(GetLang("未找到当前标签页。"))
+        }
+        commands := Map("后退", 1, "前进", 2, "刷新", 3)
+        if (!commands.Has(operation))
+            throw ValueError(GetLang("未知的标签页操作。"))
+        ; WM_APPCOMMAND 直接交给目标浏览器处理，无需 CDP 或切换前台焦点。
+        SendMessage(0x319, hwnd, commands[operation] << 16, , hwnd, , , , 1000)
+        return true
+    }
+
     static CloseWindows(browser, scope, customPath, cancelled) {
+        scope := StrReplace(StrReplace(scope, "页签", "标签页"), "分页", "标签页")
         static browsers := Map("chrome.exe", "Chrome", "msedge.exe", "Edge", "chromium.exe", "Chromium",
             "brave.exe", "Brave", "vivaldi.exe", "Vivaldi", "opera.exe", "Opera")
         customPath := Trim(customPath, ' "')
         if (browser == "自定义" ? customPath == "" : (browser != "Chrome" && browser != "Edge" && browser != "所有浏览器"))
             return
-        if (scope != "所有页签" && scope != "非当前页签" && scope != "当前页签")
+        if (scope != "所有标签页" && scope != "非当前标签页" && scope != "当前标签页")
             return
 
         for hwnd in WinGetList("ahk_class Chrome_WidgetWin_1") {
@@ -1005,7 +1065,7 @@ class BrowserUtil {
     }
 
     static _CloseWindow(hwnd, scope, cancelled) {
-        if (scope == "所有页签") {
+        if (scope == "所有标签页") {
             WinClose(hwnd)
             return
         }
@@ -1029,12 +1089,12 @@ class BrowserUtil {
             for index, tab in tabs {
                 if (cancelled())
                     break
-                if ((index == current) != (scope == "当前页签"))
+                if ((index == current) != (scope == "当前标签页"))
                     continue
                 try {
                     if (this._InvokeTabClose(tab.element, walker))
                         continue
-                    ; 紧凑页签可能只在选中时提供关闭按钮。
+                    ; 紧凑标签页可能只在选中时提供关闭按钮。
                     if (index != current) {
                         restore := true
                         ComCall(3, tab.selection) ; Select
@@ -1086,7 +1146,7 @@ class BrowserUtil {
     }
 
     static _MiddleClickTab(hwnd, tab, cancelled) {
-        ; 固定页签可能没有关闭按钮，中键只发送到当前匹配窗口的页签位置。
+        ; 固定标签页可能没有关闭按钮，中键只发送到当前匹配窗口的标签页位置。
         if (WindowControl._Int(tab.element, 38)) ; get_CurrentIsOffscreen
             return false
         rect := Buffer(16)
@@ -1100,7 +1160,7 @@ class BrowserUtil {
         if (!DllCall("ScreenToClient", "Ptr", hwnd, "Ptr", point))
             return false
         ControlClick("x" NumGet(point, 0, "Int") " y" NumGet(point, 4, "Int"), hwnd, , "Middle", 1, "NA Pos")
-        ; 等浏览器处理这次点击，再继续切换或关闭其他页签。
+        ; 等浏览器处理这次点击，再继续切换或关闭其他标签页。
         loop 10 {
             if (cancelled())
                 break

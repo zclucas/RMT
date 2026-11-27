@@ -72,7 +72,7 @@ class OutputGui {
         this._title := title
         titleHeight := XAMLHost.CmdTitleBarHeight()
 
-        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(XAMLHost.FontSize())
+        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(CmdEditorForm.FontSize())
         main.Rows(titleHeight, "*")
 
         ; === 标题栏 ===
@@ -81,10 +81,10 @@ class OutputGui {
         ; === 内容 ===
         body := main.Add("Grid").Grid_Row(1).Margin("16,10,16,12")
         body.Rows("36", "22", "*", "36", "36", "56")
-        body.Cols("80", "150", "12", "80", "*")
+        body.Cols(CmdEditorForm.PairColumns()*)
 
         ; 行0：输出类型 + 备注（白底，内边距与下拉框一致）
-        body.Add("TextBlock").Grid_Row(0).Grid_Column(0).Text(GetLang("输出类型:")).VerticalAlignment("Center").Margin("8,0,0,0")
+        body.Add("TextBlock").Grid_Row(0).Grid_Column(0).Text(GetLang("输出类型:")).VerticalAlignment("Center").Margin("0")
         ot := body.Add("ComboBox").Grid_Row(0).Grid_Column(1).Name("OutputTypeCombo").Height(26).MinHeight(26).VerticalAlignment("Center")
         ; §21.4：字符变量类型已移除（改由 变量指令-字符 的「编辑」按钮构建）
         for t in GetLangArr(["发送内容", "粘贴内容", "悬浮显示", "指令窗口", "复制到剪切板"])
@@ -100,7 +100,7 @@ class OutputGui {
         hidden.Add("ComboBox").Name("VariableNameCombo").IsEditable("True")
 
         ; 行1-2：输出内容换行；标签右移，与文本框内文字左对齐（内容边距保持不变）
-        body.Add("TextBlock").Grid_Row(1).Grid_Column(0).Text(GetLang("输出内容：")).VerticalAlignment("Bottom").Margin("8,0,0,0")
+        body.Add("TextBlock").Grid_Row(1).Grid_Column(0).Text(GetLang("输出内容：")).VerticalAlignment("Bottom").Margin("0")
         body.Add("TextBox").Grid_Row(2).Grid_Column(0).Grid_ColumnSpan(5).Name("TextCon").AcceptsReturn("True").TextWrapping("Wrap")
             .VerticalContentAlignment("Top").HorizontalContentAlignment("Left").Padding("2,4").MinHeight(72).Margin("0,4,0,4")
             .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
@@ -108,7 +108,7 @@ class OutputGui {
             .ScrollViewer_VerticalScrollBarVisibility("Auto")
 
         ; 行3：变量数组（标签与输出类型对齐）
-        body.Add("TextBlock").Grid_Row(3).Grid_Column(0).Text(GetLang("变量数组：")).ToolTip(GetLang("追加名插入名称，追加值在执行时取值。")).VerticalAlignment("Center").Margin("8,0,0,0")
+        body.Add("TextBlock").Grid_Row(3).Grid_Column(0).Text(GetLang("变量数组：")).ToolTip(GetLang("追加名插入名称，追加值在执行时取值。")).VerticalAlignment("Center").Margin("0")
         varRow := body.Add("Grid").Grid_Row(3).Grid_Column(1).Grid_ColumnSpan(4)
         varRow.Cols("90", "8", "*", "8", "70", "8", "70")
         vt := varRow.Add("ComboBox").Grid_Column(0).Name("VarTypeCombo").Height(26).MinHeight(26).VerticalAlignment("Center").SelectedIndex("0")
@@ -120,12 +120,12 @@ class OutputGui {
 
         ; 行 4：悬浮显示位置选择，其它输出类型下隐藏
         hudRow := body.Add("Grid").Grid_Row(4).Grid_ColumnSpan(5).Name("HudPosRow").Visibility("Collapsed")
-        hudRow.Cols("80", "150", "12", "*")
-        hudRow.Add("TextBlock").Grid_Column(0).Text(GetLang("显示位置：")).VerticalAlignment("Center").Margin("8,0,0,0")
+        hudRow.Cols(CmdEditorForm.LabelWidth(), "*", 16, CmdEditorForm.LabelWidth() + (CmdEditorForm.Width - 32 - 16) / 2 - CmdEditorForm.LabelWidth())
+        hudRow.Add("TextBlock").Grid_Column(0).Text(GetLang("显示位置：")).VerticalAlignment("Center").Margin("0")
         hp := hudRow.Add("ComboBox").Grid_Column(1).Name("HudPosCombo").Height(26).MinHeight(26).VerticalAlignment("Center")
         for t in HudPosLabels()
             hp.Add("ComboBoxItem").Content(t)
-        hudRow.Add("TextBlock").Grid_Column(3).Text(GetLang("运行中可直接拖动调整")).VerticalAlignment("Center").FontSize(11)
+        hudRow.Add("TextBlock").Grid_Column(3).Text(GetLang("运行中可直接拖动调整")).VerticalAlignment("Center").FontSize(CmdEditorForm.FontSize())
             .Foreground("{DynamicResource TextSub}")
 
         ; 行 5：确定
@@ -135,7 +135,7 @@ class OutputGui {
         ; === 创建 XAMLHost ===
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)
         this.ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", this.OwnerHwnd)
-        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="520" Height="330"')
+        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="' CmdEditorForm.Width '" Height="330"')
         this.ui.xaml := StrReplace(this.ui.xaml, 'FontFamily="Segoe UI Variable Display, Segoe UI, sans-serif"', 'FontFamily="' MainSoftData.FontType '"')
         this.ui.xaml := StrReplace(this.ui.xaml, '%resources%', '')
 

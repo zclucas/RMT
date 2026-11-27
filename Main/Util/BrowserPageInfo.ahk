@@ -6,17 +6,61 @@ class BrowserPageReadError extends Error {
 
 ; 普通浏览器通过 UIA 读取，不启动或接管浏览器。
 class BrowserPageInfo {
-    static Sources := ["当前页签", "目标网址", "窗口绑定"]
-    static Fields := ["页签ID", "网址", "标题"]
+    static Sources := ["当前标签页", "网址", "标题", "正则表达式-网址", "正则表达式-标题"]
+    static Fields := ["标签页ID", "网址", "标题", "加载状态"]
+    static Outputs := Map("标签页ID", "PageIdVar", "网址", "PageUrlVar", "标题", "PageTitleVar", "加载状态", "PageStateVar")
+
+    static NormalizeSource(source) {
+        switch source {
+            case "当前页签", "当前分页": return "当前标签页"
+            case "目标网址": return "网址"
+            case "正则网址", "正则表达式匹配网址": return "正则表达式-网址"
+        }
+        return source
+    }
+
+    static NormalizeField(field) => field == "页签ID" || field == "分页ID" ? "标签页ID" : field
+
+    static UsesMatchValue(source) => this.NormalizeSource(source) == "网址" || this.NormalizeSource(source) == "标题" || this.IsRegex(source)
+    static IsRegex(source) => this.NormalizeSource(source) == "正则表达式-网址" || this.NormalizeSource(source) == "正则表达式-标题"
+    static MatchesTitle(source) => this.NormalizeSource(source) == "标题" || this.NormalizeSource(source) == "正则表达式-标题"
+
+    static OutputVariables(data) {
+        outputs := Map(), hasOutputs := false
+        for field, name in this.Outputs {
+            hasOutputs := hasOutputs || data.HasOwnProp(name)
+            outputs[field] := data.HasOwnProp(name) ? data.%name% : ""
+        }
+        ; 旧单项配置转换成对应的独立变量，显式留空的新配置不回退。
+        if (!hasOutputs && data.HasOwnProp("SaveVar") && data.SaveVar != "") {
+            field := CmdEnumZh(this.NormalizeField(InputField(data, "PageField", "网址")), this.Fields)
+            outputs[field] := data.SaveVar
+        }
+        return outputs
+    }
 
     static IsBrowser(hwnd) {
         try return WinGetClass(hwnd) == "Chrome_WidgetWin_1"
-            && RegExMatch(WinGetProcessName(hwnd), "i)^(chrome|msedge)\.exe$")
+            && RegExMatch(WinGetProcessName(hwnd), "i)^(chrome|msedge|brave|vivaldi|opera|chromium)\.exe$")
         catch
             return false
     }
 
     static Read(source, field, targetUrl := "", winInfo := "", port := 9222, cancelled := "") {
+        field := this.NormalizeField(field)
+        return this.ReadFields(source, [field], targetUrl, winInfo, port, cancelled)[field]
+    }
+
+    static ReadFields(source, fields, targetUrl := "", winInfo := "", port := 9222, cancelled := "") {
+        source := this.NormalizeSource(source)
+        normalizedFields := []
+        for field in fields
+            normalizedFields.Push(this.NormalizeField(field))
+        fields := normalizedFields
+        requireUrl := false
+        for field in fields
+            if (field != "标题")
+                requireUrl := true
         if (source == "窗口绑定") {
             windows := []
             for hwnd in GetHwndList(winInfo)
@@ -29,12 +73,12 @@ class BrowserPageInfo {
                     windows.Push(hwnd)
         }
         if (!windows.Length)
-            throw TargetError(GetLang("未找到 Chrome 或 Edge 浏览器窗口。"))
-        if (source == "目标网址") {
+            throw TargetError(GetLang("未找到支持的浏览器窗口。"))
+        if (this.UsesMatchValue(source)) {
             if (Trim(targetUrl) == "")
-                throw ValueError(GetLang("目标网址不能为空。"))
-            info := this.FindUrl(windows, targetUrl, cancelled)
-        } else if (source == "当前页签") {
+                throw ValueError(GetLang("请填写标签页匹配值。"))
+            info := this.FindUrl(windows, targetUrl, cancelled, this.IsRegex(source), this.MatchesTitle(source) ? "标题" : "网址", requireUrl)
+        } else if (source == "当前标签页") {
             info := ""
             for hwnd in windows {
                 try snapshot := this.Snapshot(hwnd)
@@ -43,25 +87,59 @@ class BrowserPageInfo {
                 ; 同步提示等 Chromium 对话框也使用浏览器窗口类，但没有标签栏。
                 if (!snapshot.tabs.Length)
                     continue
-                info := this.ReadWindow(hwnd, cancelled, field != "标题")
+                info := this.ReadWindow(hwnd, cancelled, requireUrl)
                 break
             }
             if (!IsObject(info))
-                throw TargetError(GetLang("未找到带页签的 Chrome 或 Edge 浏览器窗口。"))
+                throw TargetError(GetLang("未找到带标签页的浏览器窗口。"))
         } else {
-            info := this.ReadWindow(windows[1], cancelled, field != "标题")
+            info := this.ReadWindow(windows[1], cancelled, requireUrl)
         }
-        switch field {
-            case "网址": return info.url
-            case "标题": return info.title
-            case "页签ID": return this.TargetId(info, port)
-            default: throw ValueError(GetLang("未知的页签信息类型。"))
+        values := Map(), targetId := ""
+        for field in fields
+            if (field == "标签页ID" || field == "加载状态") {
+                targetId := this.TargetId(info, port)
+                break
+            }
+        for field in fields {
+            this.CheckCancelled(cancelled)
+            switch field {
+                case "网址": values[field] := info.url
+                case "标题": values[field] := info.title
+                case "标签页ID", "加载状态":
+                    values[field] := field == "标签页ID" ? targetId : this.LoadState(info, targetId)
+                default: throw ValueError(GetLang("未知的标签页信息类型。"))
+            }
+        }
+        return values
+    }
+
+    static LoadState(info, targetId) {
+        original := this.Snapshot(info.hwnd)
+        previousId := BrowserUtil.GetActiveTabId()
+        try {
+            BrowserUtil.SwitchTab(targetId)
+            ; Chromium 网络错误页也会报告 complete，需先识别浏览器内部错误文档。
+            state := BrowserUtil.Evaluate("/^(?:chrome|edge)-error:/.test(document.documentURI) ? 'unreachable' : document.readyState")
+            switch state {
+                case "unreachable": return "不可访问"
+                case "loading": return "加载中"
+                case "interactive": return "可交互"
+                case "complete": return "加载完成"
+                default: throw BrowserPageReadError(GetLang("无法读取网页加载状态。"))
+            }
+        } finally {
+            if (previousId != "" && previousId != targetId)
+                try BrowserUtil.SwitchTab(previousId)
+            for tab in original.tabs
+                if (tab.selected)
+                    try this.SelectTab(tab.element)
         }
     }
 
     static CheckCancelled(cancelled) {
         if (IsObject(cancelled) && cancelled())
-            throw Error(GetLang("页签信息读取已取消。"))
+            throw Error(GetLang("标签页信息读取已取消。"))
     }
 
     static Snapshot(hwnd) {
@@ -118,7 +196,10 @@ class BrowserPageInfo {
         ; 地址栏可能省略协议，只有完整地址才可作为后备值。
         if (url == "" && RegExMatch(address, "i)^[a-z][a-z0-9+.-]*:"))
             url := address
-        return {hwnd: hwnd, url: url, title: title, tabs: tabs}
+        errorPage := RegExMatch(url, "i)^(chrome|edge)-error:") != 0
+        if (errorPage && address != "")
+            url := address
+        return {hwnd: hwnd, url: url, title: title, tabs: tabs, address: address, errorPage: errorPage}
     }
 
     static ReadWindow(hwnd, cancelled := "", requireUrl := true) {
@@ -127,13 +208,17 @@ class BrowserPageInfo {
             this.CheckCancelled(cancelled)
             try {
                 info := this.Snapshot(hwnd)
-                if ((!requireUrl || info.url != "") && info.title != "")
+                if ((!requireUrl || info.url != "") && info.title != "") {
+                    ; 错误文档地址是内部 URL；受控窗口优先还原 CDP 中保留的目标网址。
+                    if (info.errorPage)
+                        try this.TargetId(info, 9222)
                     return info
+                }
             } catch OSError {
                 ; 标签切换时可访问树会重建，重新获取树而不复用失效节点。
             }
             if (A_TickCount >= deadline)
-                throw BrowserPageReadError(GetLang("无法读取页签网址和标题，请确保目标页面已加载且浏览器未最小化。"))
+                throw BrowserPageReadError(GetLang("无法读取标签页网址和标题，请确保目标页面已加载且浏览器未最小化。"))
             Sleep(100)
         }
     }
@@ -148,7 +233,9 @@ class BrowserPageInfo {
         return StrCompare(left, right, true) == 0
     }
 
-    static FindUrl(windows, url, cancelled := "") {
+    static FindUrl(windows, url, cancelled := "", regex := false, field := "网址", requireUrl := true) {
+        if (regex)
+            RegExMatch("", url) ; 在切换任何标签页前验证表达式。
         found := "", deadline := A_TickCount + 30000
         for hwnd in windows {
             this.CheckCancelled(cancelled)
@@ -161,16 +248,17 @@ class BrowserPageInfo {
                 for tab in snapshot.tabs {
                     this.CheckCancelled(cancelled)
                     if (A_TickCount >= deadline)
-                        throw Error(GetLang("查找页签超时，请缩小窗口范围或使用窗口绑定。"))
+                        throw Error(GetLang("查找标签页超时，请缩小网址匹配范围。"))
                     this.SelectTab(tab.element)
-                    try info := this.ReadWindow(hwnd, cancelled)
+                    try info := this.ReadWindow(hwnd, cancelled, field == "网址" || requireUrl)
                     catch BrowserPageReadError {
                         this.CheckCancelled(cancelled)
                         continue
                     }
-                    if (this.SameUrl(info.url, url)) {
+                    value := field == "标题" ? info.title : info.url
+                    if (regex ? RegExMatch(value, url) : this.SameUrl(value, url)) {
                         if (IsObject(found))
-                            throw TargetError(GetLang("有多个页签使用此网址，请改用窗口绑定定位。"))
+                            throw TargetError(GetLang("匹配到多个标签页，请缩小匹配范围。"))
                         found := info
                     }
                 }
@@ -180,7 +268,7 @@ class BrowserPageInfo {
             }
         }
         if (!IsObject(found))
-            throw TargetError(GetLang("未找到对应网址的页签。"))
+            throw TargetError(GetLang("未找到匹配的标签页。"))
         return found
     }
 
@@ -189,17 +277,22 @@ class BrowserPageInfo {
             throw ValueError(GetLang("浏览器调试端口无效。"))
         session := BrowserUtil.ManagedSessionForWindow(info.hwnd)
         if (!IsObject(session))
-            throw BrowserConnectionError(GetLang("页签ID需要 CDP 支持，请通过「浏览器 → 网页 → 打开网址」勾选 CDP 打开该网页。"))
+            throw BrowserConnectionError(GetLang("标签页ID需要 CDP 支持，请通过「浏览器 → 网页 → 打开网址」勾选 CDP 打开该网页。"))
         BrowserUtil.Connect("127.0.0.1", session["port"])
         targets := JSON.parse(BrowserUtil.GetTabs())
         matches := []
         for target in targets {
-            if (target["type"] == "page" && this.SameUrl(target["url"], info.url) && target["title"] == info.title)
-                matches.Push(target.Has("targetId") ? target["targetId"] : target["id"])
+            sameUrl := this.SameUrl(target["url"], info.url)
+            if (info.HasOwnProp("errorPage") && info.errorPage && info.address != "")
+                sameUrl := sameUrl || this.SameUrl(RTrim(RegExReplace(target["url"], "i)^https?://"), "/"), RTrim(info.address, "/"))
+            if (target["type"] == "page" && sameUrl && target["title"] == info.title)
+                matches.Push(target)
         }
         if (matches.Length != 1)
-            throw TargetError(GetLang(matches.Length ? "有多个同名同网址页签，无法唯一确定页签ID。" : "未找到对应页签，请确认目标网页由勾选 CDP 的打开网址指令创建。"))
-        return matches[1]
+            throw TargetError(GetLang(matches.Length ? "有多个同名同网址标签页，无法唯一确定标签页ID。" : "未找到对应标签页，请确认目标网页由勾选 CDP 的打开网址指令创建。"))
+        target := matches[1]
+        info.url := target["url"]
+        return target.Has("targetId") ? target["targetId"] : target["id"]
     }
 
     static OwnsDebugPort(hwnd, port) => BrowserUtil.HasPort(this.DebugPorts(hwnd), port)

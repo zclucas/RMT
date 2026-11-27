@@ -152,6 +152,8 @@ ReadCommandConfig(path, serial, cmd) {
 
 NormalizeCommandData(cmd, Data) {
     CmdEnumNorm(cmd, Data)
+    if (cmd == "浏览器")
+        Data.ActionType := BrowserActions.Action(Data.ActionType)
     if (cmd == "变量")
         NormalizeVariableAssignmentRows(Data)
     for field in ["CurCMD", "LoopBody", "TrueMacro", "FalseMacro", "DefaultMacro", "SubMacro"] {
@@ -212,7 +214,8 @@ ValidateCommandVariableNames(cmd, data) {
         "TimeoutStatusVar", "ResultVar", "ErrorVar", "ControlVar", "TypeVar", "ClassVar", "HwndVar",
         "XVar", "YVar", "WindowXVar", "WindowYVar", "WidthVar", "HeightVar", "CountVar", "NameVar",
         "PidVar", "PathVar", "ExistVar", "StatusVar", "StartTimeVar", "UptimeVar", "CpuVar", "GpuVar",
-        "ResultArray", "WidthVarName", "HeightVarName", "ResponseVar", "ConfVar", "RatioVar", "DepthVar"]
+        "ResultArray", "WidthVarName", "HeightVarName", "ResponseVar", "ConfVar", "RatioVar", "DepthVar",
+        "PageIdVar", "PageUrlVar", "PageTitleVar", "PageStateVar"]
     Loop 12
         fields.Push("ResultVar" A_Index)
     if (cmd == "时间") {

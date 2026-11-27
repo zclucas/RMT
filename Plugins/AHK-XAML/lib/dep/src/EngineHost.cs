@@ -1489,7 +1489,21 @@ public partial class AhkWpfEngine
             }
             if (_uiScaleLastWidth == 0 && !_uiScaleFluid)
             {
-                double initialScale = RmtCommonStyles.WindowContentVisualScale(win);
+                // Auto-height editors receive queued visibility changes after creation.
+                // Their temporary tall content may already be limited by MaxHeight, so
+                // its measured height ratio is not the intended opening density.
+                double initialScale;
+                if (win.SizeToContent == SizeToContent.Height && _viewboxDesignW > 1 && win.Width > 1)
+                {
+                    double chromeW, chromeH;
+                    RmtCommonStyles.GetWindowChromeInset(win, out chromeW, out chromeH);
+                    var box = win.Content as Viewbox;
+                    var child = box == null ? null : box.Child as FrameworkElement;
+                    Thickness margin = child == null ? new Thickness() : child.Margin;
+                    initialScale = (win.Width - chromeW) / (_viewboxDesignW + margin.Left + margin.Right);
+                }
+                else
+                    initialScale = RmtCommonStyles.WindowContentVisualScale(win);
                 if (initialScale > 0) _uiScaleVisual = initialScale;
             }
             _uiScaleVisual *= factor / _uiScaleFactor;

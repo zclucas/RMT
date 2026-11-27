@@ -74,7 +74,7 @@ class ScreenShotGui {
         this._title := title
         titleHeight := XAMLHost.CmdTitleBarHeight()
 
-        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(XAMLHost.FontSize())
+        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(CmdEditorForm.FontSize())
         main.Rows(titleHeight, "Auto")
 
         ; === 标题栏 ===
@@ -83,7 +83,7 @@ class ScreenShotGui {
         ; === 内容 ===
         body := main.Add("Grid").Grid_Row(1).Margin("16,0,16,16")
         body.Rows("36", "36", "36", "36", "36", "36", "48")
-        body.Cols("108", "*", "16", "108", "*")
+        body.Cols(CmdEditorForm.PairColumns()*)
 
         ; 行0：备注（白底，内边距与下拉框一致）
         body.Add("TextBlock").Grid_Row(0).Grid_Column(0).Text(GetLang("备注：")).VerticalAlignment("Center")
@@ -107,7 +107,7 @@ class ScreenShotGui {
 
         ; 行2：窗口信息（屏幕抓图时 Hidden 占位，避免下面行上移）
         winRow := body.Add("Grid").Name("WinInfoRow").Grid_Row(2).Grid_ColumnSpan(5).Visibility("Hidden")
-        winRow.Cols("108", "*", "8", "70")
+        winRow.Cols(CmdEditorForm.LabelWidth(), "*", 8, 70)
         winRow.Add("TextBlock").Grid_Column(0).Text(GetLang("窗口绑定:")).ToolTip(GetLang("指定这条指令要操作的窗口。")).VerticalAlignment("Center")
         CmdEditorForm.WindowBindingCombo(winRow, "WinInfoCon").Grid_Column(1).MaxHeight(26)
         winRow.Add("Button").Grid_Column(3).Name("BtnWinEdit").Content(GetLang("编辑")).Height(26).MinHeight(26).VerticalAlignment("Center")
@@ -138,7 +138,7 @@ class ScreenShotGui {
         ; === 创建 XAMLHost ===
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)
         this.ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", this.OwnerHwnd)
-        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="560" SizeToContent="Height"')
+        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="' CmdEditorForm.Width '" SizeToContent="Height"')
         this.ui.xaml := StrReplace(this.ui.xaml, 'FontFamily="Segoe UI Variable Display, Segoe UI, sans-serif"', 'FontFamily="' MainSoftData.FontType '"')
         this.ui.xaml := StrReplace(this.ui.xaml, '%resources%', '')
 

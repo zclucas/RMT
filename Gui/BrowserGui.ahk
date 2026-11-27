@@ -25,7 +25,7 @@ class BrowserGui extends CommentGui {
         title := this.ParentTile GetLang("浏览器")
         this._title := title
         height := XAMLHost.CmdTitleBarHeight()
-        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(XAMLHost.FontSize())
+        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(CmdEditorForm.FontSize())
         main.Rows(height, "Auto")
         XAMLHost.AddCmdTitleBar(main, title, height)
 
@@ -47,22 +47,39 @@ class BrowserGui extends CommentGui {
         this._Choice(this._Row(browserGrid, "浏览器：", "CloseBrowserRow"), "CloseBrowserType", BrowserActions.CloseBrowserTypes).Grid_Column(1)
         openModeRow := this._Row(browserGrid, "选项设置：", "OpenModeRow", , GetLang("默认复用对应窗口；新窗口始终另开窗口；无痕模式复用对应无痕窗口。")).Grid_Column(2)
         this._Choice(openModeRow, "OpenMode", BrowserActions.OpenModes).Grid_Column(1)
-        cdpRow := this._Row(body, "网页连接：", "CdpOptionRow")
-        cdpRow.Add("CheckBox").Name("UseCDP").Grid_Column(1).Content("CDP").VerticalAlignment("Center")
-            .Foreground("{DynamicResource TextMain}").ToolTip(GetLang("勾选后打开 CDP 窗口，供页签ID、网页元素、脚本等浏览器指令使用。"))
-        this._Choice(this._Row(body, "确定页签：", "PageSourceRow", , GetLang("当前页签读取最近使用浏览器窗口的活动页签；按完整网址查找会短暂切换标签页，结束后恢复。")), "PageSource", BrowserPageInfo.Sources).Grid_Column(1)
-        this._Choice(this._Row(body, "获取信息：", "PageFieldRow", , GetLang("普通 Chrome、Edge 可读取网址和标题；页签ID仅支持勾选 CDP 打开的窗口。")), "PageField", BrowserPageInfo.Fields).Grid_Column(1)
-        bindingRow := this._Row(body, "窗口绑定：", "WinInfoRow").Add("Grid").Grid_Column(1).Cols("*", 6, "Auto")
-        CmdEditorForm.WindowBindingCombo(bindingRow, "WinInfo")
-        CmdEditorForm.TextButton(bindingRow, "BtnWinEdit", "编辑").Grid_Column(2)
+        this._Choice(this._Row(body, "匹配方式：", "PageSourceRow", , GetLang("网址和标题精确匹配，正则表达式按对应内容匹配；查找时短暂切换标签页，结束后恢复。")), "PageSource", BrowserPageInfo.Sources).Grid_Column(1)
+        currentRow := body.Add("Grid").Name("CurrentTabActionRow").Cols("*", 16, "*")
+        this._Choice(this._Row(currentRow, "标签操作：", , , GetLang("操作最近使用浏览器窗口的当前标签页，无需 CDP。")), "CurrentTabAction", BrowserActions.CurrentTabActions).Grid_Column(1)
+        matchGrid := body.Add("Grid").Name("TabMatchOptions").Cols("*", 16, "*")
+        this._Choice(this._Row(matchGrid, "匹配方式："), "TabMatchMode", BrowserActions.TabMatchModes).Grid_Column(1)
+        matchValueRow := this._Row(matchGrid, "匹配值：", , , GetLang("ID、网址与标题精确匹配；序号从1开始，正则匹配网址或标题。支持变量 {变量名}。" )).Grid_Column(2)
+        CmdEditorForm.Combo(matchValueRow, "TabMatchValue", true).Grid_Column(1)
         this._Field(body, "浏览器路径：", "BrowserPath", false, 26, "BrowserPathRow")
-        this._Choice(this._Row(body, "页签范围：", "CloseScopeRow"), "CloseScope", BrowserActions.CloseScopes).Grid_Column(1)
-        targetRefRow := this._Row(body, "目标分页：", "TargetRefRow", , GetLang("支持直接输入索引(1开始)、TargetID、标题/URL关键词，或选择变量 {变量名}"))
+        this._Choice(this._Row(body, "标签页范围：", "CloseScopeRow"), "CloseScope", BrowserActions.CloseScopes).Grid_Column(1)
+        targetRefRow := this._Row(body, "目标标签页：", "TargetRefRow", , GetLang("支持直接输入索引(1开始)、TargetID、标题/URL关键词，或选择变量 {变量名}"))
         CmdEditorForm.Combo(targetRefRow, "TargetRef", true).Grid_Column(1)
         urlRow := this._Row(body, "网址：", "UrlRow", "UrlLabel")
         urlInput := urlRow.Add("Grid").Grid_Column(1).Cols("*", 6, "Auto")
         CmdEditorForm.Combo(urlInput, "Url", true)
         CmdEditorForm.IconButton(urlInput, "BtnEditUrl", 0xE70F, "文本构造").Grid_Column(2)
+        cdpRow := this._Row(body, "调试连接：", "CdpOptionRow", "CdpOptionLabel",
+            GetLang("开发者工具协议（CDP）：勾选后，浏览器指令才可以选取操作网页控件、执行脚本等"))
+        cdpRow.Add("CheckBox").Name("UseCDP").Grid_Column(1).Content(GetLang("CDP（浏览器开发者工具协议）")).VerticalAlignment("Center")
+            .Foreground("{DynamicResource TextMain}")
+
+        outputsGrid := body.Add("Grid").Name("PageOutputs").Cols("*", 16, "*").Rows("Auto", "Auto")
+        for index, field in BrowserPageInfo.Fields {
+            name := BrowserPageInfo.Outputs[field]
+            label := field
+            tip := field == "加载状态" ? "返回不可访问、加载中、可交互、加载完成；需要 CDP，留空不获取。"
+                : field == "标签页ID" ? "填写变量以保存标签页ID；需要 CDP，留空不获取。" : "填写变量以保存信息，留空不获取。"
+            outputRow := this._Row(outputsGrid, label "：", name "Row", , GetLang(tip))
+                .Grid_Row((index - 1) // 2).Grid_Column(Mod(index - 1, 2) * 2)
+            CmdEditorForm.Combo(outputRow, name, true).Grid_Column(1)
+            if (field != "标签页ID")
+                CmdEditorForm.OutputVariablePlaceholder(outputRow, name,
+                    field == "网址" ? "Url" : field == "标题" ? "Title" : "State", 1)
+        }
 
         selector := this._Row(body, "网页元素：", "SelectorRow", ,
             GetLang("左侧选择类型，右侧填写选择器。")).Add("Grid").Grid_Column(1)
@@ -108,7 +125,7 @@ class BrowserGui extends CommentGui {
 
         saveRow := this._Row(body, "结果变量：", "SaveVarRow", , GetLang("留空时不保存结果"))
         CmdEditorForm.Combo(saveRow, "SaveVar", true).Grid_Column(1)
-        CommandTimeoutFields.Add(body, false, , , 6 * XAMLHost.ScaleFontSize(XAMLHost.FontSize()))
+        CommandTimeoutFields.Add(body, false, , , CmdEditorForm.LabelWidth())
         notice := body.Add("StackPanel").Name("CdpNotice").Orientation("Horizontal").HorizontalAlignment("Center").Margin("0,6,0,0").Visibility("Collapsed")
         notice.Add("TextBlock").Text(GetLang("该指令需要 ")).Foreground("#D32F2F").VerticalAlignment("Center")
         link := notice.Add("Button").Name("BtnCdpHelp").Padding(0).MinWidth(0).MinHeight(0)
@@ -120,7 +137,7 @@ class BrowserGui extends CommentGui {
 
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", height)
         this.ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", this.OwnerHwnd)
-        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="620" SizeToContent="Height"')
+        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="' CmdEditorForm.Width '" SizeToContent="Height"')
         this.ui.xaml := StrReplace(this.ui.xaml, 'FontFamily="Segoe UI Variable Display, Segoe UI, sans-serif"', 'FontFamily="' MainSoftData.FontType '"')
         this.ui.xaml := StrReplace(this.ui.xaml, '%resources%', '')
 
@@ -130,11 +147,12 @@ class BrowserGui extends CommentGui {
         this.ui.OnEvent("BtnOk", "Click", XamlWin.BindCurrent(this, "OnClickSureBtn"))
         this.ui.OnEvent("BtnEditJsCode", "Click", ObjBindMethod(this, "_QueueTextEditor", "JsCode"))
         this.ui.OnEvent("BtnEditUrl", "Click", ObjBindMethod(this, "_QueueTextEditor", "Url"))
-        this.ui.OnEvent("BtnWinEdit", "Click", XamlWin.BindCurrent(this, "OnEditWindowBinding"))
         this.ui.OnEvent("ActionGroup", "SelectionChanged", XamlWin.BindCurrent(this, "OnActionGroupChanged"))
         this.ui.OnEvent("ActionType", "SelectionChanged", XamlWin.BindCurrent(this, "OnActionTypeChanged"))
-        for name in ["BrowserType", "CloseBrowserType", "PageSource", "PageField"]
+        for name in ["BrowserType", "CloseBrowserType", "PageSource", "PageIdVar", "PageStateVar"]
             this.ui.OnEvent(name, "SelectionChanged", XamlWin.BindCurrent(this, "OnFieldsChanged"))
+        for name in ["PageIdVar", "PageStateVar"]
+            this.ui.OnEvent(name, "TextChanged", XamlWin.BindCurrent(this, "OnFieldsChanged"))
         this.ui.OnEvent("BtnCdpHelp", "Click", XamlWin.BindCurrent(this, "ShowCDPHelp"))
         this.ui.OnEvent("BtnPickSelector", "Click", (*) => SetTimer(this._PickSelector.Bind(this, this.ui), -1))
         this.ui.OnEvent("BtnPickKey", "Click", (*) => SetTimer(this._OpenKeyPicker.Bind(this), -1))
@@ -164,13 +182,8 @@ class BrowserGui extends CommentGui {
         this._playHotkeys := []
     }
 
-    OnEditWindowBinding(*) {
-        MyFrontInfoGui.OwnerHwnd := MainSoftData.IsModalSubGui ? this.Hwnd() : ""
-        MyFrontInfoGui.ShowGui(XamlValueBridge(this.ui, "WinInfo"))
-    }
-
     _Row(body, label, rowName := "", labelName := "", labelTip := "") {
-        row := body.Add("Grid").Margin("0,4").Cols(6 * XAMLHost.ScaleFontSize(XAMLHost.FontSize()), "*")
+        row := body.Add("Grid").Margin("0,4").Cols(CmdEditorForm.LabelWidth(), "*")
         if (rowName != "")
             row.Name(rowName)
         caption := CmdEditorForm.Label(row, label).Margin("0")
@@ -258,6 +271,7 @@ class BrowserGui extends CommentGui {
     }
 
     _UpdateFieldVisibilities(action, browser, pageSource := "", pageField := "") {
+        action := BrowserActions.Normalize(action)
         textLabels := Map(
             "输入", GetLang("输入内容："),
             "等待文字", GetLang("匹配文字："),
@@ -274,17 +288,18 @@ class BrowserGui extends CommentGui {
         isOpen := action == "打开网址"
         isClose := action == "关闭"
         isTab := BrowserActions.IsTabAction(action)
-        isInfo := action == "页签信息"
+        isInfo := action == "标签页信息"
+        isMatching := action == "切换标签页" || action == "关闭标签页"
         source := isInfo ? (pageSource != "" ? pageSource : CmdEnumZh(this.ui.Query("PageSource"), BrowserPageInfo.Sources)) : ""
         isMouseCoord := action == "鼠标移动" || action == "鼠标点击" || action == "鼠标滚轮"
         hasSelector := BrowserActions.UsesSelector(action)
         rows := Map(
             "BrowserRow", isOpen, "CloseBrowserRow", isClose, "CloseScopeRow", isClose,
             "BrowserPathRow", (isOpen && browser == "自定义路径") || (isClose && browser == "自定义"),
-            "CdpOptionRow", isOpen, "PageSourceRow", isInfo, "PageFieldRow", isInfo,
-            "WinInfoRow", isInfo && source == "窗口绑定",
-            "UrlRow", isOpen || action == "当前页跳转" || action == "新建分页" || (isInfo && source == "目标网址"),
-            "TargetRefRow", action == "切换分页" || action == "关闭分页" || BrowserActions.UsesTarget(action),
+            "CdpOptionRow", isOpen, "PageSourceRow", isInfo, "PageOutputs", isInfo,
+            "CurrentTabActionRow", action == "当前标签页", "TabMatchOptions", isMatching,
+            "UrlRow", isOpen || action == "当前页跳转" || action == "新建标签页" || (isInfo && BrowserPageInfo.UsesMatchValue(source)),
+            "TargetRefRow", BrowserActions.UsesTarget(action),
             "SelectorRow", hasSelector, "ConditionRow", action == "等待元素",
             "LoadStateRow", action == "等待加载", "TextRow", textLabels.Has(action),
             "ClearBeforeRow", action == "输入", "CheckedRow", action == "勾选",
@@ -296,12 +311,15 @@ class BrowserGui extends CommentGui {
             "JsCodeRow", action == "执行JS" || action == "Cookie操作" || action == "Storage操作",
             "AttrNameRow", attrLabels.Has(action),
             "SavePathRow", action == "网页截图", "CommandTimeoutRow", !isTab && BrowserActions.UsesTimeout(action),
-            "SaveVarRow", (isInfo || !isTab) && !BrowserActions.IsCloseAction(action))
+            "SaveVarRow", !isTab && !BrowserActions.IsCloseAction(action))
+        for field, name in BrowserPageInfo.Outputs
+            rows[name "Row"] := isInfo
         for name, visible in rows
             this._ComboPush(name, "Visibility", visible ? "Visible" : "Collapsed")
-        field := isInfo ? (pageField != "" ? pageField : CmdEnumZh(this.ui.Query("PageField"), BrowserPageInfo.Fields)) : ""
+        field := isInfo ? (pageField != "" ? pageField
+            : (this.ui.Query("PageIdVar") != "" || this.ui.Query("PageStateVar") != "") ? "标签页ID" : "") : ""
         this._ComboPush("CdpNotice", "Visibility", BrowserActions.RequiresCDP(action, field) ? "Visible" : "Collapsed")
-        this._ComboPush("UrlLabel", "Text", GetLang(isInfo ? "目标网址：" : "网址："))
+        this._ComboPush("UrlLabel", "Text", GetLang(isInfo && BrowserPageInfo.MatchesTitle(source) ? "标题：" : "网址："))
         if (attrLabels.Has(action))
             this._ComboPush("AttrNameLabel", "Text", attrLabels[action])
         this._ComboPush("JsCodeLabel", "Text", action == "执行JS" ? GetLang("JS 脚本：") : GetLang("值："))
@@ -337,7 +355,7 @@ class BrowserGui extends CommentGui {
             url := ""
             if (pages.Length != 1) {
                 tabs := pages.Length ? pages : tabs
-                prompt := GetLang("输入分页编号或要打开的网页网址。")
+                prompt := GetLang("输入标签页编号或要打开的网页网址。")
                 for i, candidate in tabs
                     prompt .= "`n" i ". " SubStr(candidate["title"] != "" ? candidate["title"] : candidate["url"], 1, 72)
                 result := RmtDialog.Input(prompt, GetLang("拾取网页元素"), pages.Length ? "1" : "", this.Hwnd())
@@ -349,7 +367,7 @@ class BrowserGui extends CommentGui {
                 else if (RegExMatch(value, "i)^(https?|file)://"))
                     url := value
                 else
-                    throw Error(GetLang("请输入有效的分页编号或网址。"))
+                    throw Error(GetLang("请输入有效的标签页编号或网址。"))
             }
             BrowserUtil.SwitchTab(tab["targetId"])
             if (url != "")
@@ -382,7 +400,7 @@ class BrowserGui extends CommentGui {
     }
 
     ShowCDPHelp(*) {
-        text := GetLang("CDP（Chrome DevTools Protocol）是 Chrome、Edge 提供的浏览器调试协议，RMT 通过它读取页签ID、定位网页元素、执行 JavaScript 等。")
+        text := GetLang("CDP（Chrome DevTools Protocol）是 Chrome、Edge 提供的浏览器调试协议，RMT 通过它读取标签页ID、定位网页元素、执行 JavaScript 等。")
             . "`n`n" GetLang("该指令仅对通过「浏览器指令 → 网页 → 打开网址」勾选「CDP」后打开的窗口网页有效。")
             . "`n`n" GetLang("未勾选 CDP 时按普通浏览器方式打开，不能用于需要 CDP 的操作。")
         RmtDialog.Info(text, GetLang("CDP 说明"), this.Hwnd())
@@ -469,6 +487,13 @@ class BrowserGui extends CommentGui {
         parts := cmd != "" ? StrSplit(cmd, "_") : []
         this.SerialStr := parts.Length ? parts[1] : AllocateCommandSerial("浏览器")
         this.Data := GetMacroCMDData(this.SerialStr).Clone()
+        this.Data.CloseScope := StrReplace(StrReplace(InputField(this.Data, "CloseScope", "所有标签页"), "页签", "标签页"), "分页", "标签页")
+        this.Data.PageSource := BrowserPageInfo.NormalizeSource(InputField(this.Data, "PageSource", "当前标签页"))
+        if (this.Data.PageSource == "窗口绑定")
+            this.Data.PageSource := "当前标签页"
+        outputs := BrowserPageInfo.OutputVariables(this.Data)
+        for field, name in BrowserPageInfo.Outputs
+            this.Data.%name% := outputs[field]
         this.Data.OpenMode := BrowserActions.GetOpenMode(this.Data)
         this._ComboPush("Remark", "Text", parts.Length >= 2 ? parts[2] : "")
 
@@ -477,22 +502,23 @@ class BrowserGui extends CommentGui {
         for name, value in defaults.OwnProps()
             if (!this.Data.HasOwnProp(name) && name != "TimeoutAction" && name != "TimeoutStatusVar")
                 this.Data.%name% := value
-        actionType := CmdEnumZh(this.Data.ActionType, BrowserActions.Names)
-        if (actionType == "关闭标签")
-            actionType := "关闭分页"
+        actionType := BrowserActions.Action(this.Data.ActionType)
+        if ((actionType == "刷新" || actionType == "后退" || actionType == "前进") && Trim(this.Data.TargetRef) == "") {
+            this.Data.CurrentTabAction := actionType
+            actionType := "当前标签页"
+        }
 
-        this._browserNames := ["系统默认浏览器"]
-        seen := Map("系统默认浏览器", true)
+        this._browserNames := BrowserActions.BrowserTypes.Clone()
+        this._browserNames.Pop() ; 自定义路径保留在列表末尾。
+        seen := Map()
+        for name in this._browserNames
+            seen[name] := true
         for browser in BrowserUtil.GetInstalledBrowsers() {
             if (!seen.Has(browser.name))
                 this._browserNames.Push(browser.name)
             seen[browser.name] := true
         }
-        if (this._browserNames.Length == 1) {
-            this._browserNames.Push("Chrome", "Edge")
-            seen["Chrome"] := seen["Edge"] := true
-        }
-        browserType := GetLangKey(this.Data.BrowserType)
+        browserType := BrowserActions.BrowserType(this.Data.BrowserType)
         closeBrowserType := BrowserActions.GetCloseBrowserType(browserType)
         if (browserType == "自定义")
             browserType := "自定义路径"
@@ -505,21 +531,27 @@ class BrowserGui extends CommentGui {
         for varName in GetGuiVarArr() {
             if (varName != "") {
                 this._ComboPush("SaveVar", "AddItem", varName)
+                for field, name in BrowserPageInfo.Outputs
+                    this._ComboPush(name, "AddItem", varName)
                 this._ComboPush("TargetRef", "AddItem", "{" varName "}")
+                this._ComboPush("TabMatchValue", "AddItem", "{" varName "}")
                 this._ComboPush("Url", "AddItem", "{" varName "}")
             }
         }
         for name in ["Url", "TargetRef", "Selector", "JsCode", "AttrName", "BrowserPath", "CoordX", "CoordY"]
             this._ComboPush(name, "Text", String(this.Data.%name%))
         this._ComboPush("SaveVar", "Text", GetLang(this.Data.SaveVar))
+        this._ComboPush("TabMatchValue", "Text", this.Data.TargetRef)
+        this._ComboPush("TabMatchMode", "SelectedIndex", CmdEnumIndex(BrowserPageInfo.NormalizeSource(this.Data.TabMatchMode), BrowserActions.TabMatchModes))
+        this._ComboPush("CurrentTabAction", "SelectedIndex", CmdEnumIndex(this.Data.CurrentTabAction, BrowserActions.CurrentTabActions))
+        for field, name in BrowserPageInfo.Outputs
+            this._ComboPush(name, "Text", this.Data.%name%)
         this._ComboPush(actionType == "网页截图" ? "SavePath" : "Text", "Text", String(this.Data.Text))
         this._ComboPush("ClearBefore", "IsChecked", this.Data.ClearBefore ? "True" : "False")
         this._ComboPush("Checked", "IsChecked", this.Data.Checked ? "True" : "False")
         this._ComboPush("UseCDP", "IsChecked", this.Data.UseCDP ? "True" : "False")
         this._ComboPush("OpenMode", "SelectedIndex", CmdEnumIndex(this.Data.OpenMode, BrowserActions.OpenModes))
         this._ComboPush("PageSource", "SelectedIndex", CmdEnumIndex(this.Data.PageSource, BrowserPageInfo.Sources))
-        this._ComboPush("PageField", "SelectedIndex", CmdEnumIndex(this.Data.PageField, BrowserPageInfo.Fields))
-        this._ComboPush("WinInfo", "Text", this.Data.WinInfo)
         this._ComboPush("FullPage", "IsChecked", actionType == "网页截图" && this.Data.OuterHtml ? "True" : "False")
         this._ComboPush("IncludeTag", "IsChecked", actionType != "提取HTML" || this.Data.OuterHtml ? "True" : "False")
 
@@ -535,6 +567,19 @@ class BrowserGui extends CommentGui {
                     break 2
                 }
             }
+        }
+        ; 历史操作只在编辑原指令时保留，避免打开再保存改变已有宏。
+        for legacyAction in BrowserActions.LegacyTabActions {
+            if (actionType != legacyAction)
+                continue
+            this._activeActions := BrowserActions.Groups[1].actions.Clone()
+            this._activeActions.Push(actionType)
+            this._ComboPush("ActionGroup", "SelectedIndex", 0)
+            this._ComboPush("ActionType", "ClearItems", "")
+            for action in this._activeActions
+                this._ComboPush("ActionType", "AddItem", GetLang(action))
+            this._ComboPush("ActionType", "SelectedIndex", this._activeActions.Length - 1)
+            break
         }
         for name, values in Map("SelectorType", BrowserGui.SelectorTypes, "Condition", BrowserGui.Conditions,
             "LoadState", BrowserGui.LoadStates, "BrowserType", this._browserNames, "MouseBtn", BrowserGui.MouseButtons, "StorageType", BrowserGui.StorageTypes)
@@ -552,7 +597,8 @@ class BrowserGui extends CommentGui {
         this._ComboPush("CloseBrowserType", "SelectedIndex", CmdEnumIndex(closeBrowserType, BrowserActions.CloseBrowserTypes))
         this._ComboPush("CloseScope", "SelectedIndex", CmdEnumIndex(this.Data.CloseScope, BrowserActions.CloseScopes))
         this._UpdateFieldVisibilities(actionType, actionType == "关闭"
-            ? CmdEnumZh(closeBrowserType, BrowserActions.CloseBrowserTypes) : CmdEnumZh(browserType, this._browserNames), this.Data.PageSource, this.Data.PageField)
+            ? CmdEnumZh(closeBrowserType, BrowserActions.CloseBrowserTypes) : CmdEnumZh(browserType, this._browserNames), this.Data.PageSource,
+            this.Data.PageIdVar != "" || this.Data.PageStateVar != "" ? "标签页ID" : "")
     }
 
     _ReadData() {
@@ -560,13 +606,20 @@ class BrowserGui extends CommentGui {
         state := this.ui.Query("BrowserType", "CloseBrowserType", "CloseScope", "BrowserPath", "TargetRef", "Url",
             "SelectorType", "Selector", "Condition", "LoadState", "Text", "SavePath", "ClearBefore",
             "Checked", "FullPage", "IncludeTag", "OpenMode", "JsCode", "AttrName", "SaveVar",
-            "CoordX", "CoordY", "MouseBtn", "StorageType", "PageSource", "PageField", "WinInfo", "UseCDP")
+            "CoordX", "CoordY", "MouseBtn", "StorageType", "PageSource", "UseCDP", "PageIdVar", "PageUrlVar", "PageTitleVar", "PageStateVar",
+            "TabMatchMode", "TabMatchValue", "CurrentTabAction")
         data.ActionType := this._Action(this.ui)
+        data.CurrentTabAction := CmdEnumZh(state["CurrentTabAction"], BrowserActions.CurrentTabActions)
+        data.TabMatchMode := CmdEnumZh(state["TabMatchMode"], BrowserActions.TabMatchModes)
         data.OpenMode := CmdEnumZh(state["OpenMode"], BrowserActions.OpenModes)
         data.UseCDP := state["UseCDP"] == "True"
         data.PageSource := CmdEnumZh(state["PageSource"], BrowserPageInfo.Sources)
-        data.PageField := CmdEnumZh(state["PageField"], BrowserPageInfo.Fields)
-        data.WinInfo := Trim(state["WinInfo"])
+        for field, name in BrowserPageInfo.Outputs
+            data.%name% := GetVarName(Trim(state[name]))
+        if (data.HasOwnProp("PageField"))
+            data.DeleteProp("PageField")
+        if (data.HasOwnProp("WinInfo"))
+            data.DeleteProp("WinInfo")
         if (data.HasOwnProp("Incognito"))
             data.DeleteProp("Incognito")
         if (data.ActionType == "关闭") {
@@ -582,7 +635,7 @@ class BrowserGui extends CommentGui {
             data.%name% := CmdEnumZh(state[name], values)
         isTab := BrowserActions.IsTabAction(data.ActionType)
         if (isTab) {
-            ; 页签操作不读取隐藏的输出、超时参数，使用内置等待策略。
+            ; 标签页操作不读取隐藏的输出、超时参数，使用内置等待策略。
             data.TimeoutMs := TimeoutPolicy.DefaultMs
             data.TimeoutAction := TimeoutPolicy.DefaultAction
             data.TimeoutStatusVar := ""
@@ -590,24 +643,53 @@ class BrowserGui extends CommentGui {
             CommandTimeoutFields.Read(this.ui, data)
         for name in ["Url", "TargetRef", "Selector", "JsCode", "AttrName", "BrowserPath", "CoordX", "CoordY"]
             data.%name% := state[name]
+        if (data.ActionType == "切换标签页" || data.ActionType == "关闭标签页")
+            data.TargetRef := Trim(state["TabMatchValue"])
         data.Text := state[data.ActionType == "网页截图" ? "SavePath" : "Text"]
         data.ClearBefore := state["ClearBefore"] == "True"
         data.Checked := state["Checked"] == "True"
         data.OuterHtml := state[data.ActionType == "网页截图" ? "FullPage" : "IncludeTag"] == "True"
-        data.SaveVar := isTab && data.ActionType != "页签信息" ? "" : GetVarName(Trim(state["SaveVar"]))
+        data.SaveVar := isTab ? "" : GetVarName(Trim(state["SaveVar"]))
         return data
     }
 
     CheckIfValid() {
         data := this._ReadData()
         message := ""
-        if (data.ActionType == "页签信息") {
-            if (data.PageSource == "目标网址" && Trim(data.Url) == "")
-                message := GetLang("目标网址不能为空。")
-            else if (data.PageSource == "窗口绑定" && data.WinInfo == "")
-                message := GetLang("窗口绑定不能为空。")
-            else if (data.SaveVar == "")
-                message := GetLang("请填写结果变量。")
+        if (data.ActionType == "标签页信息") {
+            if (BrowserPageInfo.UsesMatchValue(data.PageSource) && Trim(data.Url) == "")
+                message := GetLang("请填写标签页匹配值。")
+            else {
+                selected := false, names := Map()
+                for field, name in BrowserPageInfo.Outputs {
+                    value := data.%name%
+                    if (value == "")
+                        continue
+                    if (!CheckVarNameIfValid(value))
+                        return false
+                    if (names.Has(value))
+                        message := GetLang("各信息请使用不同的变量名。")
+                    names[value] := true
+                    selected := true
+                }
+                if (!selected)
+                    message := GetLang("请至少填写一个信息变量。")
+                if (BrowserPageInfo.IsRegex(data.PageSource)) {
+                    try RegExMatch("", data.Url)
+                    catch
+                        message := GetLang("正则表达式无效。")
+                }
+            }
+        } else if (data.ActionType == "切换标签页" || data.ActionType == "关闭标签页") {
+            if (data.TargetRef == "")
+                message := GetLang("请填写标签页匹配值。")
+            else if (data.TabMatchMode == "序号" && !InStr(data.TargetRef, "{") && (!IsInteger(data.TargetRef) || data.TargetRef < 1))
+                message := GetLang("标签页序号必须为正整数。")
+            else if (BrowserPageInfo.IsRegex(data.TabMatchMode)) {
+                try RegExMatch("", data.TargetRef)
+                catch
+                    message := GetLang("正则表达式无效。")
+            }
         } else if (data.ActionType == "关闭") {
             if (data.BrowserType == "自定义" && Trim(data.BrowserPath) == "")
                 message := GetLang("浏览器路径不能为空。")
@@ -648,6 +730,10 @@ class BrowserGui extends CommentGui {
             for suffix in ["", "_Success", "_Error", "_ElapsedMs"]
                 MySoftData.GlobalVariMap[this.Data.SaveVar suffix] := true
         }
+        if (this.Data.ActionType == "标签页信息")
+            for field, name in BrowserPageInfo.Outputs
+                if (this.Data.%name% != "")
+                    MySoftData.GlobalVariMap[this.Data.%name%] := true
         SaveMacroCMDData(this.Data)
     }
 

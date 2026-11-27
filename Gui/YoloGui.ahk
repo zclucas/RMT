@@ -99,7 +99,7 @@ class YoloGui {
         title := this.ParentTile GetLang(this.CmdKey)
         this._title := title
         height := XAMLHost.CmdTitleBarHeight()
-        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(XAMLHost.FontSize())
+        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(CmdEditorForm.FontSize())
         main.Rows(height, "Auto")
         XAMLHost.AddCmdTitleBar(main, title, height)
         body := main.Add("StackPanel").Grid_Row(1).Margin("16,8,16,12").Grid_IsSharedSizeScope("True")
@@ -111,7 +111,7 @@ class YoloGui {
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", height)
         this.ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", this.OwnerHwnd)
         this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"',
-            'Title="' this._EscapeXml(title) '" Width="640" SizeToContent="Height"')
+            'Title="' this._EscapeXml(title) '" Width="' CmdEditorForm.Width '" SizeToContent="Height"')
         this.ui.xaml := StrReplace(this.ui.xaml, 'FontFamily="Segoe UI Variable Display, Segoe UI, sans-serif"', 'FontFamily="' MainSoftData.FontType '"')
         this.ui.xaml := StrReplace(this.ui.xaml, "%resources%", "")
         this.ui.OnEvent("Window", "Closing", XamlWin.BindCurrent(this, "OnWindowClosing"))
@@ -265,7 +265,7 @@ class YoloGui {
         this._Variable(left, "距离变量：", "DepthVar")
         right := first.Add("StackPanel").Grid_Column(2)
         this._Variable(right, "结果变量：", "ResultVar", false)
-        this._Variable(right, "错误信息变量：", "ErrorVar", false)
+        this._Variable(right, "错误变量：", "ErrorVar", false)
     }
 
     _PickerField(body, label, name, tip) {

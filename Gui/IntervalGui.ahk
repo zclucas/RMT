@@ -63,7 +63,7 @@ class IntervalGui {
         this._title := title
         titleHeight := XAMLHost.CmdTitleBarHeight()
 
-        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(XAMLHost.FontSize())
+        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(CmdEditorForm.FontSize())
         main.Rows(titleHeight, "*")
 
         chrome := XAMLHost.AddCmdTitleBar(main, title, titleHeight)
@@ -71,43 +71,41 @@ class IntervalGui {
         body := main.Add("Grid").Grid_Row(1).Margin("16,12,16,16")
         body.Rows("Auto", "Auto", "Auto")
 
-        card := body.Add("Border").Grid_Row(0).CornerRadius("6").Padding("14,12")
-            .Background("{DynamicResource ControlBg}").BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1")
-        form := card.Add("Grid")
-        form.Rows("34", "34", "34", "34")
-        form.Cols("80", "*")
+        form := body.Add("Grid").Grid_Row(0)
+        form.Rows("34", "34", "34", "Auto")
+        form.Cols(CmdEditorForm.LabelWidth(), "*")
 
-        form.Add("TextBlock").Grid_Row(0).Grid_Column(0).Text(GetLang("备注：")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
+        form.Add("TextBlock").Grid_Row(0).Grid_Column(0).Text(GetLang("备注：")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
         form.Add("TextBox").Grid_Row(0).Grid_Column(1).Name("RemarkCon").Height(26).MinHeight(26)
-            .VerticalContentAlignment("Center").FontSize("11").Padding("2,0")
+            .VerticalContentAlignment("Center").FontSize(CmdEditorForm.FontSize()).Padding("2,0")
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
 
-        form.Add("TextBlock").Grid_Row(1).Grid_Column(0).Text(GetLang("类型：")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
+        form.Add("TextBlock").Grid_Row(1).Grid_Column(0).Text(GetLang("类型：")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
         combo := form.Add("ComboBox").Grid_Row(1).Grid_Column(1).Name("TypeCombo").Height(26).MinHeight(26).SelectedIndex("0")
-            .VerticalContentAlignment("Center").FontSize("11").Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
+            .VerticalContentAlignment("Center").FontSize(CmdEditorForm.FontSize()).Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
         combo.Add("ComboBoxItem").Content(GetLang("固定")).Tag("1")
         combo.Add("ComboBoxItem").Content(GetLang("随机")).Tag("2")
 
-        form.Add("TextBlock").Grid_Row(2).Grid_Column(0).Name("TimeTip1").Text(GetLang("时间A：")).ToolTip(GetLang("等待的毫秒数；随机模式下为最短时长。")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
+        form.Add("TextBlock").Grid_Row(2).Grid_Column(0).Name("TimeTip1").Text(GetLang("时间A：")).ToolTip(GetLang("等待的毫秒数；随机模式下为最短时长。")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
         form.Add("ComboBox").Grid_Row(2).Grid_Column(1).Name("TimeVarCon1").Height(26).MinHeight(26).IsEditable("True")
-            .VerticalContentAlignment("Center").FontSize("11").Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
+            .VerticalContentAlignment("Center").FontSize(CmdEditorForm.FontSize()).Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
 
-        timeRow2 := form.Add("Grid").Name("TimeRow2").Grid_Row(3).Grid_ColumnSpan(2).Visibility("Collapsed")
-        timeRow2.Cols("80", "*")
-        timeRow2.Add("TextBlock").Grid_Column(0).Text(GetLang("时间B：")).ToolTip(GetLang("随机等待的最长毫秒数。")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
+        timeRow2 := form.Add("Grid").Name("TimeRow2").Grid_Row(3).Grid_ColumnSpan(2).Height(34).Visibility("Collapsed")
+        timeRow2.Cols(CmdEditorForm.LabelWidth(), "*")
+        timeRow2.Add("TextBlock").Grid_Column(0).Text(GetLang("时间B：")).ToolTip(GetLang("随机等待的最长毫秒数。")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
         timeRow2.Add("ComboBox").Grid_Column(1).Name("TimeVarCon2").Height(26).MinHeight(26).IsEditable("True")
-            .VerticalContentAlignment("Center").FontSize("11").Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
+            .VerticalContentAlignment("Center").FontSize(CmdEditorForm.FontSize()).Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
 
         body.Add("TextBlock").Grid_Row(1).Margin("2,6,2,0").Text(GetLang("单位：毫秒"))
-            .Foreground("{DynamicResource TextSub}").FontSize("11")
+            .Foreground("{DynamicResource TextSub}").FontSize(CmdEditorForm.FontSize())
 
         btnRow := body.Add("StackPanel").Grid_Row(2).Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Top").Margin("0,4,0,8")
         AddCmdOkBtn(btnRow)
 
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)
         this.ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", this.OwnerHwnd)
-        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="380" SizeToContent="Height"')
+        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="360" SizeToContent="Height"')
         this.ui.xaml := StrReplace(this.ui.xaml, 'FontFamily="Segoe UI Variable Display, Segoe UI, sans-serif"', 'FontFamily="' MainSoftData.FontType '"')
         this.ui.xaml := StrReplace(this.ui.xaml, '%resources%', '')
 
