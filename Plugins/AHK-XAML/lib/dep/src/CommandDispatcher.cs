@@ -637,6 +637,12 @@ public partial class AhkWpfEngine
             parts[2] = parts[2].Replace("&#x0A;", "\n").Replace("&#x0D;", "\r");
         }
 
+        if (parts[0] == "Window" && parts[1] == "CompletePanelPosition")
+        {
+            if (firstFrame != null) firstFrame.CompletePanelPosition();
+            return;
+        }
+
         if (parts[0] == "Window" && parts[1] == "AsyncAttach")
         {
             // 该窗口改用共享内存直写：写入后只发一条唤醒消息，不等回执。

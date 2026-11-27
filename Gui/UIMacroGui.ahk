@@ -477,6 +477,7 @@ class UIMacroGui {
         ; 同步 Show 要等 daemon 真正建出窗口（实测 200~700ms，最坏 2s），这段时间
         ; 主线程完全阻塞，热键、跟随定时器、其它浮窗的刷新一起停。
         ; 句柄回传前 wpfHwnd 为 0，激活与就绪初始化延到 _WaitPanelHwnd 里做。
+        this._PrepareSwitchWindow(ui, panelKey)
         ui.asyncCreate := true
         ; 更新同样异步：跟随/回填/状态色都在主线程上，同步等引擎执行完等于
         ; 把这份等待加到每一次刷新上。入队即返回，引擎按帧回执。
@@ -1285,6 +1286,7 @@ class UIMacroGui {
         this._BallSet(foldIndex, on)
         this.IsCreating := true
         try {
+            this._buildingSwitchKey := panelKey
             pi := this.BuildXAMLPanel(this._CollectBtnItems(foldIndex), foldIndex, targetHwnd, isScreen, true, panelKey)
             if (!IsObject(pi)) {
                 this._BallSet(foldIndex, wasBall)
@@ -1303,14 +1305,32 @@ class UIMacroGui {
                 this._BallSet(foldIndex, wasBall)
             throw err
         } finally {
+            if (this.HasProp("_buildingSwitchKey"))
+                this.DeleteProp("_buildingSwitchKey")
             this.IsCreating := false
         }
+    }
+
+    ; 构建时即遮住首帧，不能等句柄回传后再隐藏，否则估算位置已露出来。
+    _PrepareSwitchWindow(ui, panelKey) {
+        if (!this.HasProp("_buildingSwitchKey") || this._buildingSwitchKey != panelKey)
+            return
+        marker := '<Boolean xmlns="clr-namespace:System;assembly=mscorlib" x:Key="RmtPanelPositionPending">True</Boolean>'
+        ui.xaml := StrReplace(ui.xaml, '</Window.Resources>', marker '</Window.Resources>')
+        ui.OnEvent("Window", "PanelPositionReady", ObjBindMethod(this, "_OnPanelPositionReady", panelKey, ui.id))
     }
 
     _FinishPanelSwitch(panelKey) {
         info := this._FindPanelInfo(panelKey)
         if (!IsObject(info) || !info.HasProp("_previousPanel"))
             return
+        if (info.HasProp("_awaitingPositionReveal") && info._awaitingPositionReveal) {
+            if (A_TickCount - info._positionRevealTick > 5000)
+                this._RollbackPanelSwitch(panelKey)
+            else
+                this._RestartWaitTimer(panelKey, info._buildGen)
+            return
+        }
         if (info.HasProp("_switchPoint") && !this._AlignPanelSwitch(info)) {
             if (A_TickCount - info._buildTick > 5000)
                 this._RollbackPanelSwitch(panelKey)
@@ -1318,8 +1338,28 @@ class UIMacroGui {
                 this._RestartWaitTimer(panelKey, info._buildGen)
             return
         }
+        ; 真实点位已校准，再让引擎显示完成渲染的首帧。旧入口等显示回执后才关闭。
+        info._awaitingPositionReveal := true
+        info._positionRevealTick := A_TickCount
+        this._RestartWaitTimer(panelKey, info._buildGen)
+        try info.ui.Update("Window", "CompletePanelPosition", "")
+        catch {
+            this._RollbackPanelSwitch(panelKey)
+        }
+    }
+
+    _OnPanelPositionReady(panelKey, sourceId, state, *) {
+        info := this._FindPanelInfo(panelKey)
+        if (!IsObject(info) || !info.HasProp("_previousPanel")
+            || info.ui.id != sourceId
+            || !info.HasProp("_awaitingPositionReveal") || !info._awaitingPositionReveal
+            || !IsObject(state) || !state.Has("PanelPositionReady")
+            || !IsInteger(state["PanelPositionReady"]) || Integer(state["PanelPositionReady"]) != info.wpfHwnd)
+            return
         previous := info._previousPanel
         info.DeleteProp("_previousPanel")
+        info.DeleteProp("_awaitingPositionReveal")
+        this._StopWaitTimer(panelKey)
         ; 切换形态保留字段改动，不走 DestroyPanel 的快照还原。
         if (IsObject(previous.ui))
             try previous.ui.Update("Window", "Close", "")
@@ -1564,6 +1604,7 @@ class UIMacroGui {
         ; 建窗异步：同步 Show 要等 daemon 建出窗口（实测 200~700ms，最坏 2s），这期间
         ; 主线程完全停住，而「最小化成球」是用户会连着点的操作。球的位置上面已写进
         ; XAML 的 Left/Top（DIP），误差不到 1 像素，物理像素精确对齐挪到句柄回传后做。
+        this._PrepareSwitchWindow(this.ui, panelKey)
         this.ui.asyncCreate := true
         this.ui.asyncUpdate := true
         try this.ui.Show()
@@ -2197,6 +2238,7 @@ class UIMacroGui {
         ; 建窗异步：Show 只投递不阻塞（同步等 daemon 建窗要 200~700ms，最坏 2s）。
         ; 分页初值不在这里下发：放到 _WaitPanelHwnd 的就绪分支，和主题刷新错开，
         ; 也避免首帧先把所有页的控件都画一遍再隐藏。
+        this._PrepareSwitchWindow(ui, panelKey)
         ui.asyncCreate := true
         ; 自定义面板的刷新全在按键/切页/状态色上，同步 IPC 会直接压在输入手感上
         ui.asyncUpdate := true
@@ -2755,7 +2797,12 @@ class UIMacroGui {
         this._StopWaitTimer(panelKey)
 
         panelInfo := this.PanelMap[panelKey]
-        this._FinishPanelSwitch(panelKey)
+        if (panelInfo.HasProp("_previousPanel")) {
+            previous := panelInfo._previousPanel
+            panelInfo.DeleteProp("_previousPanel")
+            if (IsObject(previous.ui))
+                try previous.ui.Update("Window", "Close", "")
+        }
         ; 面板要没了：把「只改了内存、没点写入宏」的宏文本还原回去。
         ; 折叠成球时例外：改动仍在内存里，展开后应原样还在。
         if (!(panelInfo.HasProp("_keepEdits") && panelInfo._keepEdits))

@@ -13,17 +13,22 @@ internal sealed class RmtFirstFrame
     readonly IntPtr hwnd;
     readonly bool startHidden;
     readonly Action beforeReveal;
+    readonly Action afterReveal;
+    bool positionReady;
     bool initialized, rendered, queued, finished, cloaked, layered, opacityFallback;
     int originalExStyle;
     double originalOpacity;
 
     public static bool IsPending(Window window) { return Pending.Contains(window); }
 
-    public RmtFirstFrame(Window window, bool waitForInitialization, bool startHidden, Action beforeReveal = null)
+    public RmtFirstFrame(Window window, bool waitForInitialization, bool startHidden, Action beforeReveal = null, Action afterReveal = null)
     {
         this.window = window;
         this.startHidden = startHidden;
         this.beforeReveal = beforeReveal;
+        this.afterReveal = afterReveal;
+        positionReady = !(window.Resources["RmtPanelPositionPending"] is bool
+            && (bool)window.Resources["RmtPanelPositionPending"]);
         initialized = !waitForInitialization;
         // EnsureHandle creates HWND without showing it. Taskbar styles must also be set now.
         hwnd = new WindowInteropHelper(window).EnsureHandle();
@@ -84,6 +89,12 @@ internal sealed class RmtFirstFrame
         QueueReveal();
     }
 
+    public void CompletePanelPosition()
+    {
+        positionReady = true;
+        QueueReveal();
+    }
+
     void OnContentRendered(object sender, EventArgs args)
     {
         rendered = true;
@@ -92,7 +103,7 @@ internal sealed class RmtFirstFrame
 
     void QueueReveal()
     {
-        if (finished || queued || !initialized || !rendered) return;
+        if (finished || queued || !initialized || !rendered || !positionReady) return;
         queued = true;
         if (opacityFallback) window.Opacity = originalOpacity;
         // Initialization may invalidate layout after ContentRendered. Wait for that render too.
@@ -129,6 +140,7 @@ internal sealed class RmtFirstFrame
         }
         Finish();
         RmtWindowFrame.Sync(window);
+        if (afterReveal != null) afterReveal();
     }
 
     void OnClosed(object sender, EventArgs args) { Finish(); }

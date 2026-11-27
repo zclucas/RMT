@@ -49,6 +49,8 @@ public partial class AhkWpfEngine
 
     private void BindEvent(string ctrlName, string eventName, int fpsLimit = 0, bool queueLimited = false)
     {
+        // Engine notification after the positioned first frame is revealed.
+        if (ctrlName == "Window" && eventName == "PanelPositionReady") return;
         string eventKey = ctrlName + ":" + eventName;
         object ctrl = ctrlName == "Window" ? (object)win : FindControlByPath(ctrlName);
         if (ctrl == null)

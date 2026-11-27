@@ -1953,9 +1953,15 @@ public partial class AhkWpfEngine
         IntPtr openingOwner = new WindowInteropHelper(win).Owner;
         IntPtr openingMonitor = MonitorFromWindow(openingOwner != IntPtr.Zero ? openingOwner : GetForegroundWindow(), 2);
         Action placeEditor = () => CenterEditor(openingMonitor);
+        Action panelRevealed = () =>
+        {
+            if (win.Resources["RmtPanelPositionPending"] is bool && (bool)win.Resources["RmtPanelPositionPending"])
+                SendToAhkAsync("EVENT|" + winId + "|Window|PanelPositionReady|"
+                    + BridgeUtil.LengthPrefix(new WindowInteropHelper(win).Handle.ToInt64().ToString()) + "\n");
+        };
         try
         {
-            firstFrame = new RmtFirstFrame(win, waitForInitialUpdates, startHidden, placeEditor);
+            firstFrame = new RmtFirstFrame(win, waitForInitialUpdates, startHidden, placeEditor, panelRevealed);
             PlacePanelScreenPosition();
             ApplyTaskbarExStyle(win);
             if (startHidden) win.ShowActivated = false;
@@ -1974,7 +1980,7 @@ public partial class AhkWpfEngine
             if (win.Resources.Contains("OriginalNativeOwner"))
                 win.Resources.Remove("OriginalNativeOwner");
             if (firstFrame == null)
-                firstFrame = new RmtFirstFrame(win, waitForInitialUpdates, startHidden, placeEditor);
+                firstFrame = new RmtFirstFrame(win, waitForInitialUpdates, startHidden, placeEditor, panelRevealed);
             PlacePanelScreenPosition();
             if (isDaemon)
             {
