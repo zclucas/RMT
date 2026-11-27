@@ -1,4 +1,4 @@
-﻿#Requires AutoHotkey v2.0
+#Requires AutoHotkey v2.0
 
 class BrowserElementInfo {
     static InfoOutputs := Map("元素变量", "ElementRefVar", "存在变量", "ElementExistsVar", "元素值变量", "ElementValueVar", "标签页ID", "ElementTabIdVar", "元素状态", "ElementStateVar", "HTML变量", "ElementHtmlVar")

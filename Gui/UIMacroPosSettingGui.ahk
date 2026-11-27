@@ -1,4 +1,4 @@
-﻿#Requires AutoHotkey v2.0
+#Requires AutoHotkey v2.0
 
 ; 界面宏模块浮窗位置。
 ; 相对坐标：浮窗锚点与目标区域的对应点重合，再加偏移。无目标窗口时目标区域是屏幕。

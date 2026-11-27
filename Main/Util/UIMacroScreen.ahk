@@ -1,4 +1,4 @@
-﻿#Requires AutoHotkey v2.0
+#Requires AutoHotkey v2.0
 
 ; 跨进程坐标统一为屏幕物理像素。仅在 Win32 调用期间切换线程 DPI，
 ; 不改变原生界面或其他指令的 DPI 感知，异常时也恢复原上下文。
