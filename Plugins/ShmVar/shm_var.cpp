@@ -14,11 +14,6 @@ SHMVAR_API int32_t ShmVar_Init(const char* mapName, size_t initialSize) {
         return SHMVAR_ERR_INVALID_ARG;
     }
 
-    // Limit maximum size to 4GB due to 32-bit offset indexing
-    if (initialSize > shm::MAX_SHM_SIZE) {
-        return SHMVAR_ERR_INVALID_ARG;
-    }
-
     std::lock_guard<std::mutex> guard(g_lifecycleLock);
 
     // If already initialized with same name, return OK
@@ -112,7 +107,6 @@ SHMVAR_API int32_t ShmVar_Init(const char* mapName, size_t initialSize) {
         }
 
         header->magic = shm::SHM_MAGIC;
-        header->version = shm::SHM_VERSION;
         header->totalSize = initialSize;
         header->arenaOffset = arenaOff;
         header->arenaSize = arenaSz;
@@ -127,7 +121,7 @@ SHMVAR_API int32_t ShmVar_Init(const char* mapName, size_t initialSize) {
         SetEvent(hNoReadersEvent); // Initially no readers
     } else {
         // Validate existing shared memory layout
-        if (header->magic != shm::SHM_MAGIC || header->version != shm::SHM_VERSION || header->totalSize > shm::MAX_SHM_SIZE) {
+        if (header->magic != shm::SHM_MAGIC) {
             UnmapViewOfFile(pBase);
             CloseHandle(hMap);
             CloseHandle(hNotifyEvent);

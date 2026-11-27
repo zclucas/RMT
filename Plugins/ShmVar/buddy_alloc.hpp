@@ -214,7 +214,6 @@ public:
         if (!attached || !attached->validate_existing_state()) {
             return std::unexpected(error::corrupted_metadata);
         }
-        attached->normalize_tree_if_stale();
         return attached;
     }
 
@@ -317,7 +316,6 @@ public:
         if (!valid(replacement)) {
             occupy_node(origin->position);
             header_->free_size -= origin->block_size;
-            normalize_tree_if_stale();
             return std::unexpected(error::out_of_memory);
         }
 
@@ -332,7 +330,6 @@ public:
                 std::min(origin->block_size, target->block_size)
             );
         }
-        normalize_tree_if_stale();
         return block_at(replacement);
     }
 
@@ -420,12 +417,10 @@ public:
         }
 
         toggle_range(range->first, range->second, true);
-        header_->flags |= flag_tree_summaries_may_be_stale;
         set_reservation_bits(range->first / header_->minimum_block_size,
                              range->second / header_->minimum_block_size, true);
         header_->reserved_size += range->second;
         header_->free_size -= range->second;
-        normalize_tree_if_stale();
         return backing_.subspan(range->first, range->second);
     }
 
@@ -446,11 +441,9 @@ public:
         }
 
         toggle_range(range->first, range->second, false);
-        header_->flags |= flag_tree_summaries_may_be_stale;
         set_reservation_bits(first_block, block_count, false);
         header_->reserved_size -= range->second;
         header_->free_size += range->second;
-        normalize_tree_if_stale();
         return {};
     }
 
@@ -469,13 +462,11 @@ public:
             return std::unexpected(range.error());
         }
         toggle_range(range->first, range->second, false);
-        header_->flags |= flag_tree_summaries_may_be_stale;
         set_reservation_bits(range->first / header_->minimum_block_size,
                              range->second / header_->minimum_block_size, false);
         header_->reserved_size = header_->reserved_size >= range->second
             ? header_->reserved_size - range->second : 0;
         header_->free_size += range->second;
-        normalize_tree_if_stale();
         return {};
     }
 
@@ -524,9 +515,7 @@ public:
             toggle_range(old_size, added, false);
             header_->free_size += added;
         }
-        header_->flags |= flag_tree_summaries_may_be_stale;
         header_->memory_size = new_size;
-        normalize_tree_if_stale();
         return {};
     }
 
@@ -567,16 +556,10 @@ public:
         }
 
         size_type squared_sum = 0;
-        size_type total_free_units = 0;
-        const auto collect = [&](block_info info) noexcept {
-            if (info.kind == block_kind::free) {
-                const size_type units = info.memory.size() / header_->minimum_block_size;
-                squared_sum += units * units;
-                total_free_units += units;
-            }
-            return true;
-        };
-        (void)visit_node(root_position(), 0, header_->tree_capacity, collect);
+        collect_free_squared_units(root_position(), 0, header_->tree_capacity, squared_sum);
+        // free_size is already maintained incrementally; avoid rebuilding the
+        // total from every free interval during this diagnostic calculation.
+        const size_type total_free_units = header_->free_size / header_->minimum_block_size;
         if (total_free_units == 0) {
             return 0;
         }
@@ -834,7 +817,6 @@ private:
     };
 
     static constexpr std::uint64_t metadata_magic = 0x4255444459433233ull; // BUDDYC23
-    static constexpr std::uint32_t flag_tree_summaries_may_be_stale = 1u << 1;
     static constexpr size_type root_index = 1;
     static constexpr size_type word_bits = std::numeric_limits<std::uint64_t>::digits;
 
@@ -1177,9 +1159,8 @@ private:
             }
         }
 
-        // Validate the stored per-level unary prefixes. Descendant summaries
-        // may be stale after range/resize operations, but each individual
-        // prefix must still have the canonical 1...10...0 representation.
+        // Validate every stored per-level unary prefix. Each node summary
+        // must retain the canonical 1...10...0 representation.
         for (size_type depth = 1; depth <= header_->order; ++depth) {
             const size_type width = header_->order - depth + 1;
             const size_type first_node = size_type{1} << (depth - 1u);
@@ -1397,29 +1378,26 @@ private:
     }
 
     [[nodiscard]] size_type count_tree_bits_nonzero(size_type first, size_type count) const noexcept {
-        // Caller has already established that the leading unary bit is set.
-        const size_type last = first + count;
-        const size_type first_byte = first / 8;
-        const size_type last_byte = (last - 1) / 8;
-        const size_type first_bit = first % 8;
-        const size_type last_bit = (last - 1) % 8;
-        if (first_byte == last_byte) {
-            const auto low = static_cast<unsigned int>(0xFFu << first_bit);
-            const auto high = static_cast<unsigned int>(0xFFu >> (7u - static_cast<unsigned int>(last_bit)));
-            const auto mask = static_cast<std::uint8_t>(low & high);
-            return static_cast<size_type>(std::popcount(static_cast<unsigned int>(
-                std::to_integer<std::uint8_t>(tree_bits_[first_byte]) & mask)));
+        // Every node summary is a unary prefix (111...1100...00). Count only
+        // the leading one-run and stop at the first zero instead of popcounting
+        // every byte in the summary, which is usually more work than needed.
+        size_type result = 0;
+        while (count != 0) {
+            const size_type byte_index = first >> 3;
+            const unsigned bit_offset = static_cast<unsigned>(first & 7u);
+            const size_type available = 8u - bit_offset;
+            const size_type take = std::min(count, available);
+            const auto byte = std::to_integer<std::uint8_t>(tree_bits_[byte_index]);
+            const auto shifted = static_cast<std::uint8_t>(byte >> bit_offset);
+            const size_type run = static_cast<size_type>(std::countr_one(shifted));
+            const size_type consumed = std::min(run, take);
+            result += consumed;
+            if (consumed != take) {
+                break;
+            }
+            first += take;
+            count -= take;
         }
-
-        size_type result = static_cast<size_type>(std::popcount(static_cast<unsigned int>(
-            std::to_integer<std::uint8_t>(tree_bits_[first_byte]) &
-            static_cast<std::uint8_t>(0xFFu << first_bit))));
-        for (size_type byte = first_byte + 1; byte < last_byte; ++byte) {
-            result += static_cast<size_type>(std::popcount(static_cast<unsigned int>(std::to_integer<std::uint8_t>(tree_bits_[byte]))));
-        }
-        const auto last_mask = static_cast<std::uint8_t>(0xFFu >> (7u - static_cast<unsigned int>(last_bit)));
-        result += static_cast<size_type>(std::popcount(static_cast<unsigned int>(
-            std::to_integer<std::uint8_t>(tree_bits_[last_byte]) & last_mask)));
         return result;
     }
 
@@ -1517,47 +1495,6 @@ private:
         }
     }
 
-    // Re-establish canonical summaries after bulk range and resize changes.
-    // This keeps the common allocation/free path on the original fast path.
-    [[nodiscard]] size_type normalize_tree_node(node_position position) noexcept {
-        const size_type width = local_width(position);
-        const size_type status = read_status(position);
-        if (position.depth == header_->order) {
-            return status == 0 ? 0 : 1;
-        }
-
-        const node_position left = left_child(position);
-        const node_position right = right_child(position);
-        const size_type left_status = read_status(left);
-        const size_type right_status = read_status(right);
-
-        if (status == 0) {
-            clear_descendant_bits(position);
-            return 0;
-        }
-        if (status == width && left_status == 0 && right_status == 0) {
-            clear_descendant_bits(position);
-            return width;
-        }
-
-        const size_type normalized_left = normalize_tree_node(left);
-        const size_type normalized_right = normalize_tree_node(right);
-        const size_type normalized_status =
-            (normalized_left != 0 || normalized_right != 0)
-                ? std::min(normalized_left, normalized_right) + 1
-                : 0;
-        write_status(position, normalized_status);
-        return normalized_status;
-    }
-
-    void normalize_tree_if_stale() noexcept {
-        if ((header_->flags & flag_tree_summaries_may_be_stale) == 0) {
-            return;
-        }
-        (void)normalize_tree_node(root_position());
-        header_->flags &= ~flag_tree_summaries_may_be_stale;
-    }
-
     void update_ancestors(node_position position, size_type current_status) noexcept {
         internal_position current_location = internal(position);
         while (position.index != root_index) {
@@ -1596,9 +1533,8 @@ private:
         update_ancestors(position, location.local_offset);
     }
 
-    // All public operations that can create stale descendants normalize the
-    // tree before returning. Therefore the ordinary occupy path can stay as
-    // lean as the original C mark operation.
+    // Node summaries are kept canonical by clearing descendants when a whole
+    // subtree becomes free or is merged into one allocation.
     void occupy_node(node_position position) noexcept {
         mark_node(position);
     }
@@ -1616,16 +1552,9 @@ private:
         update_ancestors(position, 0);
     }
 
+    // Search the canonical unary summaries directly. Range changes clear
+    // descendants locally, so no stale-summary fallback is needed.
     [[nodiscard]] node_position find_free(size_type target_depth) noexcept {
-        if ((header_->flags & flag_tree_summaries_may_be_stale) != 0) {
-            return find_free_stale_tolerant(target_depth);
-        }
-        return find_free_fast(target_depth);
-    }
-
-    // Fast path mirrors the original C tree search. Ordinary allocation/free
-    // keeps the canonical summaries and does not need stale-descendant checks.
-    [[nodiscard]] node_position find_free_fast(size_type target_depth) noexcept {
         node_position current = root_position();
         size_type target_status = target_depth - 1;
         size_type current_depth = 1;
@@ -1659,67 +1588,6 @@ private:
                     current = right_status == 0 ? left : right;
                 }
             }
-        }
-        return current;
-    }
-
-    // In-place resizing and range operations can leave valid but stale
-    // descendant summaries. A zero subtree is still wholly free, so follow
-    // its left edge without consulting those stale descendants.
-    [[nodiscard]] node_position find_free_stale_tolerant(size_type target_depth) noexcept {
-        node_position current = root_position();
-        internal_position current_location = internal(current);
-        size_type target_status = target_depth - 1;
-        size_type current_depth = 1;
-        bool current_is_nonzero = compare_status(current_location, 1);
-        if (compare_status(current_location, target_status + 1)) {
-            return {};
-        }
-
-        while (current_depth != target_depth) {
-            --target_status;
-            ++current_depth;
-            const node_position left = left_child(current);
-            const node_position right = right_child(current);
-            const internal_position left_location = child_internal(current, false);
-            const internal_position right_location{
-                left_location.bitset_location + left_location.local_offset,
-                left_location.local_offset};
-
-            if (!current_is_nonzero) {
-                current = left;
-                current_location = left_location;
-                continue;
-            }
-
-            if (compare_status(left_location, target_status + 1)) {
-                current = right;
-                current_location = right_location;
-                current_is_nonzero = compare_status(current_location, 1);
-            } else if (compare_status(right_location, target_status + 1)) {
-                current = left;
-                current_location = left_location;
-                current_is_nonzero = compare_status(current_location, 1);
-            } else {
-                const size_type right_status = read_status(right_location);
-                if (right_status != 0 && compare_status(left_location, right_status)) {
-                    current = left;
-                    current_location = left_location;
-                    current_is_nonzero = compare_status(current_location, 1);
-                } else {
-                    current = right_status == 0 ? left : right;
-                    current_location = right_status == 0 ? left_location : right_location;
-                    current_is_nonzero = compare_status(current_location, 1);
-                }
-            }
-        }
-        // The stale-tolerant search only returns a subtree whose summary is
-        // empty at the requested depth. Clear any older descendant summaries
-        // here, so the allocation fast path can mark it without another flag
-        // check or cleanup branch.
-        if (current.depth < header_->order) {
-            write_status(left_child(current), 0);
-            write_status(right_child(current), 0);
         }
         return current;
     }
@@ -1956,8 +1824,13 @@ private:
         }
         if (query_begin <= node_begin && node_end <= query_end) {
             if (mark) {
+                // mark=true is used only for ranges already proven free
+                // (reserve_range, shrinking resize, and initial inactive tail).
                 occupy_node(position);
             } else {
+                // A released range node becomes wholly free. Discard its old
+                // descendants locally so the tree remains canonical.
+                clear_descendant_bits(position);
                 release_node(position);
             }
             return;
@@ -1966,12 +1839,9 @@ private:
             return;
         }
 
-        // A zero summary means this whole subtree is free. After a resize or
-        // partial-range operation, descendants below that summary may still
-        // contain obsolete bits. Ignore them on release, and clear one level
-        // before descending when a new reservation is inserted into the free
-        // subtree. This keeps range mutation canonical without penalizing the
-        // ordinary allocate/deallocate fast path.
+        // A zero summary means this whole subtree is free. Its descendants
+        // are canonical zeros; clear the immediate child summaries before
+        // descending so a newly marked subrange cannot inherit old state.
         if (read_status(position) == 0) {
             if (!mark) {
                 return;
@@ -2084,6 +1954,29 @@ private:
         const size_type first = node_offset(position) / header_->minimum_block_size;
         const size_type count = node_size(position) / header_->minimum_block_size;
         return reservation_range_is_set(first, count);
+    }
+
+    // Fragmentation only needs free intervals. Fully occupied subtrees can
+    // be skipped immediately; unlike walk(), there is no need to classify or
+    // descend through the individual allocated/reserved blocks.
+    void collect_free_squared_units(node_position position, size_type offset,
+                                    size_type length, size_type& squared_sum) const noexcept {
+        if (offset >= header_->memory_size) {
+            return;
+        }
+        const size_type status = read_status(position);
+        const size_type width = local_width(position);
+        if (status == 0 && length <= header_->memory_size - offset) {
+            const size_type units = length / header_->minimum_block_size;
+            squared_sum += units * units;
+            return;
+        }
+        if (status == width || position.depth == header_->order) {
+            return;
+        }
+        const size_type half = length / 2;
+        collect_free_squared_units(left_child(position), offset, half, squared_sum);
+        collect_free_squared_units(right_child(position), offset + half, half, squared_sum);
     }
 
     template <class Visitor>
