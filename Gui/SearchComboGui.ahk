@@ -185,8 +185,8 @@ class SearchComboGui {
             .BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1")
 
         ; 找到 / 未找到（编辑按钮叠在输入框右上角）
-        rightPanel.Add("TextBlock").Text(GetLang("找到后的指令：（可选）")).Margin("0,10,0,0")
-            .Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
+        rightPanel.Add("TextBlock").Text(GetLang("找到后执行（可选）")).Margin("0,10,0,0")
+            .Foreground("{DynamicResource TextSub}").FontSize(CmdEditorForm.FontSize())
         foundHost := rightPanel.Add("Grid").Margin("0,2,0,0")
         foundHost.Add("TextBox").Name("TrueMacroCon").AcceptsReturn("True").TextWrapping("Wrap")
             .HorizontalAlignment("Stretch").Height(86).MinHeight(86)
@@ -199,8 +199,8 @@ class SearchComboGui {
             .FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets").FontSize("12").Content(Chr(0xE70F))
             .ToolTip(GetLang("编辑")).Foreground("{DynamicResource TextMain}")
             .Background("{DynamicResource ControlBg}").BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1")
-        rightPanel.Add("TextBlock").Name("FalseMacroTipCon").Text(GetLang("未找到后的指令：（可选）")).Margin("0,6,0,0")
-            .Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
+        rightPanel.Add("TextBlock").Name("FalseMacroTipCon").Text(GetLang("未找到后执行（可选）")).Margin("0,6,0,0")
+            .Foreground("{DynamicResource TextSub}").FontSize(CmdEditorForm.FontSize())
         missHost := rightPanel.Add("Grid").Name("FalseMacroHost").Margin("0,2,0,0")
         missHost.Add("TextBox").Name("FalseMacroCon").AcceptsReturn("True").TextWrapping("Wrap")
             .HorizontalAlignment("Stretch").Height(86).MinHeight(86)
@@ -418,8 +418,8 @@ class SearchComboGui {
             . '</Button>'
             . '</Grid>'
             . '</Grid>'
-            . '<Button Name="' this._TN(n, "PreviewBtn") '" Grid.Row="2" Grid.Column="0" Margin="0,0,5,0"'
-            . ' HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Cursor="Hand" Focusable="False"'
+            . '<Button Name="' this._TN(n, "PreviewBtn") '" Grid.Row="2" Grid.Column="0"'
+            . ' HorizontalAlignment="Left" VerticalAlignment="Stretch" Cursor="Hand" Focusable="False"'
             . ' Tag="0" ToolTip="' GetLang("搜索范围") '"'
             . ' HorizontalContentAlignment="Left" VerticalContentAlignment="Stretch"'
             . ' Background="{DynamicResource ControlBg}" BorderBrush="{DynamicResource ControlBorder}" BorderThickness="1">'
@@ -491,7 +491,7 @@ class SearchComboGui {
             . '<ComboBox Name="' this._TN(n, "Color") '" Grid.Column="0" Height="28" MinHeight="28" HorizontalAlignment="Stretch" VerticalAlignment="Center" VerticalContentAlignment="Center" FontSize="' fs '" IsEditable="True"/>'
             . '<Border Name="' this._TN(n, "ColorTip") '" Grid.Column="2" Width="20" Height="20" Background="#FF0000" VerticalAlignment="Center"/>'
             . '</Grid>'
-            . '<TextBlock Name="' this._TN(n, "TextTipLabel") '" Grid.Row="3" Grid.Column="0" Text="' GetLang("搜索文本：") '" VerticalAlignment="Center" HorizontalAlignment="Left" Foreground="{DynamicResource TextMain}" FontSize="' fs '"/>'
+            . '<TextBlock Name="' this._TN(n, "TextTipLabel") '" Grid.Row="3" Grid.Column="0" Text="' GetLang("搜索文本：") '" VerticalAlignment="Center" HorizontalAlignment="Left" Foreground="{DynamicResource TextSub}" FontSize="' fs '"/>'
             . '<Grid Name="' this._TN(n, "TextRow") '" Grid.Row="3" Grid.Column="2" Grid.ColumnSpan="3">'
             . '<Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="8"/><ColumnDefinition Width="28"/></Grid.ColumnDefinitions>'
             . '<ComboBox Name="' this._TN(n, "Text") '" Grid.Column="0" Height="28" MinHeight="28" HorizontalAlignment="Stretch" VerticalAlignment="Center" VerticalContentAlignment="Center" FontSize="' fs '" IsEditable="True"/>'

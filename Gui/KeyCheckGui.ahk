@@ -67,17 +67,25 @@ class KeyCheckGui {
         chrome := XAMLHost.AddCmdTitleBar(main, title, titleHeight)
 
         body := main.Add("Grid").Grid_Row(1).Margin("4,2,4,8")
-        body.Rows("Auto", "Auto", "44", "Auto", "48")
+        body.Rows("Auto", "Auto", "Auto", "44", "48")
         body.Cols("Auto", "Auto", "Auto", "Auto", "Auto", "Auto", "Auto", "Auto", "Auto", "Auto", "*")
 
-        ; 行0：键盘（按键指令同款）
-        sv := body.Add("ScrollViewer").Grid_Row(0).Grid_ColumnSpan(11).Margin("0,4,0,0")
+        if (!this.HasProp("SelectionData")) {
+            remarkRow := body.Add("Grid").Name("RemarkRow").Grid_Row(0).Grid_ColumnSpan(11)
+                .Width(CmdEditorForm.LabelWidth() + 300).HorizontalAlignment("Center").Margin("0,4")
+            remarkRow.Cols(CmdEditorForm.LabelWidth(), 300)
+            CmdEditorForm.Label(remarkRow, "备注：").Margin("0")
+            CmdEditorForm.TextBox(remarkRow, "RemarkCon").Style("{StaticResource RmtSingleLineTextBox}").Grid_Column(1).Width(300)
+        }
+
+        ; 行0：备注；行1：键盘（按键指令同款）
+        sv := body.Add("ScrollViewer").Grid_Row(1).Grid_ColumnSpan(11).Margin("0,4,0,0")
             .VerticalScrollBarVisibility("Auto").HorizontalScrollBarVisibility("Disabled").ClipToBounds("True")
         kbHost := sv.Add("Grid")
         this._keyGrid := kbHost.Add("Canvas").Width("1109").Height("270").HorizontalAlignment("Center").VerticalAlignment("Top")
 
-        ; 行1：鼠标（居中，按键指令同款）
-        mouseBlock := body.Add("StackPanel").Grid_Row(1).Grid_ColumnSpan(11).HorizontalAlignment("Center").Margin("0,5,0,2")
+        ; 行2：鼠标（居中，按键指令同款）
+        mouseBlock := body.Add("StackPanel").Grid_Row(2).Grid_ColumnSpan(11).HorizontalAlignment("Center").Margin("0,5,0,2")
         mouseBlock.Add("TextBlock").Text(GetLang("鼠标")).FontWeight("SemiBold").FontSize(CmdEditorForm.FontSize())
             .HorizontalAlignment("Center").Foreground("{DynamicResource TextMain}").Margin("0,0,0,6")
         mouseKeys := mouseBlock.Add("StackPanel").Orientation("Horizontal").HorizontalAlignment("Center")
@@ -90,8 +98,8 @@ class KeyCheckGui {
             this._PlaceFlowKey(mouseKeys, mouseDefs[A_Index][1], mouseDefs[A_Index][2], mouseDefs[A_Index][3], A_Index < mouseDefs.Length)
         }
 
-        ; 行2：检测模式 / 检测类型 / 结果变量（居中）
-        bottom := body.Add("StackPanel").Grid_Row(2).Grid_ColumnSpan(11).Orientation("Horizontal").HorizontalAlignment("Center").Margin("10,12,10,2").VerticalAlignment("Center")
+        ; 行3：检测模式 / 检测类型 / 结果变量（居中）
+        bottom := body.Add("StackPanel").Grid_Row(3).Grid_ColumnSpan(11).Orientation("Horizontal").HorizontalAlignment("Center").Margin("10,12,10,2").VerticalAlignment("Center")
         if (!this.HasProp("SelectionData")) {
             bottom.Add("TextBlock").Text(GetLang("检测模式:")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
             cc := bottom.Add("ComboBox").Name("CheckTypeCon").Width(120).Height(26).MinHeight(26).Margin("4,0,0,0")
@@ -108,12 +116,6 @@ class KeyCheckGui {
                 .VerticalContentAlignment("Center").FontSize(CmdEditorForm.FontSize()).Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
         }
 
-        if (!this.HasProp("SelectionData")) {
-            remarkRow := body.Add("Grid").Grid_Row(3).Grid_ColumnSpan(11).Margin("16,4")
-            remarkRow.Cols(6 * XAMLHost.ScaleFontSize(XAMLHost.FontSize()), "*")
-            CmdEditorForm.Label(remarkRow, "备注：").Margin("0")
-            CmdEditorForm.TextBox(remarkRow, "RemarkCon").Style("{StaticResource RmtSingleLineTextBox}").Grid_Column(1)
-        }
 
         ; 行4：清空 / 确定（清空与确定同款，间距 300px）
         btnRow := body.Add("StackPanel").Grid_Row(4).Grid_ColumnSpan(11).Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center")

@@ -37,16 +37,24 @@ class JoyCheckGui extends JoyGui {
         XAMLHost.AddCmdTitleBar(main, title, titleHeight)
 
         body := main.Add("Grid").Grid_Row(1).Margin("14")
-        body.Rows("*", "Auto", "48")
+        body.Rows("Auto", "*", "Auto", "48")
 
-        padCard := body.Add("Border").Grid_Row(0).CornerRadius("10").Padding("12")
+        if (!this.HasProp("SelectionData")) {
+            remarkRow := body.Add("Grid").Name("RemarkRow").Grid_Row(0)
+                .Width(CmdEditorForm.LabelWidth() + 300).HorizontalAlignment("Center").Margin("0,0,0,8")
+            remarkRow.Cols(CmdEditorForm.LabelWidth(), 300)
+            CmdEditorForm.Label(remarkRow, "备注：").Margin("0")
+            CmdEditorForm.TextBox(remarkRow, "RemarkCon").Style("{StaticResource RmtSingleLineTextBox}").Grid_Column(1).Width(300)
+        }
+
+        padCard := body.Add("Border").Grid_Row(1).CornerRadius("10").Padding("12")
             .Background("{DynamicResource ControlBg}").BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1")
         vb := padCard.Add("Viewbox").Stretch("Uniform").Margin("0,0,0,16")
         padHost := vb.Add("Grid").Width("640").Height("340")
         this._pad := padHost.Add("Canvas").Name("JoyPadCanvas").Width("640").Height("340").Background("Transparent")
         this._BuildPad()
 
-        paramCard := body.Add("Border").Grid_Row(1).CornerRadius("8").Padding("12").Margin("0,14,0,0")
+        paramCard := body.Add("Border").Grid_Row(2).CornerRadius("8").Padding("12").Margin("0,14,0,0")
             .Background("{DynamicResource ControlBg}").BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1")
         param := paramCard.Add("StackPanel")
 
@@ -70,12 +78,6 @@ class JoyCheckGui extends JoyGui {
                 .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
         }
 
-        if (!this.HasProp("SelectionData")) {
-            remarkRow := param.Add("Grid").Margin("0,8,0,0")
-            remarkRow.Cols(6 * XAMLHost.ScaleFontSize(XAMLHost.FontSize()), "*")
-            CmdEditorForm.Label(remarkRow, "备注：").Margin("0")
-            CmdEditorForm.TextBox(remarkRow, "RemarkCon").Style("{StaticResource RmtSingleLineTextBox}").Grid_Column(1)
-        }
 
         analogRow := param.Add("StackPanel").Name("AnalogRow").Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center").Margin("0,8,0,0").MinHeight("26").Height("26").Visibility("Hidden")
         analogRow.Add("TextBlock").Name("AxisTip1").Text("LX").VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize()).Width("28")
@@ -91,7 +93,7 @@ class JoyCheckGui extends JoyGui {
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
 
-        btnRow := body.Add("StackPanel").Grid_Row(2).Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center")
+        btnRow := body.Add("StackPanel").Grid_Row(3).Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center")
         clearBtn := btnRow.Add("Button").Name("BtnClear").Content(GetLang("清空")).Width(88).Height(32).MinHeight(32).Cursor("Hand")
             .Background("{DynamicResource ActionBg}").Foreground("{DynamicResource ActionText}")
             .BorderBrush("{DynamicResource ActionStroke}").BorderThickness("1").FontSize(CmdEditorForm.FontSize()).FontWeight("Bold")

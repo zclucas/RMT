@@ -162,7 +162,7 @@ class ExVariableGui {
         area.Rows("*", "*")
         area.Cols(labelWidth, "0", "*", "8", "*")
         areaBtn := area.Add("Button").Name("BtnPreviewArea").Grid_RowSpan(2).Cursor("Hand").Focusable("False")
-            .HorizontalAlignment("Stretch").VerticalAlignment("Stretch")
+            .HorizontalAlignment("Left").VerticalAlignment("Stretch")
             .Tag("0").ToolTip(GetLang("搜索范围"))
             .HorizontalContentAlignment("Left").VerticalContentAlignment("Stretch")
             .Background("{DynamicResource ControlBg}").BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1")
