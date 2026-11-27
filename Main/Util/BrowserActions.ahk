@@ -27,12 +27,19 @@ class BrowserActions {
     static BrowserType(value) => this._Choice(value, this.BrowserTypes, "浏览器类型")
     static GetOpenMode(data) => this._Choice(data.OpenMode, this.OpenModes, "打开方式")
 
-    static _Choice(value, choices, label) {
-        value := GetLangKey(value)
+    static _Choice(value, choices, label := "浏览器选项") {
+        value := GetConfigKey(value, choices)
         for choice in choices
             if (Type(value) == "String" && value == choice)
                 return choice
         throw ValueError(GetLang("不支持的") GetLang(label) "：" value)
+    }
+
+    static ChoiceIndex(value, choices) {
+        value := this._Choice(value, choices)
+        for index, choice in choices
+            if (value == choice)
+                return index - 1
     }
 
     static ClosesCurrentTabOnly(matchMode, closeMode := "匹配标签页") {

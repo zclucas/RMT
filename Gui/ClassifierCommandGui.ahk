@@ -242,7 +242,7 @@ class WindowControlGui extends ClassifierCommandGui {
     Choices := WindowControl.Actions
     TextFields := ["Selector", "Argument"]
 
-    _SavedChoice(value) => CmdEnumZh(WindowControl.NormalizeAction(value), this.Choices)
+    _SavedChoice(value) => WindowControl.Choice(value, this.Choices)
 
     _BuildHeaderFields(body) {
         header := body.Add("Grid").Cols("*", 16, "*")
@@ -834,13 +834,11 @@ class ControlOperationGui extends WindowControlGui {
             this.Data.TimeoutAction,
             this.Data.TimeoutStatusVar)
         this._writeKind := this.Data.WriteKind
-        this._ComboPush("WaitType", "SelectedIndex", CmdEnumIndex(this.Data.WaitType, WindowControl.WaitTypes))
+        this._ComboPush("WaitType", "SelectedIndex", WindowControl.ChoiceIndex(this.Data.WaitType, WindowControl.WaitTypes))
         for field in ["ClickType", "ClickPoint"] {
             choices := field == "ClickType" ? WindowControl.ClickTypes : WindowControl.ClickPoints
             value := this.Data.%field%
-            if (field == "ClickType")
-                value := GetLangKey(value)
-            this._ComboPush(field, "SelectedIndex", Max(0, CmdEnumIndex(value, choices)))
+            this._ComboPush(field, "SelectedIndex", WindowControl.ChoiceIndex(value, choices))
         }
         this._ComboPush("ClickHoldMs", "ClearItems", "")
         for reference in GetGuiVarReferences()
@@ -864,7 +862,7 @@ class ControlOperationGui extends WindowControlGui {
         this._RebuildWaitConditions(WindowControl.GetWaitConditions(this.Data), this._conditionKind, allowHalf)
         this._ComboPush("ArgumentText", "Text", this.Data.Argument)
         action := WindowControl.NormalizeAction(this.Data.ActionType)
-        this._ComboPush("ActionType", "SelectedIndex", CmdEnumIndex(action, this.Choices))
+        this._ComboPush("ActionType", "SelectedIndex", WindowControl.ChoiceIndex(action, this.Choices))
     }
 
     _UpdateChoice(action) {
@@ -1056,7 +1054,7 @@ class ControlOperationGui extends WindowControlGui {
             this._ComboPush(operatorField, "ClearItems", "")
             for choice in operators
                 this._ComboPush(operatorField, "AddItem", GetLang(choice))
-            operatorIndex := CmdEnumIndex("等于", operators)
+            operatorIndex := WindowControl.ChoiceIndex("等于", operators)
             for choiceIndex, choice in operators {
                 if (choice == GetLangKey(condition[1])) {
                     operatorIndex := choiceIndex - 1

@@ -48,12 +48,21 @@ class WindowControl {
     static InfoActions := ["检测控件存在", "读取位置/宽高"]
     static PositionFields := ["XVar", "YVar", "WindowXVar", "WindowYVar", "WidthVar", "HeightVar"]
 
-    static NormalizeAction(action) {
-        action := GetLangKey(action)
-        for current in this.Actions
-            if (Type(action) == "String" && action == current)
-                return current
-        throw ValueError(GetLang("不支持的控件操作：") action)
+    static NormalizeAction(action) => this.Choice(action, this.Actions, "控件操作")
+
+    static Choice(value, choices, label := "控件选项") {
+        value := GetConfigKey(value, choices)
+        for choice in choices
+            if (Type(value) == "String" && value == choice)
+                return choice
+        throw ValueError(GetLang("不支持的") GetLang(label) "：" value)
+    }
+
+    static ChoiceIndex(value, choices) {
+        value := this.Choice(value, choices)
+        for index, choice in choices
+            if (value == choice)
+                return index - 1
     }
     static OperationActions := ["点击控件", "写入控件值", "等待控件出现", "聚焦控件", "滚动到控件"]
     static WaitTypes := ["等待出现", "等待消失", "可用", "禁用", "值变化", "值满足条件", "值不满足条件"]
@@ -1120,7 +1129,7 @@ OnWindowControl(tableItem, cmd, index) {
     }
     if (cancelled())
         return
-    if (WindowControl.UsesTimeout(CmdEnumZh(data.ActionType, WindowControl.Actions)))
+    if (WindowControl.UsesTimeout(data.ActionType))
         TimeoutPolicy.WriteStatus(data, timedOut)
     names := [], values := []
     controlAction := WindowControl.NormalizeAction(data.ActionType)

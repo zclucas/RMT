@@ -96,7 +96,7 @@ BrowserMatchingIds(targets, mode, value, currentId := "") {
 BrowserMatchedTarget(tableItem, index, data, resolve) {
     mode := BrowserActions.MatchMode(data.TabMatchMode, data.ActionType)
     if (mode == "元素匹配") {
-        matches := BrowserElementInfo.MatchTabs(resolve(data.Selector), CmdEnumZh(data.SelectorType, ["CSS", "XPath"]), () => tableItem.Items[index].Killed)
+        matches := BrowserElementInfo.MatchTabs(resolve(data.Selector), BrowserActions._Choice(data.SelectorType, ["CSS", "XPath"]), () => tableItem.Items[index].Killed)
         if (matches.Length != 1)
             throw TargetError(GetLang(matches.Length ? "匹配到多个标签页，请缩小匹配范围。" : "未找到匹配的标签页。"))
         return matches[1]
@@ -144,7 +144,7 @@ BrowserResolveRegex(text, resolve) {
 _ExecuteBrowserAction(tableItem, index, data, actionType, resolve, selType) {
     actionType := BrowserActions.Action(actionType)
     if (actionType == "当前标签页")
-        return BrowserUtil.CurrentTabAction(CmdEnumZh(data.CurrentTabAction, BrowserActions.CurrentTabActions), () => tableItem.Items[index].Killed, data.BrowserPort)
+        return BrowserUtil.CurrentTabAction(BrowserActions._Choice(data.CurrentTabAction, BrowserActions.CurrentTabActions), () => tableItem.Items[index].Killed, data.BrowserPort)
     if (actionType == "关闭标签页" && BrowserActions.ClosesCurrentTabOnly(data.TabMatchMode, data.TabCloseMode))
         return BrowserUtil.CurrentTabAction("关闭", () => tableItem.Items[index].Killed)
     if (BrowserActions.UsesTimeout(actionType)) {
@@ -163,7 +163,7 @@ _ExecuteBrowserAction(tableItem, index, data, actionType, resolve, selType) {
         case "元素信息", "元素位置/宽高":
             return BrowserElementInfo.ReadMatched(data, resolve(data.Selector), selType, () => tableItem.Items[index].Killed)
         case "标签页信息":
-            source := CmdEnumZh(BrowserPageInfo.NormalizeSource(data.PageSource), BrowserPageInfo.Sources)
+            source := BrowserPageInfo.NormalizeSource(data.PageSource)
             fields := []
             for field, name in BrowserPageInfo.OutputVariables(data)
                 if (name != "")

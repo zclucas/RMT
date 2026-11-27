@@ -230,7 +230,7 @@ class BrowserGui extends CommentGui {
             this._ComboPush("TabMatchMode", "ClearItems", "")
             for mode in modes
                 this._ComboPush("TabMatchMode", "AddItem", GetLang(mode))
-            this._ComboPush("TabMatchMode", "SelectedIndex", CmdEnumIndex(selected, modes))
+            this._ComboPush("TabMatchMode", "SelectedIndex", BrowserActions.ChoiceIndex(selected, modes))
         } finally this._updatingMatchModes := false
     }
 
@@ -332,7 +332,7 @@ class BrowserGui extends CommentGui {
         if (this.HasOwnProp("_updatingMatchModes") && this._updatingMatchModes)
             return
         action := this._Action(this.ui)
-        browser := CmdEnumZh(this.ui.Query("BrowserType"), this._browserNames)
+        browser := BrowserActions._Choice(this.ui.Query("BrowserType"), this._browserNames)
         this._UpdateFieldVisibilities(action, browser)
     }
 
@@ -356,8 +356,8 @@ class BrowserGui extends CommentGui {
         isMatching := action == "切换标签页" || action == "关闭标签页"
         if (isMatching && (!this.HasOwnProp("_tabMatchAction") || this._tabMatchAction != action))
             this._FillTabMatchModes(action)
-        matchMode := isMatching ? CmdEnumZh(this.ui.Query("TabMatchMode"), BrowserActions.MatchModes(action)) : ""
-        source := isInfo ? (pageSource != "" ? pageSource : CmdEnumZh(this.ui.Query("PageSource"), BrowserPageInfo.Sources)) : ""
+        matchMode := isMatching ? BrowserActions._Choice(this.ui.Query("TabMatchMode"), BrowserActions.MatchModes(action)) : ""
+        source := isInfo ? (pageSource != "" ? pageSource : BrowserActions._Choice(this.ui.Query("PageSource"), BrowserPageInfo.Sources)) : ""
         isMouseCoord := action == "鼠标移动" || action == "鼠标点击" || action == "鼠标滚轮"
         elementMatch := (isInfo && source == "元素匹配") || (isMatching && matchMode == "元素匹配")
         hasSelector := BrowserActions.UsesSelector(action) || elementMatch
@@ -390,8 +390,8 @@ class BrowserGui extends CommentGui {
         if (!hasSelector && this._picking)
             this._FinishPicker()
         field := isInfo ? (pageField != "" ? pageField
-            : (this.ui.Query("PageIdVar") != "" || this.ui.Query("PageStateVar") != "") ? "标签页ID" : "") : (action == "当前标签页" ? CmdEnumZh(this.ui.Query("CurrentTabAction"), BrowserActions.CurrentTabActions) : "")
-        closeMode := CmdEnumZh(this.ui.Query("TabCloseMode"), BrowserActions.TabCloseModes)
+            : (this.ui.Query("PageIdVar") != "" || this.ui.Query("PageStateVar") != "") ? "标签页ID" : "") : (action == "当前标签页" ? BrowserActions._Choice(this.ui.Query("CurrentTabAction"), BrowserActions.CurrentTabActions) : "")
+        closeMode := BrowserActions._Choice(this.ui.Query("TabCloseMode"), BrowserActions.TabCloseModes)
         this._ComboPush("CdpNotice", "Visibility", BrowserActions.RequiresCDP(action, field, isInfo ? source : matchMode, closeMode) ? "Visible" : "Collapsed")
         this._ComboPush("UrlLabel", "Text", GetLang(isInfo && BrowserPageInfo.MatchesTitle(source) ? "标题：" : "网址："))
         if (attrLabels.Has(action))
@@ -467,7 +467,7 @@ class BrowserGui extends CommentGui {
         try {
             if (!this._EnsurePickerBrowser() || this.ui != ui || !this._picking)
                 return
-            this._pickerSelectorType := CmdEnumZh(ui.Query("SelectorType"), BrowserGui.SelectorTypes)
+            this._pickerSelectorType := BrowserActions._Choice(ui.Query("SelectorType"), BrowserGui.SelectorTypes)
             this._pickerKeys := WinHotkey.Register(["Enter", "Escape"], this._PickerKey.Bind(this, ui))
             if (this._pickerKeys.Length != 2)
                 throw Error(GetLang("无法注册拾取确认热键。"))
@@ -508,7 +508,7 @@ class BrowserGui extends CommentGui {
             result := BrowserUtil.Evaluate("window." this._pickerToken "?.confirm() ?? ''")
             if (SubStr(result, 1, 7) != "picked:")
                 throw Error(GetLang("请将鼠标移到可拾取的网页元素上。"))
-            ui.Update("SelectorType", "SelectedIndex", CmdEnumIndex(this._pickerSelectorType, BrowserGui.SelectorTypes))
+            ui.Update("SelectorType", "SelectedIndex", BrowserActions.ChoiceIndex(this._pickerSelectorType, BrowserGui.SelectorTypes))
             ui.Update("Selector", "Text", SubStr(result, 8))
         } catch as e {
             failure := e.Message
@@ -700,8 +700,8 @@ class BrowserGui extends CommentGui {
         this._ComboPush("SaveVar", "Text", GetLang(this.Data.SaveVar))
         this._ComboPush("TabMatchValue", "Text", this.Data.TargetRef)
         this._FillTabMatchModes(actionType, this.Data.TabMatchMode)
-        this._ComboPush("TabCloseMode", "SelectedIndex", CmdEnumIndex(BrowserActions.TabCloseMode(this.Data.TabCloseMode), BrowserActions.TabCloseModes))
-        this._ComboPush("CurrentTabAction", "SelectedIndex", CmdEnumIndex(this.Data.CurrentTabAction, BrowserActions.CurrentTabActions))
+        this._ComboPush("TabCloseMode", "SelectedIndex", BrowserActions.ChoiceIndex(BrowserActions.TabCloseMode(this.Data.TabCloseMode), BrowserActions.TabCloseModes))
+        this._ComboPush("CurrentTabAction", "SelectedIndex", BrowserActions.ChoiceIndex(this.Data.CurrentTabAction, BrowserActions.CurrentTabActions))
         for field, name in BrowserPageInfo.Outputs
             this._ComboPush(name, "Text", this.Data.%name%)
         for action in ["元素信息", "元素位置/宽高"]
@@ -711,8 +711,8 @@ class BrowserGui extends CommentGui {
         this._ComboPush("ClearBefore", "IsChecked", this.Data.ClearBefore ? "True" : "False")
         this._ComboPush("Checked", "IsChecked", this.Data.Checked ? "True" : "False")
         this._ComboPush("UseCDP", "IsChecked", this.Data.UseCDP ? "True" : "False")
-        this._ComboPush("OpenMode", "SelectedIndex", CmdEnumIndex(this.Data.OpenMode, BrowserActions.OpenModes))
-        this._ComboPush("PageSource", "SelectedIndex", CmdEnumIndex(this.Data.PageSource, BrowserPageInfo.Sources))
+        this._ComboPush("OpenMode", "SelectedIndex", BrowserActions.ChoiceIndex(this.Data.OpenMode, BrowserActions.OpenModes))
+        this._ComboPush("PageSource", "SelectedIndex", BrowserActions.ChoiceIndex(this.Data.PageSource, BrowserPageInfo.Sources))
         this._ComboPush("FullPage", "IsChecked", this.Data.FullPage ? "True" : "False")
 
         actionFound := false
@@ -734,7 +734,7 @@ class BrowserGui extends CommentGui {
             throw ValueError(GetLang("不支持的浏览器操作：") actionType)
         for name, values in Map("SelectorType", BrowserGui.SelectorTypes, "Condition", BrowserGui.Conditions,
             "LoadState", BrowserGui.LoadStates, "BrowserType", this._browserNames, "MouseBtn", BrowserGui.MouseButtons, "StorageType", BrowserGui.StorageTypes)
-            this._ComboPush(name, "SelectedIndex", CmdEnumIndex((name == "BrowserType" ? browserType : this.Data.%name%), values))
+            this._ComboPush(name, "SelectedIndex", BrowserActions.ChoiceIndex((name == "BrowserType" ? browserType : this.Data.%name%), values))
         CommandTimeoutFields.Init(this.ui, this.Data.TimeoutMs, this.Data.TimeoutAction, this.Data.TimeoutStatusVar)
         this._UpdateFieldVisibilities(actionType, browserType, this.Data.PageSource,
             this.Data.PageIdVar != "" || this.Data.PageStateVar != "" ? "标签页ID" : "")
@@ -751,17 +751,17 @@ class BrowserGui extends CommentGui {
         for action in ["元素信息", "元素位置/宽高"]
             for label, name in BrowserElementInfo.Outputs(action)
                 data.%name% := data.ActionType == action ? GetVarName(Trim(this.ui.Query(name))) : ""
-        data.CurrentTabAction := CmdEnumZh(state["CurrentTabAction"], BrowserActions.CurrentTabActions)
-        data.TabMatchMode := CmdEnumZh(state["TabMatchMode"], BrowserActions.MatchModes(data.ActionType))
-        data.TabCloseMode := CmdEnumZh(state["TabCloseMode"], BrowserActions.TabCloseModes)
-        data.OpenMode := CmdEnumZh(state["OpenMode"], BrowserActions.OpenModes)
+        data.CurrentTabAction := BrowserActions._Choice(state["CurrentTabAction"], BrowserActions.CurrentTabActions)
+        data.TabMatchMode := BrowserActions._Choice(state["TabMatchMode"], BrowserActions.MatchModes(data.ActionType))
+        data.TabCloseMode := BrowserActions._Choice(state["TabCloseMode"], BrowserActions.TabCloseModes)
+        data.OpenMode := BrowserActions._Choice(state["OpenMode"], BrowserActions.OpenModes)
         data.UseCDP := state["UseCDP"] == "True"
-        data.PageSource := CmdEnumZh(state["PageSource"], BrowserPageInfo.Sources)
+        data.PageSource := BrowserActions._Choice(state["PageSource"], BrowserPageInfo.Sources)
         for field, name in BrowserPageInfo.Outputs
             data.%name% := data.ActionType == "标签页信息" ? GetVarName(Trim(state[name])) : ""
         for name, values in Map("SelectorType", BrowserGui.SelectorTypes, "Condition", BrowserGui.Conditions,
             "LoadState", BrowserGui.LoadStates, "BrowserType", this._browserNames, "MouseBtn", BrowserGui.MouseButtons, "StorageType", BrowserGui.StorageTypes)
-            data.%name% := CmdEnumZh(state[name], values)
+            data.%name% := BrowserActions._Choice(state[name], values)
         isTab := BrowserActions.IsTabAction(data.ActionType)
         if (isTab || !BrowserActions.UsesTimeout(data.ActionType)) {
             ; 不读取隐藏的超时参数，避免切换操作后沿用变量超时或重试设置。
