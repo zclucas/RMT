@@ -68,13 +68,13 @@
 
         if (IsIf || IsSearch) {
             ; 如果有真分支則創建真分支，有假分支則創建假分支
-            if (SplitMacro(Data.TrueMacro).Length > 0) {
+            if (Data.TrueMacro != "") {
                 TrueRoot := this.MacroTreeViewCon.Add(
                     GetLang("真"), root, this.GetCmdIconStr(GetLang("真")))
                 this.TreeAddSubTree(TrueRoot, GetLangMacro(Data.TrueMacro, 1))
                 this.TreeAddControl(TrueRoot, IsIf ? Data.TrueControlType : "无")
             }
-            if (SplitMacro(Data.FalseMacro).Length > 0) {
+            if (Data.FalseMacro != "") {
                 FalseRoot := this.MacroTreeViewCon.Add(
                     GetLang("假"), root, this.GetCmdIconStr(GetLang("假")))
                 this.TreeAddSubTree(FalseRoot, GetLangMacro(Data.FalseMacro, 1))
@@ -114,11 +114,13 @@
                 this.TreeAddControl(CondiRoot, Data.ControlTypeArr[A_Index])
             }
 
-            CondiRoot := this.MacroTreeViewCon.Add(
-                GetLang("条件：以上都不是"), root, iconStr)
+            if (Data.DefaultMacro != "") {
+                CondiRoot := this.MacroTreeViewCon.Add(
+                    GetLang("条件：以上都不是"), root, iconStr)
 
-            this.TreeAddSubTree(CondiRoot, GetLangMacro(Data.DefaultMacro, 1))
-            this.TreeAddControl(CondiRoot, Data.DefaultControlType)
+                this.TreeAddSubTree(CondiRoot, GetLangMacro(Data.DefaultMacro, 1))
+                this.TreeAddControl(CondiRoot, Data.DefaultControlType)
+            }
         }
     }
 
