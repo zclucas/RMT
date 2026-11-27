@@ -505,8 +505,11 @@ class MacroTreeAdapter {
         return false
     }
 
-    ; 仅最内层搜索/如果用左右分栏；上级一律树形，避免套娃分栏过窄
+    ; 仅最内层搜索用左右分栏（如果指令真假不使用单行分栏，保持树形层级展示）；上级一律树形，避免套娃分栏过窄
     _ShouldUseSplit(node) {
+        cmd := GetCommandKey(GetCmdOnlyText(this._CleanNodeText(node)))
+        if (cmd == "如果")
+            return false
         pair := this._FindTrueFalsePair(node)
         if (!IsObject(pair))
             return false
