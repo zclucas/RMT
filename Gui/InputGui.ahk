@@ -66,14 +66,14 @@ class InputGui {
         this._title := title
         titleHeight := XAMLHost.CmdTitleBarHeight()
 
-        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(XAMLHost.FontSize())
+        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(CmdEditorForm.FontSize())
         main.Rows(titleHeight, "*")
 
         chrome := XAMLHost.AddCmdTitleBar(main, title, titleHeight)
 
         body := main.Add("Grid").Grid_Row(1).Margin("16,10,16,12")
         body.Rows("36", "36", "36", "36", "36", "36", "56")
-        body.Cols("80", "150", "12", "80", "150")
+        body.Cols(CmdEditorForm.PairColumns()*)
 
         body.Add("TextBlock").Grid_Row(0).Grid_Column(0).Text(GetLang("备注：")).VerticalAlignment("Center")
         body.Add("TextBox").Grid_Row(0).Grid_Column(1).Name("RemarkCon").Height(26).MinHeight(26).MaxHeight(26).VerticalAlignment("Center")
@@ -81,7 +81,7 @@ class InputGui {
             .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
         cancelRow := body.Add("Grid").Grid_Row(0).Grid_Column(3).Grid_ColumnSpan(2).Name("CancelRow").Visibility("Collapsed")
-        cancelRow.Cols("80", "150")
+        cancelRow.Cols(CmdEditorForm.LabelWidth(), "*")
         cancelRow.Add("TextBlock").Grid_Column(0).Text(GetLang("取消时:")).VerticalAlignment("Center")
         ct := cancelRow.Add("ComboBox").Grid_Column(1).Name("CancelTypeCombo").Height(26).MinHeight(26).VerticalAlignment("Center")
         for t in GetLangArr(["终止当前宏", "终止所有宏"])
@@ -103,7 +103,7 @@ class InputGui {
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
 
         optRow := body.Add("Grid").Grid_Row(3).Grid_ColumnSpan(5).Name("OptionsRow")
-        optRow.Cols("80", "*")
+        optRow.Cols(CmdEditorForm.LabelWidth(), "*")
         optRow.Add("TextBlock").Grid_Column(0).Text(GetLang("选项：")).ToolTip(GetLang("逗号分隔选项")).VerticalAlignment("Center")
         optRow.Add("TextBox").Grid_Column(1).Name("OptionsCon").Height(26).MinHeight(26).MaxHeight(26).VerticalAlignment("Center")
             .VerticalContentAlignment("Center").Padding("2,0")
@@ -111,9 +111,9 @@ class InputGui {
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
 
         defRow := body.Add("Grid").Grid_Row(4).Grid_ColumnSpan(5).Name("DefaultRow")
-        defRow.Cols("80", "150", "12", "80", "150")
+        defRow.Cols(CmdEditorForm.PairColumns()*)
         resultRow := defRow.Add("Grid").Grid_Column(0).Grid_ColumnSpan(2).Name("ResultRow")
-        resultRow.Cols("80", "150")
+        resultRow.Cols(CmdEditorForm.LabelWidth(), "*")
         resultRow.Add("TextBlock").Grid_Column(0).Text(GetLang("结果变量：")).VerticalAlignment("Center")
         resultRow.Add("ComboBox").Grid_Column(1).Name("SaveNameCombo").Height(26).MinHeight(26).IsEditable("True").VerticalAlignment("Center")
         defRow.Add("TextBlock").Grid_Column(3).Name("DefaultLabel").Text(GetLang("默认值：")).VerticalAlignment("Center")
@@ -128,7 +128,7 @@ class InputGui {
         timeoutCombo.Add("ComboBoxItem").Content(GetLang("不限时"))
         timeoutCombo.Add("ComboBoxItem").Content("10000")
         timeoutActionRow := body.Add("Grid").Grid_Row(5).Grid_Column(3).Grid_ColumnSpan(2).Name("TimeoutActionRow").Visibility("Collapsed")
-        timeoutActionRow.Cols("80", "150")
+        timeoutActionRow.Cols(CmdEditorForm.LabelWidth(), "*")
         timeoutActionRow.Add("TextBlock").Grid_Column(0).Text(GetLang("超时后:")).VerticalAlignment("Center")
         ta := timeoutActionRow.Add("ComboBox").Grid_Column(1).Name("TimeoutActionCombo").Height(26).MinHeight(26).VerticalAlignment("Center")
         for t in GetLangArr(["无", "用默认值", "保持原值", "终止当前宏", "终止所有宏"])
@@ -139,7 +139,7 @@ class InputGui {
 
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)
         this.ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", this.OwnerHwnd)
-        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="540" Height="348"')
+        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="' CmdEditorForm.Width '" Height="348"')
         this.ui.xaml := StrReplace(this.ui.xaml, 'FontFamily="Segoe UI Variable Display, Segoe UI, sans-serif"', 'FontFamily="' MainSoftData.FontType '"')
         this.ui.xaml := StrReplace(this.ui.xaml, '%resources%', '')
 

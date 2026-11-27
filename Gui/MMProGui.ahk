@@ -81,7 +81,7 @@ class MMProGui {
         this._title := title
         titleHeight := XAMLHost.CmdTitleBarHeight()
 
-        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(XAMLHost.FontSize())
+        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(CmdEditorForm.FontSize())
         main.Rows(titleHeight, "*")
 
         ; === 标题栏 ===
@@ -96,19 +96,19 @@ class MMProGui {
         ; 行0：当前鼠标位置 + 备注（备注与坐标Y左对齐，输入右对齐下方下拉）
         body.Add("TextBlock").Grid_Row(0).Grid_Column(0).Grid_ColumnSpan(2).Name("MousePosCon")
             .Text(GetLang("当前鼠标位置:0,0")).VerticalAlignment("Center")
-            .Foreground("{DynamicResource TextMain}").FontSize("12")
+            .Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
         body.Add("TextBlock").Grid_Row(0).Grid_Column(2).Text(GetLang("备注：")).VerticalAlignment("Center").Margin("20,0,0,0")
-            .Foreground("{DynamicResource TextMain}").FontSize("12")
+            .Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
         body.Add("TextBox").Grid_Row(0).Grid_Column(3).Name("RemarkCon").Height(26).MinHeight(26)
-            .VerticalContentAlignment("Center").FontSize("11").Padding("4,0")
+            .VerticalContentAlignment("Center").FontSize(CmdEditorForm.FontSize()).Padding("4,0")
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
 
         ; 行1：坐标基准 + 拟真轨迹
         body.Add("TextBlock").Grid_Row(1).Grid_Column(0).Text(GetLang("坐标基准：")).ToolTip(GetLang("坐标基准=窗口时，坐标按所选窗口左上角偏移计算（绝对移动）。")).VerticalAlignment("Center")
-            .Foreground("{DynamicResource TextMain}").FontSize("12")
+            .Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
         ref := body.Add("ComboBox").Grid_Row(1).Grid_Column(1).Name("RefCombo").Height(26).MinHeight(26)
-            .VerticalContentAlignment("Center").FontSize("11")
+            .VerticalContentAlignment("Center").FontSize(CmdEditorForm.FontSize())
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
         for r in GetLangArr(["屏幕", "窗口"])
             ref.Add("ComboBoxItem").Content(r)
@@ -119,66 +119,66 @@ class MMProGui {
         winRow := body.Add("Grid").Name("WinInfoRow").Grid_Row(2).Grid_ColumnSpan(4).Visibility("Hidden")
         winRow.Cols("Auto", "*", "Auto")
         winRow.Add("TextBlock").Grid_Column(0).Text(GetLang("窗口绑定：")).VerticalAlignment("Center")
-            .Foreground("{DynamicResource TextMain}").FontSize("12")
-        CmdEditorForm.WindowBindingCombo(winRow, "WinInfoCon").Grid_Column(1).FontSize(11)
+            .Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
+        CmdEditorForm.WindowBindingCombo(winRow, "WinInfoCon").Grid_Column(1).FontSize(CmdEditorForm.FontSize())
         winRow.Add("Button").Grid_Column(2).Name("BtnWinInfoEdit").Content(GetLang("编辑")).Height(26).MinHeight(26)
             .Margin("8,0,0,0").HorizontalAlignment("Left").VerticalAlignment("Center")
 
         ; 行3：移动方式 + 鼠标动作
         body.Add("TextBlock").Grid_Row(3).Grid_Column(0).Text(GetLang("移动方式：")).VerticalAlignment("Center")
-            .Foreground("{DynamicResource TextMain}").FontSize("12")
+            .Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
         mm := body.Add("ComboBox").Grid_Row(3).Grid_Column(1).Name("MouseMoveModeCombo").Height(26).MinHeight(26)
-            .VerticalContentAlignment("Center").FontSize("11")
+            .VerticalContentAlignment("Center").FontSize(CmdEditorForm.FontSize())
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
         for m in GetLangArr(["绝对移动", "相对移动"])
             mm.Add("ComboBoxItem").Content(m)
         body.Add("TextBlock").Grid_Row(3).Grid_Column(2).Text(GetLang("鼠标动作：")).VerticalAlignment("Center").Margin("20,0,0,0")
-            .Foreground("{DynamicResource TextMain}").FontSize("12")
+            .Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
         act := body.Add("ComboBox").Grid_Row(3).Grid_Column(3).Name("ActionTypeCombo").Height(26).MinHeight(26).Margin("20,0,0,0")
-            .VerticalContentAlignment("Center").FontSize("11")
+            .VerticalContentAlignment("Center").FontSize(CmdEditorForm.FontSize())
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
         for a in GetLangArr(["移动", "移动后单击", "移动后双击", "拖拽", "A到B拖拽"])
             act.Add("ComboBoxItem").Content(a)
 
         ; 行4：坐标X/Y（绝对=坐标位置，相对=坐标偏移）
         body.Add("TextBlock").Grid_Row(4).Grid_Column(0).Name("PosXLabel").Text(GetLang("坐标位置X:")).VerticalAlignment("Center")
-            .Foreground("{DynamicResource TextMain}").FontSize("12")
+            .Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
         body.Add("ComboBox").Grid_Row(4).Grid_Column(1).Name("PosVarX").Height(26).MinHeight(26).IsEditable("True")
-            .VerticalContentAlignment("Center").FontSize("11")
+            .VerticalContentAlignment("Center").FontSize(CmdEditorForm.FontSize())
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
         body.Add("TextBlock").Grid_Row(4).Grid_Column(2).Name("PosYLabel").Text(GetLang("坐标位置Y:")).VerticalAlignment("Center").Margin("20,0,0,0")
-            .Foreground("{DynamicResource TextMain}").FontSize("12")
+            .Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
         body.Add("ComboBox").Grid_Row(4).Grid_Column(3).Name("PosVarY").Height(26).MinHeight(26).Margin("20,0,0,0").IsEditable("True")
-            .VerticalContentAlignment("Center").FontSize("11")
+            .VerticalContentAlignment("Center").FontSize(CmdEditorForm.FontSize())
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
 
         ; 绝对拖拽终止坐标；其他动作折叠此行。
         endRow := body.Add("Grid").Grid_Row(5).Grid_ColumnSpan(4).Name("EndPosRow").Visibility("Collapsed").Height(36)
         endRow.Cols("Auto", "*", "Auto", "*")
         endRow.Add("TextBlock").Grid_Column(0).Text(GetLang("终止点")).VerticalAlignment("Center")
-            .Foreground("{DynamicResource TextMain}").FontSize("12")
+            .Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
         endRow.Add("ComboBox").Grid_Column(1).Name("EndPosVarX").Height(26).MinHeight(26).IsEditable("True")
-            .VerticalContentAlignment("Center").FontSize("11")
+            .VerticalContentAlignment("Center").FontSize(CmdEditorForm.FontSize())
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
         endRow.Add("TextBlock").Grid_Column(2).Text("").VerticalAlignment("Center").Margin("20,0,0,0")
-            .Foreground("{DynamicResource TextMain}").FontSize("12")
+            .Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
         endRow.Add("ComboBox").Grid_Column(3).Name("EndPosVarY").Height(26).MinHeight(26).Margin("20,0,0,0").IsEditable("True")
-            .VerticalContentAlignment("Center").FontSize("11")
+            .VerticalContentAlignment("Center").FontSize(CmdEditorForm.FontSize())
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
 
         ; 行5：移动速度
         spdHost := body.Add("Border").Grid_Row(6).Grid_Column(0).Background("Transparent").VerticalAlignment("Center")
             .ToolTip(GetLang("移动速度0~100，100为瞬移"))
         spdHost.Add("TextBlock").Text(GetLang("移动速度：")).VerticalAlignment("Center")
-            .Foreground("{DynamicResource TextMain}").FontSize("12")
+            .Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
         body.Add("TextBox").Grid_Row(6).Grid_Column(1).Name("SpeedCon").Height(26).MinHeight(26).VerticalContentAlignment("Center")
-            .FontSize("11").Padding("4,0").Text("90")
+            .FontSize(CmdEditorForm.FontSize()).Padding("4,0").Text("90")
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
 
         ; 行6：提示
         body.Add("TextBlock").Grid_Row(7).Grid_ColumnSpan(4).Text(GetLang("坐标基准=窗口时，坐标按所选窗口左上角偏移计算（绝对移动）。")).VerticalAlignment("Center")
-            .Foreground("{DynamicResource TextSub}").FontSize("11")
+            .Foreground("{DynamicResource TextSub}").FontSize(CmdEditorForm.FontSize())
 
         ; 行7：确定（水平居中）
         btnRow := body.Add("StackPanel").Grid_Row(8).Grid_ColumnSpan(4).Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center")
@@ -187,7 +187,7 @@ class MMProGui {
         ; === 创建 XAMLHost ===
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)
         this.ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", this.OwnerHwnd)
-        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="520" SizeToContent="Height"')
+        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="620" SizeToContent="Height"')
         this.ui.xaml := StrReplace(this.ui.xaml, 'FontFamily="Segoe UI Variable Display, Segoe UI, sans-serif"', 'FontFamily="' MainSoftData.FontType '"')
         this.ui.xaml := StrReplace(this.ui.xaml, '%resources%', '')
 

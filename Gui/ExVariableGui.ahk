@@ -65,7 +65,7 @@ class ExVariableGui {
 
     _StyleBox(el, width := "") {
         el.Height(26).MinHeight(26).MaxHeight(26).VerticalAlignment("Center")
-            .VerticalContentAlignment("Center").FontSize("11").Padding("4,0")
+            .VerticalContentAlignment("Center").FontSize(CmdEditorForm.FontSize()).Padding("4,0")
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
         if (width != "")
@@ -74,7 +74,7 @@ class ExVariableGui {
     }
 
     _StyleCombo(el, width := "") {
-        el.Height(26).MinHeight(26).VerticalAlignment("Center").VerticalContentAlignment("Center").FontSize("11")
+        el.Height(26).MinHeight(26).VerticalAlignment("Center").VerticalContentAlignment("Center").FontSize(CmdEditorForm.FontSize())
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
         if (width != "")
@@ -113,7 +113,7 @@ class ExVariableGui {
         this._title := title
         titleHeight := XAMLHost.CmdTitleBarHeight()
 
-        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(XAMLHost.FontSize())
+        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(CmdEditorForm.FontSize())
         main.Rows(titleHeight, "*")
 
         ; === 标题栏 ===
@@ -162,7 +162,7 @@ class ExVariableGui {
         area.Rows("*", "*")
         area.Cols(labelWidth, "0", "*", "8", "*")
         areaBtn := area.Add("Button").Name("BtnPreviewArea").Grid_RowSpan(2).Cursor("Hand").Focusable("False")
-            .HorizontalAlignment("Stretch").VerticalAlignment("Stretch")
+            .HorizontalAlignment("Left").VerticalAlignment("Stretch")
             .Tag("0").ToolTip(GetLang("搜索范围"))
             .HorizontalContentAlignment("Left").VerticalContentAlignment("Stretch")
             .Background("{DynamicResource ControlBg}").BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1")

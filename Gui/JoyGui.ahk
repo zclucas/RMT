@@ -94,7 +94,7 @@ class JoyGui {
         this._title := title
         titleHeight := XAMLHost.CmdTitleBarHeight()
 
-        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(XAMLHost.FontSize())
+        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(CmdEditorForm.FontSize())
         main.Rows(titleHeight, "*")
         XAMLHost.AddCmdTitleBar(main, title, titleHeight)
 
@@ -114,30 +114,30 @@ class JoyGui {
 
         digitalRow := param.Add("StackPanel").Name("DigitalRow").Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center").MinHeight("26")
         typeBox := digitalRow.Add("StackPanel").Name("TypeBox").Orientation("Horizontal").VerticalAlignment("Center")
-        typeBox.Add("TextBlock").Text(GetLang("类型:")).ToolTip(this._TypeHelpText()).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
+        typeBox.Add("TextBlock").Text(GetLang("类型:")).ToolTip(this._TypeHelpText()).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
         kt := typeBox.Add("ComboBox").Name("KeyTypeCon").Width(80).Height(26).MinHeight(26).Margin("4,0,0,0")
-            .VerticalContentAlignment("Center").FontSize("11").Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
+            .VerticalContentAlignment("Center").FontSize(CmdEditorForm.FontSize()).Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
         for t in GetLangArr(["按下", "松开", "点击"])
             kt.Add("ComboBoxItem").Content(t)
-        digitalRow.Add("TextBlock").Name("HoldTimeTipCon").Text(GetLang("点击时长:")).ToolTip(GetLang("从按下到松开的毫秒数。")).VerticalAlignment("Center").Margin("14,0,0,0").Foreground("{DynamicResource TextMain}").FontSize("12")
+        digitalRow.Add("TextBlock").Name("HoldTimeTipCon").Text(GetLang("点击时长:")).ToolTip(GetLang("从按下到松开的毫秒数。")).VerticalAlignment("Center").Margin("14,0,0,0").Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
         this._AddNumBox(digitalRow, "HoldTimeCon", "60", "100")
-        digitalRow.Add("TextBlock").Name("KeyCountTipCon").Text(GetLang("点击次数：")).VerticalAlignment("Center").Margin("14,0,0,0").Foreground("{DynamicResource TextMain}").FontSize("12")
+        digitalRow.Add("TextBlock").Name("KeyCountTipCon").Text(GetLang("点击次数：")).VerticalAlignment("Center").Margin("14,0,0,0").Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
         this._AddNumBox(digitalRow, "KeyCountCon", "60", "1")
-        digitalRow.Add("TextBlock").Name("PerIntervalTipCon").Text(GetLang("每次间隔：")).ToolTip(GetLang("两次操作之间等待的毫秒数。")).VerticalAlignment("Center").Margin("14,0,0,0").Foreground("{DynamicResource TextMain}").FontSize("12").Visibility("Collapsed")
+        digitalRow.Add("TextBlock").Name("PerIntervalTipCon").Text(GetLang("每次间隔：")).ToolTip(GetLang("两次操作之间等待的毫秒数。")).VerticalAlignment("Center").Margin("14,0,0,0").Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize()).Visibility("Collapsed")
         this._AddNumBox(digitalRow, "PerIntervalCon", "60", "200", "Collapsed")
 
         analogRow := param.Add("StackPanel").Name("AnalogRow").Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center").Margin("0,8,0,0").MinHeight("26").Height("26").Visibility("Hidden")
-        analogRow.Add("TextBlock").Name("AxisTip1").Text("LX").VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12").Width("28")
+        analogRow.Add("TextBlock").Name("AxisTip1").Text("LX").VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize()).Width("28")
         analogRow.Add("Slider").Name("AxisSlider1").Width("180").Height("26").Minimum("-100").Maximum("100").Value("100").IsMoveToPointEnabled("True").VerticalAlignment("Center")
         analogRow.Add("TextBox").Name("AxisVal1").Width("48").Height(26).MinHeight(26).Margin("6,0,16,0")
-            .VerticalContentAlignment("Center").TextAlignment("Center").FontSize("11").Padding("2,0")
+            .VerticalContentAlignment("Center").TextAlignment("Center").FontSize(CmdEditorForm.FontSize()).Padding("2,0")
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
-        analogRow.Add("TextBlock").Name("AxisTip2").Text("LY").VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12").Width("28")
+        analogRow.Add("TextBlock").Name("AxisTip2").Text("LY").VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize()).Width("28")
         analogRow.Add("Slider").Name("AxisSlider2").Width("180").Height("26").Minimum("-100").Maximum("100").Value("0").IsMoveToPointEnabled("True").VerticalAlignment("Center")
         analogRow.Add("TextBox").Name("AxisVal2").Width("48").Height(26).MinHeight(26).Margin("6,0,0,0")
-            .VerticalContentAlignment("Center").TextAlignment("Center").FontSize("11").Padding("2,0")
+            .VerticalContentAlignment("Center").TextAlignment("Center").FontSize(CmdEditorForm.FontSize()).Padding("2,0")
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
 
@@ -147,7 +147,7 @@ class JoyGui {
         btnRow := body.Add("StackPanel").Grid_Row(2).Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center")
         clearBtn := btnRow.Add("Button").Name("BtnClear").Content(GetLang("清空")).Width(88).Height(32).MinHeight(32).Cursor("Hand")
             .Background("{DynamicResource ActionBg}").Foreground("{DynamicResource ActionText}")
-            .BorderBrush("{DynamicResource ActionStroke}").BorderThickness("1").FontSize(13).FontWeight("Bold")
+            .BorderBrush("{DynamicResource ActionStroke}").BorderThickness("1").FontSize(CmdEditorForm.FontSize()).FontWeight("Bold")
             .Margin("0,0,150,0")
         clearBtn.InjectResources(FrontInfoGui._OkBtnHoverStyle())
         AddCmdOkBtn(btnRow, "BtnOk")
@@ -182,7 +182,7 @@ class JoyGui {
 
     _AddNumBox(parent, name, width, text := "", vis := "") {
         tb := parent.Add("TextBox").Name(name).Width(width).Height(26).MinHeight(26).Margin("6,0,0,0")
-            .VerticalContentAlignment("Center").TextAlignment("Center").FontSize("11").Padding("4,0")
+            .VerticalContentAlignment("Center").TextAlignment("Center").FontSize(CmdEditorForm.FontSize()).Padding("4,0")
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1").Tag("NumOnly|NoIME|MaxLen:5")
         if (text != "")
@@ -351,7 +351,7 @@ class JoyGui {
             .Fill("{DynamicResource ControlBg}").Stroke("{DynamicResource ControlBorder}").StrokeThickness("1.5")
             .SetProp("SnapsToDevicePixels", "True")
         tag := (id == "AxisLS") ? "L" : "R"
-        knobBox.Add("TextBlock").Name("Pad_" id "Tag").Text(tag).FontSize("12").FontWeight("Bold")
+        knobBox.Add("TextBlock").Name("Pad_" id "Tag").Text(tag).FontSize(CmdEditorForm.FontSize()).FontWeight("Bold")
             .Foreground("{DynamicResource TextMain}")
             .HorizontalAlignment("Center").VerticalAlignment("Center").IsHitTestVisible("False")
         this._stickLayout[id] := { kind: "stick", x: x, y: y, size: size, knob: knob, maxR: maxR, wellR: wellR, pad: pad }
@@ -376,7 +376,7 @@ class JoyGui {
             .Height("0").Visibility("Collapsed").ClipToBounds("True").BorderThickness("0").Background("#00FFFFFF")
         clip.Add("Border").Width(String(innerW)).Height(String(innerH)).VerticalAlignment("Bottom").HorizontalAlignment("Center")
             .CornerRadius(String(innerR)).Background("{DynamicResource Accent}").IsHitTestVisible("False")
-        inner.Add("TextBlock").Name("Pad_" id "Label").Text(label).FontSize("10").FontWeight("SemiBold")
+        inner.Add("TextBlock").Name("Pad_" id "Label").Text(label).FontSize(CmdEditorForm.FontSize()).FontWeight("SemiBold")
             .Foreground("{DynamicResource TextMain}").HorizontalAlignment("Center").VerticalAlignment("Center")
             .IsHitTestVisible("False")
         this._stickLayout[id] := { kind: "trig", x: x, y: y, w: w, h: h, innerH: innerH, label: label }
@@ -1311,14 +1311,14 @@ class JoyGui {
     }
 
     _CommandTextXaml(s) {
-        return '<TextBlock Text="' this._EscapeXml(s) '" FontSize="12" VerticalAlignment="Center"'
+        return '<TextBlock Text="' this._EscapeXml(s) '" FontSize="15" VerticalAlignment="Center"'
             . ' Foreground="{DynamicResource TextMain}" FontFamily="' this._EscapeXml(this._CommandFont()) '"/>'
     }
 
     _CommandGlyphXaml(kind, ch) {
         fg := "{DynamicResource TextMain}"
         fam := (kind == "tri") ? "Segoe UI Symbol, Segoe UI" : this._FluentFont()
-        return '<TextBlock Text="&#x' Format("{:X}", Ord(ch)) ';" FontSize="12" VerticalAlignment="Center" Margin="0,1,0,0"'
+        return '<TextBlock Text="&#x' Format("{:X}", Ord(ch)) ';" FontSize="15" VerticalAlignment="Center" Margin="0,1,0,0"'
             . ' Foreground="' fg '" FontFamily="' this._EscapeXml(fam) '"/>'
     }
 

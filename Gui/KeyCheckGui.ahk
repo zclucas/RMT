@@ -60,25 +60,33 @@ class KeyCheckGui {
         this._title := title
         titleHeight := XAMLHost.CmdTitleBarHeight()
 
-        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(XAMLHost.FontSize())
+        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(CmdEditorForm.FontSize())
         main.Rows(titleHeight, "*")
 
         ; === 标题栏 ===
         chrome := XAMLHost.AddCmdTitleBar(main, title, titleHeight)
 
         body := main.Add("Grid").Grid_Row(1).Margin("4,2,4,8")
-        body.Rows("Auto", "Auto", "44", "Auto", "48")
+        body.Rows("Auto", "Auto", "Auto", "44", "48")
         body.Cols("Auto", "Auto", "Auto", "Auto", "Auto", "Auto", "Auto", "Auto", "Auto", "Auto", "*")
 
-        ; 行0：键盘（按键指令同款）
-        sv := body.Add("ScrollViewer").Grid_Row(0).Grid_ColumnSpan(11).Margin("0,4,0,0")
+        if (!this.HasProp("SelectionData")) {
+            remarkRow := body.Add("Grid").Name("RemarkRow").Grid_Row(0).Grid_ColumnSpan(11)
+                .Width(CmdEditorForm.LabelWidth() + 300).HorizontalAlignment("Center").Margin("0,4")
+            remarkRow.Cols(CmdEditorForm.LabelWidth(), 300)
+            CmdEditorForm.Label(remarkRow, "备注：").Margin("0")
+            CmdEditorForm.TextBox(remarkRow, "RemarkCon").Style("{StaticResource RmtSingleLineTextBox}").Grid_Column(1).Width(300)
+        }
+
+        ; 行0：备注；行1：键盘（按键指令同款）
+        sv := body.Add("ScrollViewer").Grid_Row(1).Grid_ColumnSpan(11).Margin("0,4,0,0")
             .VerticalScrollBarVisibility("Auto").HorizontalScrollBarVisibility("Disabled").ClipToBounds("True")
         kbHost := sv.Add("Grid")
         this._keyGrid := kbHost.Add("Canvas").Width("1109").Height("270").HorizontalAlignment("Center").VerticalAlignment("Top")
 
-        ; 行1：鼠标（居中，按键指令同款）
-        mouseBlock := body.Add("StackPanel").Grid_Row(1).Grid_ColumnSpan(11).HorizontalAlignment("Center").Margin("0,5,0,2")
-        mouseBlock.Add("TextBlock").Text(GetLang("鼠标")).FontWeight("SemiBold").FontSize(12)
+        ; 行2：鼠标（居中，按键指令同款）
+        mouseBlock := body.Add("StackPanel").Grid_Row(2).Grid_ColumnSpan(11).HorizontalAlignment("Center").Margin("0,5,0,2")
+        mouseBlock.Add("TextBlock").Text(GetLang("鼠标")).FontWeight("SemiBold").FontSize(CmdEditorForm.FontSize())
             .HorizontalAlignment("Center").Foreground("{DynamicResource TextMain}").Margin("0,0,0,6")
         mouseKeys := mouseBlock.Add("StackPanel").Orientation("Horizontal").HorizontalAlignment("Center")
         mouseDefs := [
@@ -90,36 +98,30 @@ class KeyCheckGui {
             this._PlaceFlowKey(mouseKeys, mouseDefs[A_Index][1], mouseDefs[A_Index][2], mouseDefs[A_Index][3], A_Index < mouseDefs.Length)
         }
 
-        ; 行2：检测模式 / 检测类型 / 结果变量（居中）
-        bottom := body.Add("StackPanel").Grid_Row(2).Grid_ColumnSpan(11).Orientation("Horizontal").HorizontalAlignment("Center").Margin("10,12,10,2").VerticalAlignment("Center")
+        ; 行3：检测模式 / 检测类型 / 结果变量（居中）
+        bottom := body.Add("StackPanel").Grid_Row(3).Grid_ColumnSpan(11).Orientation("Horizontal").HorizontalAlignment("Center").Margin("10,12,10,2").VerticalAlignment("Center")
         if (!this.HasProp("SelectionData")) {
-            bottom.Add("TextBlock").Text(GetLang("检测模式:")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
+            bottom.Add("TextBlock").Text(GetLang("检测模式:")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
             cc := bottom.Add("ComboBox").Name("CheckTypeCon").Width(120).Height(26).MinHeight(26).Margin("4,0,0,0")
-                .VerticalContentAlignment("Center").FontSize("11").Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
+                .VerticalContentAlignment("Center").FontSize(CmdEditorForm.FontSize()).Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
             for t in GetLangArr(["同时按下", "有一个按下"])
                 cc.Add("ComboBoxItem").Content(t)
-            bottom.Add("TextBlock").Text(GetLang("检测类型:")).ToolTip(GetLang("物理状态看实际按键，逻辑状态看系统收到的输入。")).VerticalAlignment("Center").Margin("20,0,0,0").Foreground("{DynamicResource TextMain}").FontSize("12")
+            bottom.Add("TextBlock").Text(GetLang("检测类型:")).ToolTip(GetLang("物理状态看实际按键，逻辑状态看系统收到的输入。")).VerticalAlignment("Center").Margin("20,0,0,0").Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
             st := bottom.Add("ComboBox").Name("StateTypeCon").Width(120).Height(26).MinHeight(26).Margin("4,0,0,0")
-                .VerticalContentAlignment("Center").FontSize("11").Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
+                .VerticalContentAlignment("Center").FontSize(CmdEditorForm.FontSize()).Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
             for t in GetLangArr(["物理状态", "逻辑状态"])
                 st.Add("ComboBoxItem").Content(t)
-            bottom.Add("TextBlock").Text(GetLang("结果变量：")).VerticalAlignment("Center").Margin("20,0,0,0").Foreground("{DynamicResource TextMain}").FontSize("12")
+            bottom.Add("TextBlock").Text(GetLang("结果变量：")).VerticalAlignment("Center").Margin("20,0,0,0").Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
             bottom.Add("ComboBox").Name("VarNameCon").Width(130).Height(26).MinHeight(26).Margin("4,0,0,0").IsEditable("True")
-                .VerticalContentAlignment("Center").FontSize("11").Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
+                .VerticalContentAlignment("Center").FontSize(CmdEditorForm.FontSize()).Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
         }
 
-        if (!this.HasProp("SelectionData")) {
-            remarkRow := body.Add("Grid").Grid_Row(3).Grid_ColumnSpan(11).Margin("16,4")
-            remarkRow.Cols(6 * XAMLHost.ScaleFontSize(XAMLHost.FontSize()), "*")
-            CmdEditorForm.Label(remarkRow, "备注：").Margin("0")
-            CmdEditorForm.TextBox(remarkRow, "RemarkCon").Style("{StaticResource RmtSingleLineTextBox}").Grid_Column(1)
-        }
 
         ; 行4：清空 / 确定（清空与确定同款，间距 300px）
         btnRow := body.Add("StackPanel").Grid_Row(4).Grid_ColumnSpan(11).Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center")
         clearBtn := btnRow.Add("Button").Name("BtnClear").Content(GetLang("清空")).Width(88).Height(32).MinHeight(32).Cursor("Hand")
             .Background("{DynamicResource ActionBg}").Foreground("{DynamicResource ActionText}")
-            .BorderBrush("{DynamicResource ActionStroke}").BorderThickness("1").FontSize(13).FontWeight("Bold")
+            .BorderBrush("{DynamicResource ActionStroke}").BorderThickness("1").FontSize(CmdEditorForm.FontSize()).FontWeight("Bold")
             .Margin("0,0,300,0")
         clearBtn.InjectResources(FrontInfoGui._OkBtnHoverStyle())
         AddCmdOkBtn(btnRow, "BtnOk")
@@ -151,7 +153,7 @@ class KeyCheckGui {
     ; ---------------- 按键网格（Canvas 绝对定位，与按键指令键盘布局一致）----------------
 
     _PlaceLabel(text, x, y) {
-        this._keyGrid.Add("TextBlock").Text(text).FontWeight("SemiBold").FontSize(12)
+        this._keyGrid.Add("TextBlock").Text(text).FontWeight("SemiBold").FontSize(CmdEditorForm.FontSize())
             .SetProp("Canvas.Left", String(x)).SetProp("Canvas.Top", String(y))
     }
 
@@ -165,7 +167,7 @@ class KeyCheckGui {
         name := "KeyBtn_" this._keySeq
         btn := this._keyGrid.Add("Button").Name(name).Width(width).Height(25)
             .SetProp("Canvas.Left", String(x - 10)).SetProp("Canvas.Top", String(y))
-            .Content(display).FontSize(11).Cursor("Hand").Padding("2,0").Tag("0")
+            .Content(display).FontSize(CmdEditorForm.FontSize()).Cursor("Hand").Padding("2,0").Tag("0")
             .Background("{DynamicResource InputBg}").Foreground("{DynamicResource TextMain}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
         btn.InjectResources(FrontInfoGui._KeyPickBtnStyle())
@@ -183,7 +185,7 @@ class KeyCheckGui {
         this._keySeq += 1
         name := "KeyBtn_" this._keySeq
         btn := parent.Add("Button").Name(name).Width(width).Height(25)
-            .Content(display).FontSize(11).Cursor("Hand").Padding("2,0").Tag("0")
+            .Content(display).FontSize(CmdEditorForm.FontSize()).Cursor("Hand").Padding("2,0").Tag("0")
             .Background("{DynamicResource InputBg}").Foreground("{DynamicResource TextMain}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
         btn.InjectResources(FrontInfoGui._KeyPickBtnStyle())

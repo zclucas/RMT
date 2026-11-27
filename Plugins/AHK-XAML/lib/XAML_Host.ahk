@@ -905,8 +905,8 @@ class XAMLHost {
     }
 
     static MacroBodyFontSize() {
-        ; 写入声明字号；经 ScaleFontSize 后等于主题 × 主窗 Viewbox
-        return XAMLHost.VisualFontSizeDeclared()
+        ; 宏编辑器已有固定设计根与 Viewbox，字号保持设计值，避免预乘主窗倍率后再次放大。
+        return XAMLHost.FontSize()
     }
 
     ; 标题栏关闭钮：与主界面 BtnWinClose 同款（46×标题栏高、TitleBarCloseButton、右上圆角 hover）
@@ -1295,7 +1295,7 @@ class XAMLHost {
         rest := SubStr(xaml, pos + StrLen("</Window.Resources>"))
         if (!RegExMatch(rest, "i)<(Grid|DockPanel|StackPanel|Border|Canvas)\b([^>]*)>", &m))
             return false
-        return InStr(m[2], "Width=")
+        return RegExMatch(m[2], '\bWidth=')
     }
 
     ; 子窗口只跟主界面 Viewbox 比例，不因主题字号改变宽高。
@@ -1326,11 +1326,8 @@ class XAMLHost {
                 width := A_ScreenWidth, height := A_ScreenHeight, dpi := A_ScreenDPI
             }
         }
-        return {Scale: XAMLHost.EditorDisplayScale(width, height, dpi),
-            WorkWidth: workWidth * 96 / dpi, WorkHeight: workHeight * 96 / dpi}
+        return {WorkWidth: workWidth * 96 / dpi, WorkHeight: workHeight * 96 / dpi}
     }
-
-    static EditorDisplayScale(width, height, dpi) => Min(width / 1920, height / 1080) * 96 / dpi
 
     static ApplyDialogVisualScale(&xaml, skip := false, ownerHwnd := 0) {
         if (skip || InStr(xaml, 'x:Key="RmtFluidDialogLayout"'))
@@ -1342,9 +1339,8 @@ class XAMLHost {
             return
         if (InStr(windowHead, "SizeToContent=") && InStr(windowHead, "WidthAndHeight"))
             return
-        ; 用户已保存尺寸的窗口（如变量监视器）不再二次放大，避免越开越大
-        winEnd := InStr(xaml, ">")
-        if (winEnd && InStr(SubStr(xaml, 1, winEnd), "MinWidth="))
+        ; 保存尺寸的窗口显式跳过；MinWidth 只是布局约束，不能作为跳过缩放的依据。
+        if (InStr(xaml, 'x:Key="RmtPreserveWindowSize"'))
             return
         if (XAMLHost.RootContentHasDesignSize(xaml))
             return
@@ -1354,18 +1350,18 @@ class XAMLHost {
         isCommandEditor := InStr(xaml, 'Name="CmdEditorTitle"') || InStr(xaml, 'Name="MacroEditorTitle"')
         if (isCommandEditor)
             display := XAMLHost.EditorDisplay(ownerHwnd)
-        uiScale := isCommandEditor
-            ? display.Scale
-            : XAMLHost.GetMainViewboxScale()
+        ; 编辑表单跟随主界面的实际内容倍率，不能再按显示器分辨率推算另一套倍率。
+        ; 用户界面缩放由引擎统一应用，这里只取不含该预设的主窗基准倍率。
+        uiScale := XAMLHost.GetMainViewboxScale()
         hasSizeToContent := InStr(xaml, "SizeToContent=")
         ; 内容自适应高度的编辑器也要留在工作区内；Viewbox 在到达上限时等比缩小。
         if (isCommandEditor && hasSizeToContent && !InStr(windowHead, "MaxHeight=")) {
             maxHeight := Max(1, Floor(display.WorkHeight - 16))
             xaml := RegExReplace(xaml, "i)<Window\b", '<Window MaxHeight="' maxHeight '"', , 1)
         }
-        if (!isCommandEditor && uiScale <= 1.001)
+        if (!isCommandEditor && Abs(uiScale - 1) <= 0.001)
             return
-        if (!RegExMatch(xaml, 'Width="(\d+(?:\.\d+)?)"', &mw))
+        if (!RegExMatch(windowHead, '\bWidth="(\d+(?:\.\d+)?)"', &mw))
             return
         designW := Float(mw[1])
         rootW := Round(designW)
@@ -1375,13 +1371,22 @@ class XAMLHost {
                 uiScale := Min(uiScale, Max(1, display.WorkHeight - 16) / Float(heightMatch[1]))
         }
         winW := Round(rootW * uiScale)
-        xaml := RegExReplace(xaml, 'Width="' mw[1] '"', 'Width="' winW '"', , 1)
+        xaml := RegExReplace(xaml, '\bWidth="' mw[1] '"', 'Width="' winW '"', , 1)
 
         rootH := ""
-        if (!hasSizeToContent && RegExMatch(xaml, 'Height="(\d+(?:\.\d+)?)"', &mh)) {
+        if (!hasSizeToContent && RegExMatch(windowHead, '\bHeight="(\d+(?:\.\d+)?)"', &mh)) {
             rootH := Round(Float(mh[1]))
-            xaml := RegExReplace(xaml, 'Height="' mh[1] '"', 'Height="' Round(rootH * uiScale) '"', , 1)
+            xaml := RegExReplace(xaml, '\bHeight="' mh[1] '"', 'Height="' Round(rootH * uiScale) '"', , 1)
         }
+
+        ; 最小尺寸随内容倍率一起变化，避免缩小时被原始约束强行撑大。
+        winEnd := InStr(xaml, ">")
+        head := SubStr(xaml, 1, winEnd)
+        for attr in ["MinWidth", "MinHeight"] {
+            if (RegExMatch(head, '\b' attr '="(\d+(?:\.\d+)?)"', &minimum))
+                head := RegExReplace(head, '\b' attr '="[^"]*"', attr '="' Round(Float(minimum[1]) * uiScale) '"')
+        }
+        xaml := head SubStr(xaml, winEnd + 1)
 
         pos := InStr(xaml, "</Window.Resources>")
         if (!pos)
@@ -1450,6 +1455,7 @@ class XAMLHost {
     static ApplyFontSizeDelta(xaml, skip := false) {
         if (skip)
             return xaml
+        original := xaml
         try {
             frozen := []
             customFrozen := []
@@ -1457,16 +1463,16 @@ class XAMLHost {
             ; 多数窗口不含此类控件，故先检测再执行正则：主窗口 XAML 为 114KB，
             ; 无条件执行带回调的全文本替换将耗时数十毫秒。
             if (InStr(xaml, 'Glyph"')) {
-                xaml := RegExReplace(xaml, 'Name="(\w+Glyph)"([^>]*?)FontSize="(\d+(?:\.\d+)?)"'
+                xaml := XAMLHost._ReplaceFontMatches(xaml, 'Name="(\w*Glyph)"([^>]*?)FontSize="(\d+(?:\.\d+)?)"'
                     , (m) => (frozen.Push(m[3]), 'Name="' m[1] '"' m[2] 'FontSize="@@GLYPH' frozen.Length '@@"'))
-                xaml := RegExReplace(xaml, 'FontSize="(\d+(?:\.\d+)?)"([^>]*?)Name="(\w+Glyph)"'
+                xaml := XAMLHost._ReplaceFontMatches(xaml, 'FontSize="(\d+(?:\.\d+)?)"([^>]*?)Name="(\w*Glyph)"'
                     , (m) => (frozen.Push(m[1]), 'FontSize="@@GLYPH' frozen.Length '@@"' m[2] 'Name="' m[3] '"'))
             }
             ; 自定义界面字号由控件配置决定，不随主题缩放。
             if (InStr(xaml, 'UIMacroCustomFont'))
-                xaml := RegExReplace(xaml, '<[^>]*\bTag="UIMacroCustomFont"[^>]*>'
+                xaml := XAMLHost._ReplaceFontMatches(xaml, '<[^>]*\bTag="UIMacroCustomFont"[^>]*>'
                     , (m) => XAMLHost._FreezeCustomFontTag(m[0], customFrozen))
-            scale(s) => RegExReplace(s, 'FontSize="\K\d+(?:\.\d+)?'
+            scale(s) => XAMLHost._ReplaceFontMatches(s, 'FontSize="\K\d+(?:\.\d+)?'
                 , (m) => XAMLHost.FormatFontSize(XAMLHost.ScaleFontSize(m[0])))
             dragPos := InStr(xaml, 'Name="DragArea"')
             result := ""
@@ -1489,8 +1495,18 @@ class XAMLHost {
                 result := StrReplace(result, "@@CUSTOMFONT" A_Index "@@", customFrozen[A_Index])
             return result
         } catch {
-            return xaml
+            return original
         }
+    }
+
+    ; AHK v2 的 RegExReplace 只接受替换字符串；逐个匹配调用转换函数。
+    static _ReplaceFontMatches(source, pattern, replace) {
+        result := "", position := 1
+        while (found := RegExMatch(source, pattern, &match, position)) {
+            result .= SubStr(source, position, found - position) replace(match)
+            position := found + match.Len[0]
+        }
+        return result SubStr(source, position)
     }
 
     static _FreezeCustomFontTag(tag, frozen) {

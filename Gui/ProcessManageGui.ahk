@@ -22,7 +22,7 @@ class ProcessManageGui extends CommentGui {
         this._closed := false
         title := this.ParentTile GetLang(ProcessManageGui.CmdKey)
         height := XAMLHost.CmdTitleBarHeight()
-        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(XAMLHost.FontSize())
+        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(CmdEditorForm.FontSize())
         main.Rows(height, "Auto")
         chrome := XAMLHost.AddCmdTitleBar(main, title, height)
         chrome.F1.ToolTip(StrReplace(GetLang("F1:确定信息"), "F1:", "F1："))
@@ -63,7 +63,7 @@ class ProcessManageGui extends CommentGui {
         template := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", height)
         this.ui := XAMLHost(StrReplace(template, "%app%", main.ToString()), "", this.OwnerHwnd)
         this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"',
-            'Title="' this._EscapeXml(title) '" Width="680" SizeToContent="Height"')
+            'Title="' this._EscapeXml(title) '" Width="' CmdEditorForm.Width '" SizeToContent="Height"')
         this.ui.xaml := StrReplace(this.ui.xaml, 'FontFamily="Segoe UI Variable Display, Segoe UI, sans-serif"',
             'FontFamily="' MainSoftData.FontType '"')
         this.ui.xaml := StrReplace(this.ui.xaml, "%resources%", "")
@@ -81,7 +81,7 @@ class ProcessManageGui extends CommentGui {
     _Pair(body) => body.Add("Grid").Cols("*", "16", "*")
 
     _FieldRow(body, label, right, tip := "") {
-        labelWidth := 6 * XAMLHost.ScaleFontSize(XAMLHost.FontSize())
+        labelWidth := CmdEditorForm.LabelWidth()
         row := body.Add("Grid").Grid_Column(right ? 2 : 0).Margin("0,4").Cols(labelWidth, "*")
         caption := CmdEditorForm.Label(row, label).Margin("0").TextTrimming("CharacterEllipsis")
         if (tip != "")

@@ -165,7 +165,7 @@
 
         for idx, cat in this.CmdCategory {
             expanded := this._catExpand.Get(cat.name, true)
-            this._AddCmdSectionHead(panel, "CatToggle_" idx, "CatArrow_" idx, "CatCount_" idx, cat.icon, GetLang(cat.name), expanded, cat.cmds.Length, "0,4,0,2")
+            this._AddCmdSectionHead(panel, "CatToggle_" idx, "CatArrow_" idx, "CatCount_" idx, cat.icon, GetLang(cat.name), expanded, cat.cmds.Length, "0,1,0,1")
                 .Background("{DynamicResource Accent}")
             catPanel := panel.Add("StackPanel").Name("CatPanel_" idx).Visibility(expanded ? "Visible" : "Collapsed")
             for cmdName in cat.cmds {

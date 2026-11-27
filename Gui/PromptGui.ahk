@@ -3,9 +3,9 @@
 class PromptGui {
     _autoRemark := ""
     _playHotkeys := []
-    static WindowWidth := 560
+    static WindowWidth := 620
     static BodyInset := 16
-    static PairGap := 14
+    static PairGap := 16
     static TimePartWidth := 136
     static TimePartGap := 16
 
@@ -69,7 +69,7 @@ class PromptGui {
     Build() {
         title := this.ParentTile GetLang("提示编辑器")
         titleHeight := XAMLHost.CmdTitleBarHeight()
-        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(XAMLHost.FontSize())
+        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(CmdEditorForm.FontSize())
         main.Rows(titleHeight, "*", 56)
         chrome := XAMLHost.AddCmdTitleBar(main, title, titleHeight)
         chrome.F1.Style("{StaticResource PromptPickButton}").Tag("0")
@@ -199,7 +199,7 @@ class PromptGui {
         right := row.Add("StackPanel").Grid_Column(2)
     }
 
-    LabelColumnWidth() => Ceil(XAMLHost.GetThemeFontSize() * 5.5) + 6
+    LabelColumnWidth() => CmdEditorForm.LabelWidth()
 
     LayoutWidth() {
         timeWidth := 3 * PromptGui.TimePartWidth + 2 * PromptGui.TimePartGap
@@ -253,7 +253,7 @@ class PromptGui {
             target := row.Add("Grid").Grid_Row(1)
         } else {
             row.Cols(this.LabelColumnWidth(), "*")
-            caption.TextWrapping("Wrap").VerticalAlignment("Center").Margin("0,0,6,0")
+            caption.TextWrapping("NoWrap").VerticalAlignment("Center").Margin("0")
             target := row.Add("Grid").Grid_Column(1)
         }
         if (kind == "tools")

@@ -88,7 +88,7 @@ class CompareProEditItemGui {
         this.Gui := CompareProEditItemGuiFacade(this)
         titleHeight := "30"
 
-        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(XAMLHost.FontSize())
+        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(CmdEditorForm.FontSize())
         main.Rows(titleHeight, "*", "44")
 
         ; === 标题栏 ===
@@ -100,9 +100,9 @@ class CompareProEditItemGui {
 
         ; 行0：逻辑关系
         logicRow := body.Add("StackPanel").Grid_Row(0).Orientation("Horizontal").VerticalAlignment("Center")
-        logicRow.Add("TextBlock").Text(GetLang("逻辑关系：")).ToolTip(GetLang("选择全部条件成立，或任一条件成立。")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
+        logicRow.Add("TextBlock").Text(GetLang("逻辑关系：")).ToolTip(GetLang("选择全部条件成立，或任一条件成立。")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
         lc := logicRow.Add("ComboBox").Name("LogicalTypeCon").Width(70).Height(26).MinHeight(26).Margin("4,0,0,0")
-            .VerticalContentAlignment("Center").FontSize("11").Foreground("{DynamicResource InputText}")
+            .VerticalContentAlignment("Center").FontSize(CmdEditorForm.FontSize()).Foreground("{DynamicResource InputText}")
             .Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
         for t in GetLangArr(["且", "或"])
             lc.Add("ComboBoxItem").Content(t)
@@ -126,11 +126,11 @@ class CompareProEditItemGui {
 
         ; 行2：分支指令 + 编辑按钮
         macroLabelRow := body.Add("StackPanel").Grid_Row(2).Orientation("Horizontal").VerticalAlignment("Center")
-        macroLabelRow.Add("TextBlock").Text(GetLang("分支指令:")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
+        macroLabelRow.Add("TextBlock").Text(GetLang("分支指令:")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
         macroLabelRow.Add("Button").Name("BtnEditMacro").Content(GetLang("编辑")).Height(26).MinHeight(26).Margin("10,0,0,0").Padding("12,0").Cursor("Hand")
 
         ; 行3：分支指令内容（多行）
-        body.Add("TextBox").Name("MacroCon").Grid_Row(3).AcceptsReturn("True").TextWrapping("Wrap").FontSize("11")
+        body.Add("TextBox").Name("MacroCon").Grid_Row(3).AcceptsReturn("True").TextWrapping("Wrap").FontSize(CmdEditorForm.FontSize())
             .VerticalContentAlignment("Top").Padding("4,2").Margin("0,2,0,0")
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")

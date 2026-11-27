@@ -86,7 +86,7 @@ class TranslateGui {
         title := this.ParentTile GetLang("翻译编辑器")
         this._title := title
         height := XAMLHost.CmdTitleBarHeight()
-        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(XAMLHost.FontSize())
+        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(CmdEditorForm.FontSize())
         main.Rows(height, "Auto")
         XAMLHost.AddCmdTitleBar(main, title, height)
         body := main.Add("StackPanel").Grid_Row(1).Margin("16,8,16,12").Grid_IsSharedSizeScope("True")
@@ -131,7 +131,7 @@ class TranslateGui {
 
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", height)
         this.ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", this.OwnerHwnd)
-        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="620" SizeToContent="Height"')
+        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="' CmdEditorForm.Width '" SizeToContent="Height"')
         this.ui.xaml := StrReplace(this.ui.xaml, 'FontFamily="Segoe UI Variable Display, Segoe UI, sans-serif"', 'FontFamily="' MainSoftData.FontType '"')
         this.ui.xaml := StrReplace(this.ui.xaml, '%resources%', '')
         this.ui.OnEvent("Window", "Closing", XamlWin.BindCurrent(this, "OnWindowClosing"))
@@ -377,7 +377,7 @@ class TranslateGui {
             . ' BorderBrush="{DynamicResource InputStroke}" BorderThickness="1" Margin="0,2,6,2" Padding="8,2">'
             . '<StackPanel Orientation="Horizontal">'
             . '<TextBlock Text="' esc '" Foreground="{DynamicResource InputText}" VerticalAlignment="Center" Margin="0,0,4,0"/>'
-            . '<Button Name="BtnGlossDel_' id '" Content="✕" FontSize="10" Padding="3,1" Margin="0,-2,-3,0"'
+            . '<Button Name="BtnGlossDel_' id '" Content="✕" FontSize="15" Padding="3,1" Margin="0,-2,-3,0"'
             . ' Background="Transparent" BorderThickness="0" Foreground="{DynamicResource InputText}"'
             . ' VerticalAlignment="Center" Cursor="Hand"/>'
             . '</StackPanel></Border>'

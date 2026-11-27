@@ -57,7 +57,7 @@ class CompareGui {
         this._title := title
         titleHeight := XAMLHost.CmdTitleBarHeight()
 
-        main := XAML_Generator("Grid").Name("CmdRoot").Background("{DynamicResource BgColor}").TextElement_FontSize(XAMLHost.FontSize())
+        main := XAML_Generator("Grid").Name("CmdRoot").Background("{DynamicResource BgColor}").TextElement_FontSize(CmdEditorForm.FontSize())
         main.Rows(titleHeight, "*")
 
         ; === 标题栏 ===
@@ -71,13 +71,13 @@ class CompareGui {
         top := body.Add("Grid").Grid_Row(0).Grid_ColumnSpan(7)
         top.Cols("28", "*", "8", "90", "8", "*", "28")
         logicSp := top.Add("StackPanel").Grid_Column(0).Grid_ColumnSpan(2).Orientation("Horizontal").VerticalAlignment("Center")
-        logicSp.Add("TextBlock").Text(GetLang("逻辑关系：")).ToolTip(GetLang("选择全部条件成立，或任一条件成立。")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
+        logicSp.Add("TextBlock").Text(GetLang("逻辑关系：")).ToolTip(GetLang("选择全部条件成立，或任一条件成立。")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
         logicCon := logicSp.Add("ComboBox").Name("LogicalTypeCon").Width(70).Height(26).MinHeight(26).Margin("4,0,0,0").SelectedIndex("0")
-            .VerticalContentAlignment("Center").FontSize("11").Foreground("{DynamicResource InputText}")
+            .VerticalContentAlignment("Center").FontSize(CmdEditorForm.FontSize()).Foreground("{DynamicResource InputText}")
             .Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
         for t in GetLangArr(["且", "或"])
             logicCon.Add("ComboBoxItem").Content(t)
-        top.Add("TextBlock").Grid_Column(3).Text(GetLang("备注：")).VerticalAlignment("Center").HorizontalAlignment("Left").Foreground("{DynamicResource TextMain}").FontSize("12")
+        top.Add("TextBlock").Grid_Column(3).Text(GetLang("备注：")).VerticalAlignment("Center").HorizontalAlignment("Left").Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
         top.Add("TextBox").Grid_Column(5).Grid_ColumnSpan(2).Name("RemarkCon").Height(26).MinHeight(26).VerticalAlignment("Center")
             .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1").VerticalContentAlignment("Center").Padding("4,0")
@@ -105,19 +105,19 @@ class CompareGui {
 
         foundCol := macroRow.Add("StackPanel").Grid_Column(0).Orientation("Vertical")
         ft := foundCol.Add("StackPanel").Orientation("Horizontal")
-        ft.Add("TextBlock").Text(GetLang("真-分支指令:（可选）")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
+        ft.Add("TextBlock").Text(GetLang("真-分支指令:（可选）")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
         ft.Add("Button").Name("BtnTrueEdit").Content(GetLang("编辑")).Height(26).MinHeight(26).Margin("8,0,0,0").Cursor("Hand")
         foundCol.Add("TextBox").Name("TrueMacroCon").Height(66).Margin("0,2,0,0").AcceptsReturn("True").TextWrapping("Wrap")
-            .VerticalContentAlignment("Top").Padding("4,2").FontSize(11)
+            .VerticalContentAlignment("Top").Padding("4,2").FontSize(CmdEditorForm.FontSize())
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
 
         unfoundCol := macroRow.Add("StackPanel").Grid_Column(2).Orientation("Vertical")
         ft2 := unfoundCol.Add("StackPanel").Orientation("Horizontal")
-        ft2.Add("TextBlock").Text(GetLang("假-分支指令:（可选）")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
+        ft2.Add("TextBlock").Text(GetLang("假-分支指令:（可选）")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
         ft2.Add("Button").Name("BtnFalseEdit").Content(GetLang("编辑")).Height(26).MinHeight(26).Margin("8,0,0,0").Cursor("Hand")
         unfoundCol.Add("TextBox").Name("FalseMacroCon").Height(66).Margin("0,2,0,0").AcceptsReturn("True").TextWrapping("Wrap")
-            .VerticalContentAlignment("Top").Padding("4,2").FontSize(11)
+            .VerticalContentAlignment("Top").Padding("4,2").FontSize(CmdEditorForm.FontSize())
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
 
@@ -128,9 +128,9 @@ class CompareGui {
         saveLeft.Cols(6 * XAMLHost.ScaleFontSize(XAMLHost.FontSize()), "*")
         saveLeft.Add("TextBlock").Name("ResultSaveLabel").Text(GetLang("结果变量："))
             .ToolTip(GetLang("条件成立时保存 1，不成立时保存 0；留空则不保存。"))
-            .VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
+            .VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
         saveLeft.Add("ComboBox").Grid_Column(1).Name("SaveNameCon").Height(26).MinHeight(26)
-            .IsEditable("True").VerticalAlignment("Center").VerticalContentAlignment("Center").FontSize("11")
+            .IsEditable("True").VerticalAlignment("Center").VerticalContentAlignment("Center").FontSize(CmdEditorForm.FontSize())
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
 
@@ -143,7 +143,7 @@ class CompareGui {
         ; === 创建 XAMLHost ===
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)
         this.ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", this.OwnerHwnd)
-        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="560" Height="' this._FitHeight() '"')
+        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="620" Height="' this._FitHeight() '"')
         this.ui.xaml := StrReplace(this.ui.xaml, 'FontFamily="Segoe UI Variable Display, Segoe UI, sans-serif"', 'FontFamily="' MainSoftData.FontType '"')
         this.ui.xaml := StrReplace(this.ui.xaml, '%resources%', this._CondiScrollStyles())
 

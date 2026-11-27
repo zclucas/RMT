@@ -13,7 +13,7 @@ class ClassifierCommandGui extends CommentGui {
         this._feedbackFields := Map()
         title := this.ParentTile GetLang(this.CmdKey)
         height := XAMLHost.CmdTitleBarHeight()
-        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(XAMLHost.FontSize())
+        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(CmdEditorForm.FontSize())
         main.Rows(height, "Auto")
         XAMLHost.AddCmdTitleBar(main, title, height, , , , , this.F1Glyph)
         body := main.Add("StackPanel").Grid_Row(1).Margin("16,8,16,12").Grid_IsSharedSizeScope("True")
@@ -26,7 +26,7 @@ class ClassifierCommandGui extends CommentGui {
         this.ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", this.OwnerHwnd)
         FeedbackDiagnostics.BindEditor(this.ui, this, this._feedbackFields)
         this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"',
-            'Title="' this._EscapeXml(title) '" Width="620" SizeToContent="Height"')
+            'Title="' this._EscapeXml(title) '" Width="' CmdEditorForm.Width '" SizeToContent="Height"')
         this.ui.xaml := StrReplace(this.ui.xaml, 'FontFamily="Segoe UI Variable Display, Segoe UI, sans-serif"', 'FontFamily="' MainSoftData.FontType '"')
         this.ui.xaml := StrReplace(this.ui.xaml, "%resources%", "")
         this.ui.OnEvent("Window", "Closing", XamlWin.BindCurrent(this, "OnWindowClosing"))
@@ -45,8 +45,8 @@ class ClassifierCommandGui extends CommentGui {
     _BuildResultFields(body) {
         results := body.Add("Grid")
         results.Cols("*", 16, "*")
-        this._Variable(results, "保存结果变量：", "ResultVar")
-        this._Variable(results, "错误信息变量：", "ErrorVar", 2)
+        this._Variable(results, "结果变量：", "ResultVar")
+        this._Variable(results, "错误变量：", "ErrorVar", 2)
     }
 
     _Row(body, label, name, labelAlignment := "Center", labelGroup := "CommandLabel", labelTip := "") {
@@ -251,7 +251,7 @@ class WindowControlGui extends ClassifierCommandGui {
     }
 
     _Row(body, label, name, labelAlignment := "Center", labelGroup := "CommandLabel", labelTip := "") {
-        labelWidth := 6 * XAMLHost.ScaleFontSize(XAMLHost.FontSize())
+        labelWidth := CmdEditorForm.LabelWidth()
         row := body.Add("Grid").Name(name "Row").Margin("0,4").Cols(labelWidth, "*")
         caption := CmdEditorForm.Label(row, label).Name(name "Label").Margin("0").VerticalAlignment(labelAlignment)
         if (labelTip != "")
@@ -326,7 +326,7 @@ class WindowControlGui extends ClassifierCommandGui {
         this._Variable(results, "结果变量：", "ResultVar")
         if (this.HasErrorField)
             this._Variable(results, "错误变量：", "ErrorVar", 2)
-        CommandTimeoutFields.Add(body, false, , , 6 * XAMLHost.ScaleFontSize(XAMLHost.FontSize()))
+        CommandTimeoutFields.Add(body, false, , , CmdEditorForm.LabelWidth())
     }
 
     Init(cmd) {
@@ -751,7 +751,7 @@ class ControlOperationGui extends WindowControlGui {
         : choice == "写入控件值" ? GetLang("修改控件值") : super._ChoiceLabel(choice)
 
     _BuildResultFields(body) {
-        CommandTimeoutFields.Add(body, false, , , 6 * XAMLHost.ScaleFontSize(XAMLHost.FontSize()))
+        CommandTimeoutFields.Add(body, false, , , CmdEditorForm.LabelWidth())
     }
 
     _BuildArgumentField(body) {
@@ -1528,7 +1528,7 @@ class AiDecisionGui extends ClassifierCommandGui {
         results := body.Add("Grid")
         results.Cols("*", 16, "*")
         this._Variable(results, "结果变量：", "ResultVar")
-        CommandTimeoutFields.Add(body)
+        CommandTimeoutFields.Add(body, false, , , CmdEditorForm.LabelWidth())
     }
 
     _TextBox(parent, name, height := 26) {

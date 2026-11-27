@@ -70,7 +70,7 @@ class CompareProGui {
         this._title := title
         titleHeight := XAMLHost.CmdTitleBarHeight()
 
-        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(XAMLHost.FontSize())
+        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(CmdEditorForm.FontSize())
         main.Rows(titleHeight, "*")
 
         XAMLHost.AddCmdTitleBar(main, title, titleHeight)
@@ -89,7 +89,7 @@ class CompareProGui {
         meta := inner.Add("Grid").Grid_Row(0).Margin("0,0,0,8")
         meta.Cols("48", "*")
         meta.Add("TextBlock").Grid_Column(0).Text(GetLang("备注：")).VerticalAlignment("Center")
-            .Foreground("{DynamicResource TextMain}").FontSize("12")
+            .Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
         ; TextBox 默认模板会裁掉上下边，用外层 Border 画四边
         remarkBd := meta.Add("Border").Grid_Column(1).Height("28").MinHeight("28").VerticalAlignment("Center")
             .Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource ControlBorder}")
@@ -109,7 +109,7 @@ class CompareProGui {
 
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)
         this.ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", this.OwnerHwnd)
-        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="660" Height="540"')
+        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="620" Height="540"')
         this.ui.xaml := StrReplace(this.ui.xaml, 'FontFamily="Segoe UI Variable Display, Segoe UI, sans-serif"', 'FontFamily="' MainSoftData.FontType '"')
         this.ui.xaml := StrReplace(this.ui.xaml, '%resources%', '')
 

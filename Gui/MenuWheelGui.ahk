@@ -265,12 +265,13 @@ class MenuWheelGui {
         if (itemCount > 16)
             itemCount := 16
 
-        radius := Round(radius * this.dpiScale)
-        innerR := Round(innerR * this.dpiScale)
-        iconSize := Round(iconSize * this.dpiScale)
-        fontSize := Round(fontSize * this.dpiScale)
+        ; WPF 的尺寸与字号使用 DIP，由窗口 DPI 自动缩放，不能再预乘屏幕倍率。
+        radius := Round(radius)
+        innerR := Round(innerR)
+        iconSize := Round(iconSize)
+        fontSize := Round(fontSize)
 
-        pad := Round(4 * this.dpiScale)
+        pad := 4
         cx := radius + pad
         cy := radius + pad
         winW := (radius + pad) * 2
@@ -446,10 +447,10 @@ class MenuWheelGui {
                 lbl.FontSize(fontSize).FontWeight("SemiBold")
                 lbl.Style("{StaticResource WheelLabelStyle_" idx "}")
                 lbl.TextAlignment("Center").TextTrimming("CharacterEllipsis")
-                lbl.Width(Round(78 * this.dpiScale)).Canvas_Left(lpx - Round(39 * this.dpiScale)).Canvas_Top(lpy - 8).IsHitTestVisible("False")
+                lbl.Width(78).Canvas_Left(lpx - 39).Canvas_Top(lpy - 8).IsHitTestVisible("False")
 
                 ; 运行状态色点（默认隐藏，放在文本下方居中）
-                dotSize := Round(8 * this.dpiScale)
+                dotSize := 8
                 stateDot := canvas.Add("Ellipse").Name("StateDot_" idx)
                 stateDot.Width(dotSize).Height(dotSize)
                 stateDot.Canvas_Left(lpx - Round(dotSize / 2)).Canvas_Top(lpy + fontSize + 2)
@@ -469,10 +470,10 @@ class MenuWheelGui {
                 lbl.FontSize(fontSize).FontWeight("SemiBold")
                 lbl.Style("{StaticResource WheelLabelStyle_" idx "}")
                 lbl.TextAlignment("Center").TextTrimming("CharacterEllipsis")
-                lbl.Width(Round(78 * this.dpiScale)).Canvas_Left(cpx - Round(39 * this.dpiScale)).Canvas_Top(cpy - 8).IsHitTestVisible("False")
+                lbl.Width(78).Canvas_Left(cpx - 39).Canvas_Top(cpy - 8).IsHitTestVisible("False")
 
                 ; 运行状态色点（默认隐藏，放在文本下方居中）
-                dotSize := Round(8 * this.dpiScale)
+                dotSize := 8
                 stateDot := canvas.Add("Ellipse").Name("StateDot_" idx)
                 stateDot.Width(dotSize).Height(dotSize)
                 stateDot.Canvas_Left(cpx - Round(dotSize / 2)).Canvas_Top(cpy + fontSize + 2)
@@ -489,6 +490,7 @@ class MenuWheelGui {
         }
 
         this.ui := XAMLHost(win.ToString(), "", 0)
+        this.ui.skipFontScale := true ; 轮盘尺寸与字号由自身比例控制，WPF 单独处理显示器 DPI。
         this.closed := false
         this.swipeTriggered := false
         this.isOpen := true

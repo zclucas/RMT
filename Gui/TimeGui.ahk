@@ -60,7 +60,7 @@ class TimeGui {
         if (width == "")
             width := this._labW
         return parent.Add("TextBlock").Text(GetLang(text)).Width(String(width)).VerticalAlignment("Center")
-            .Foreground("{DynamicResource TextMain}").FontSize("12").Margin(margin)
+            .Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize()).Margin(margin)
     }
 
     _Edit(parent, name, width := "") {
@@ -75,7 +75,7 @@ class TimeGui {
 
     _Combo(parent, name, editable := true, width := "") {
         el := parent.Add("ComboBox").Name(name).Height(26).MinHeight(26).VerticalAlignment("Center").HorizontalAlignment("Left")
-            .VerticalContentAlignment("Center").FontSize("11")
+            .VerticalContentAlignment("Center").FontSize(CmdEditorForm.FontSize())
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
         if (editable)
@@ -108,7 +108,7 @@ class TimeGui {
         this._title := title
         titleHeight := XAMLHost.CmdTitleBarHeight()
 
-        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(XAMLHost.FontSize())
+        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(CmdEditorForm.FontSize())
         main.Rows(titleHeight, "Auto")
 
         ; === 标题栏 ===
