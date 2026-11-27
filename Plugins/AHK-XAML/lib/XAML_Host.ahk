@@ -1609,7 +1609,7 @@ class XAMLHost {
                     tag := RegExReplace(tag, '\bVerticalAlignment="[^"]*"', 'VerticalAlignment="Stretch"')
                 else
                     tag := RegExReplace(tag, ">$", ' VerticalAlignment="Stretch">')
-                ; 静止透明（透出标题栏色），hover=ControlBorder，按下=BtnPressBg
+                ; 静止透明（透出标题栏色），悬停与按下使用主题交互色。
                 if (InStr(tag, "Background="))
                     tag := RegExReplace(tag, '\bBackground="[^"]*"', 'Background="Transparent"')
                 if (!InStr(tag, "Style="))

@@ -78,7 +78,7 @@ class PromptGui {
             . '<Border x:Name="surface" Background="{TemplateBinding Background}">'
             . '<ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>'
             . '<ControlTemplate.Triggers>'
-            . '<Trigger Property="IsMouseOver" Value="True"><Setter TargetName="surface" Property="Background" Value="{DynamicResource ControlBorder}"/></Trigger>'
+            . '<Trigger Property="IsMouseOver" Value="True"><Setter TargetName="surface" Property="Background" Value="{DynamicResource EditHoverBg}"/></Trigger>'
             . '<Trigger Property="Tag" Value="1"><Setter TargetName="surface" Property="Background" Value="{DynamicResource BtnPressBg}"/></Trigger>'
             . '</ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>')
         body := main.Add("ScrollViewer").Grid_Row(1).MaxHeight(400).VerticalScrollBarVisibility("Auto")

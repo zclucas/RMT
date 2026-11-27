@@ -568,13 +568,13 @@ public partial class AhkWpfEngine
         return screenX >= x0 && screenX <= x1 && screenY >= y0 && screenY <= y1;
     }
 
-    // 最大化钮被标成 HTMAXBUTTON 后 WPF 触发器不走；底色与最小化/关闭一致：hover=ControlBorder，按下=BtnPressBg
+    // 最大化钮被标成 HTMAXBUTTON 后 WPF 触发器不走；底色与最小化/关闭使用同一组主题交互色。
     void SetMaxBtnChrome(System.Windows.Controls.Button btn, bool hover, bool pressed)
     {
         Brush brush = System.Windows.Media.Brushes.Transparent;
         try
         {
-            string key = pressed ? "BtnPressBg" : (hover ? "ControlBorder" : null);
+            string key = pressed ? "BtnPressBg" : (hover ? "EditHoverBg" : null);
             if (key != null && win != null)
             {
                 Brush found = win.TryFindResource(key) as Brush;

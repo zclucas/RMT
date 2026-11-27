@@ -172,7 +172,7 @@ class CompareProGui {
             . '<Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource Accent}"/>'
             . '</Trigger>'
             . '<Trigger Property="IsPressed" Value="True">'
-            . '<Setter TargetName="Bd" Property="Background" Value="{DynamicResource ControlBorder}"/>'
+            . '<Setter TargetName="Bd" Property="Background" Value="{DynamicResource BtnPressBg}"/>'
             . '</Trigger>'
             . '<Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.4"/></Trigger>'
             . '</ControlTemplate.Triggers>'

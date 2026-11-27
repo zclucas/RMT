@@ -436,7 +436,7 @@ class MainWin {
             . '</Style>'
         ; 页签选中背景默认占位（主题应用时由 ApplyWinThemeToXaml 用 Accent 低透明度覆盖）
         tabSelBgRes := '<SolidColorBrush x:Key="TabSelBg" Color="#80FFFFFF"/>'
-            . '<SolidColorBrush x:Key="BtnPressBg" Color="#E0CCCCCC"/>'
+            . '<SolidColorBrush x:Key="BtnPressBg" Color="#400078D7"/>'
             . '<SolidColorBrush x:Key="ActionPressBg" Color="#FF106EBE"/>'
             . '<SolidColorBrush x:Key="ListAltBg" Color="#40000000"/>'
             . '<SolidColorBrush x:Key="ListRowAltBg" Color="#FF2A2A2A"/>'
