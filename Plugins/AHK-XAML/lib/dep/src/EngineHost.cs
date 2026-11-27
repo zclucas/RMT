@@ -1956,6 +1956,7 @@ public partial class AhkWpfEngine
         try
         {
             firstFrame = new RmtFirstFrame(win, waitForInitialUpdates, startHidden, placeEditor);
+            PlacePanelScreenPosition();
             ApplyTaskbarExStyle(win);
             if (startHidden) win.ShowActivated = false;
             if (isDaemon)
@@ -1974,6 +1975,7 @@ public partial class AhkWpfEngine
                 win.Resources.Remove("OriginalNativeOwner");
             if (firstFrame == null)
                 firstFrame = new RmtFirstFrame(win, waitForInitialUpdates, startHidden, placeEditor);
+            PlacePanelScreenPosition();
             if (isDaemon)
             {
                 ApplyTaskbarExStyle(win);

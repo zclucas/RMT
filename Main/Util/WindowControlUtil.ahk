@@ -33,8 +33,10 @@ class WindowControlData {
 class ControlInfoData extends WindowControlData {
     ActionType := "检测控件存在"
     ResultVar := "Res"
+    ValueVar := "ConValue"
     ControlVar := "TargetCon"
-    HwndVar := "ConHwnd"
+    HwndVar := ""
+    StateVar := ""
     XVar := "ConX"
     YVar := "ConY"
     WindowXVar := "ConWinX"
@@ -50,7 +52,7 @@ class WindowControl {
         "选中控件", "加入选区", "移出选区", "切换勾选", "设置勾选", "展开控件", "折叠控件", "滚动到控件",
         "设置范围值", "读取范围值", "等待控件出现", "检测控件存在", "展开/折叠", "读取位置/宽高"]
     ; Actions 的旧枚举顺序保留，仅在编辑菜单中移除已合并的操作。
-    static InfoActions := ["检测控件存在", "读取控件值", "读取位置/宽高"]
+    static InfoActions := ["检测控件存在", "读取位置/宽高"]
     static PositionFields := ["XVar", "YVar", "WindowXVar", "WindowYVar", "WidthVar", "HeightVar"]
 
     static NormalizeAction(action) {
@@ -86,7 +88,7 @@ class WindowControl {
 
     static CommandKey(action) {
         action := this.NormalizeAction(action)
-        if (action == "读取控件信息")
+        if (action == "读取控件信息" || action == "读取控件值")
             return "控件信息"
         for name in this.InfoActions
             if (action == name)
@@ -284,8 +286,20 @@ class WindowControl {
 
         switch action {
             case "等待控件出现", "检测控件存在":
-                if (action == "检测控件存在" && IsSet(outputs))
+                if (action == "检测控件存在" && IsSet(outputs)) {
                     outputs.hwnd := this._NativeHwnd(element)
+                    outputs.value := ""
+                    if (InputField(data, "ValueVar", "") != "") {
+                        result := this.ProbeValue(element)
+                        if (result.supported)
+                            outputs.value := result.value
+                    }
+                    if (data.HasOwnProp("StateVar") && data.StateVar != "") {
+                        enabled := outputs.hwnd ? DllCall("IsWindowEnabled", "Ptr", outputs.hwnd) : this._Int(element, 28)
+                        visible := !this._Int(element, 38) && (!outputs.hwnd || DllCall("IsWindowVisible", "Ptr", outputs.hwnd))
+                        outputs.state := (enabled ? "可交互" : "不可交互") "-" (visible ? "可见" : "不可见")
+                    }
+                }
                 return 1
             case "读取位置/宽高":
                 bounds := this._Bounds(element)
@@ -1195,6 +1209,14 @@ OnWindowControl(tableItem, cmd, index) {
     if (controlAction == "检测控件存在" && data.HasOwnProp("HwndVar") && data.HwndVar != "") {
         names.Push(data.HwndVar)
         values.Push(failure == "" && value == 1 ? outputs.hwnd : 0)
+    }
+    if (controlAction == "检测控件存在" && data.HasOwnProp("StateVar") && data.StateVar != "") {
+        names.Push(data.StateVar)
+        values.Push(failure == "" && value == 1 ? outputs.state : "不可见")
+    }
+    if (controlAction == "检测控件存在" && InputField(data, "ValueVar", "") != "") {
+        names.Push(data.ValueVar)
+        values.Push(failure == "" && value == 1 ? outputs.value : "")
     }
     if (controlAction == "读取位置/宽高") {
         bounds := failure == "" ? outputs.bounds : ""

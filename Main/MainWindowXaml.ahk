@@ -165,12 +165,12 @@ class MainWin {
         chromeFlat := '<Style TargetType="Button"><Setter Property="VerticalAlignment" Value="Stretch"/><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button"><Border x:Name="border" Background="{TemplateBinding Background}" CornerRadius="0" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="border" Property="Background" Value="{DynamicResource EditHoverBg}"/></Trigger><Trigger Property="IsPressed" Value="True"><Setter TargetName="border" Property="Background" Value="{DynamicResource BtnPressBg}"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>'
         minBtn := btnGroup.Add("Button").Name("BtnMinimize").Style("{StaticResource TitleBarCloseButton}").WindowChrome_IsHitTestVisibleInChrome("True").Width(46).Height(titleHeight).MinHeight(titleHeight).Padding("0").VerticalAlignment("Stretch").Background("Transparent").Foreground("{DynamicResource TitleBarForeground}").BorderThickness(0)
         minBtn.InjectResources(chromeFlat)
-        minBtn.Add("TextBlock").Text(Chr(0xE921)).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets").FontSize(10).VerticalAlignment("Center").HorizontalAlignment("Center")
+        minBtn.Add("TextBlock").Text(Chr(0xE921)).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets").FontSize(XAMLHost.TitleFontSize()).VerticalAlignment("Center").HorizontalAlignment("Center")
         maxBtn := btnGroup.Add("Button").Name("BtnMaximize").Style("{StaticResource TitleBarCloseButton}").WindowChrome_IsHitTestVisibleInChrome("True").Width(46).Height(titleHeight).MinHeight(titleHeight).Padding("0").VerticalAlignment("Stretch").Background("Transparent").Foreground("{DynamicResource TitleBarForeground}").BorderThickness(0)
         maxBtn.InjectResources(chromeFlat)
-        maxBtn.Add("TextBlock").Text(Chr(0xE922)).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets").FontSize(10).VerticalAlignment("Center").HorizontalAlignment("Center")
+        maxBtn.Add("TextBlock").Text(Chr(0xE922)).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets").FontSize(XAMLHost.TitleFontSize()).VerticalAlignment("Center").HorizontalAlignment("Center")
         closeBtn := btnGroup.Add("Button").Name("BtnWinClose").Style("{StaticResource TitleBarCloseButton}").WindowChrome_IsHitTestVisibleInChrome("True").Width(46).Height(titleHeight).MinHeight(titleHeight).Padding("0").VerticalAlignment("Stretch").Background("Transparent").Foreground("{DynamicResource TitleBarForeground}").BorderThickness(0)
-        XAMLHost._AddTitleChromeGlyph(closeBtn, "BtnWinCloseGlyph", Chr(0xE8BB), 10)
+        XAMLHost._AddTitleChromeGlyph(closeBtn, "BtnWinCloseGlyph", Chr(0xE8BB), XAMLHost.TitleFontSize())
 
         this._BuildStatusBar(main)
 

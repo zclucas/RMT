@@ -1,5 +1,6 @@
 #Requires AutoHotkey v2.0
 #Include BrowserPageInfo.ahk
+#Include BrowserElementInfo.ahk
 
 OnBrowser(tableItem, cmd, index) {
     parts := StrSplit(cmd, "_")
@@ -69,9 +70,14 @@ OnBrowser(tableItem, cmd, index) {
             if (name != "")
                 MySetGlobalVariable([name], [val[field]], false)
     }
+    if (BrowserElementInfo.IsRead(actionType) && success && !item.Killed) {
+        for label, name in BrowserElementInfo.Outputs(actionType)
+            if (InputField(data, name, "") != "")
+                MySetGlobalVariable([data.%name%], [val[name]], false)
+    }
     legacyPageOutput := actionType == "标签页信息" && !data.HasOwnProp("PageIdVar") && !data.HasOwnProp("PageUrlVar")
         && !data.HasOwnProp("PageTitleVar") && !data.HasOwnProp("PageStateVar")
-    if (data.SaveVar != "" && !item.Killed && (actionType != "标签页信息" || legacyPageOutput)) {
+    if (data.SaveVar != "" && !item.Killed && !BrowserElementInfo.IsRead(actionType) && (actionType != "标签页信息" || legacyPageOutput)) {
         saveVar := data.SaveVar
         result := legacyPageOutput && success ? val[CmdEnumZh(BrowserPageInfo.NormalizeField(InputField(data, "PageField", "网址")), BrowserPageInfo.Fields)] : val
         MySetGlobalVariable([saveVar], [result], false)
@@ -96,23 +102,19 @@ BrowserTargetRef(tableItem, index, data, resolve) {
     return resolve(raw)
 }
 
-BrowserMatchedTarget(tableItem, index, data, resolve) {
-    mode := CmdEnumZh(BrowserPageInfo.NormalizeSource(InputField(data, "TabMatchMode", "自动匹配")), BrowserActions.TabMatchModes)
-    if (mode == "自动匹配")
-        return BrowserTargetRef(tableItem, index, data, resolve)
-    raw := InputField(data, "TargetRef", "")
-    value := Trim(BrowserPageInfo.IsRegex(mode) ? BrowserResolveRegex(raw, resolve) : resolve(raw))
-    if (value == "")
+BrowserMatchingIds(targets, mode, value, currentId := "") {
+    if (mode != "当前标签页" && value == "")
         throw ValueError(GetLang("请填写标签页匹配值。"))
     if (mode == "序号" && (!IsInteger(value) || value < 1))
         throw ValueError(GetLang("标签页序号必须为正整数。"))
     if (BrowserPageInfo.IsRegex(mode))
         RegExMatch("", value)
     matches := []
-    for target in JSON.parse(BrowserUtil.GetTabs()) {
+    for target in targets {
         id := target.Has("targetId") ? target["targetId"] : target["id"]
         matched := false
         switch mode {
+            case "当前标签页": matched := id == currentId
             case "标签页ID": matched := StrCompare(id, value, true) == 0
             case "序号": matched := target["index"] == Integer(value)
             case "网址": matched := StrCompare(target["url"], value, true) == 0
@@ -123,9 +125,39 @@ BrowserMatchedTarget(tableItem, index, data, resolve) {
         if (matched)
             matches.Push(id)
     }
+    return matches
+}
+
+BrowserMatchedTarget(tableItem, index, data, resolve) {
+    mode := BrowserActions.MatchMode(InputField(data, "TabMatchMode", "自动匹配"))
+    if (mode == "自动匹配")
+        return BrowserTargetRef(tableItem, index, data, resolve)
+    if (mode == "元素匹配") {
+        matches := BrowserElementInfo.MatchTabs(resolve(data.Selector), CmdEnumZh(data.SelectorType, ["CSS", "XPath"]), () => tableItem.Items[index].Killed)
+        if (matches.Length != 1)
+            throw TargetError(GetLang(matches.Length ? "匹配到多个标签页，请缩小匹配范围。" : "未找到匹配的标签页。"))
+        return matches[1]
+    }
+    raw := InputField(data, "TargetRef", "")
+    value := Trim(BrowserPageInfo.IsRegex(mode) ? BrowserResolveRegex(raw, resolve) : resolve(raw))
+    matches := BrowserMatchingIds(JSON.parse(BrowserUtil.GetTabs()), mode, value)
     if (matches.Length != 1)
         throw TargetError(GetLang(matches.Length ? "匹配到多个标签页，请缩小匹配范围。" : "未找到匹配的标签页。"))
     return matches[1]
+}
+
+BrowserCloseTargets(targets, matches, inverse := false) {
+    if (!matches.Length)
+        throw TargetError(GetLang("未找到匹配的标签页。"))
+    selected := Map(), result := []
+    for id in matches
+        selected[id] := true
+    for target in targets {
+        id := target.Has("targetId") ? target["targetId"] : target["id"]
+        if (inverse ? !selected.Has(id) : selected.Has(id))
+            result.Push(id)
+    }
+    return result
 }
 
 BrowserResolveRegex(text, resolve) {
@@ -149,7 +181,9 @@ BrowserResolveRegex(text, resolve) {
 _ExecuteBrowserAction(tableItem, index, data, actionType, resolve, selType) {
     actionType := BrowserActions.Normalize(actionType)
     if (actionType == "当前标签页")
-        return BrowserUtil.CurrentTabAction(CmdEnumZh(InputField(data, "CurrentTabAction", "刷新"), BrowserActions.CurrentTabActions), () => tableItem.Items[index].Killed)
+        return BrowserUtil.CurrentTabAction(CmdEnumZh(InputField(data, "CurrentTabAction", "刷新"), BrowserActions.CurrentTabActions), () => tableItem.Items[index].Killed, InputField(data, "BrowserPort", 9222))
+    if (actionType == "关闭标签页" && BrowserActions.ClosesCurrentTabOnly(InputField(data, "TabMatchMode", "自动匹配"), InputField(data, "TabCloseMode", "匹配标签页")))
+        return BrowserUtil.CurrentTabAction("关闭", () => tableItem.Items[index].Killed)
     if (BrowserActions.UsesTimeout(actionType)) {
         data := data.Clone()
         data.TimeoutMs := TimeoutPolicy.ResolveMs(data.TimeoutMs, resolve, 2147483647)
@@ -163,6 +197,8 @@ _ExecuteBrowserAction(tableItem, index, data, actionType, resolve, selType) {
     }
 
     switch actionType {
+        case "元素信息", "元素位置/宽高":
+            return BrowserElementInfo.ReadMatched(data, resolve(data.Selector), selType, () => tableItem.Items[index].Killed)
         case "标签页信息":
             source := CmdEnumZh(BrowserPageInfo.NormalizeSource(InputField(data, "PageSource", "当前标签页")), BrowserPageInfo.Sources)
             fields := []
@@ -171,6 +207,8 @@ _ExecuteBrowserAction(tableItem, index, data, actionType, resolve, selType) {
                     fields.Push(field)
             if (!fields.Length)
                 throw ValueError(GetLang("请至少填写一个信息变量。"))
+            if (source == "元素匹配")
+                return BrowserElementInfo.ReadPageFields(resolve(data.Selector), selType, fields, InputField(data, "BrowserPort", 9222), () => tableItem.Items[index].Killed)
             binding := source == "窗口绑定" ? resolve(ResolveBindWindow(tableItem, index, InputField(data, "WinInfo", ""))) : ""
             url := !BrowserPageInfo.UsesMatchValue(source) ? "" : BrowserPageInfo.IsRegex(source) ? BrowserResolveRegex(data.Url, resolve) : resolve(data.Url)
             return BrowserPageInfo.ReadFields(source, fields, url, binding,
@@ -212,8 +250,23 @@ _ExecuteBrowserAction(tableItem, index, data, actionType, resolve, selType) {
             return targetRef
 
         case "关闭标签页", "关闭标签":
-            targetRef := BrowserMatchedTarget(tableItem, index, data, resolve)
-            BrowserUtil.CloseTabByRef(targetRef)
+            mode := BrowserActions.MatchMode(InputField(data, "TabMatchMode", "自动匹配"))
+            if (mode == "自动匹配") {
+                BrowserUtil.CloseTabByRef(BrowserTargetRef(tableItem, index, data, resolve))
+                return true
+            }
+            raw := InputField(data, "TargetRef", "")
+            value := (mode == "元素匹配" || mode == "当前标签页") ? "" : Trim(BrowserPageInfo.IsRegex(mode) ? BrowserResolveRegex(raw, resolve) : resolve(raw))
+            currentId := mode == "当前标签页" ? BrowserPageInfo.Read("当前标签页", "标签页ID", "", "", InputField(data, "BrowserPort", 9222), () => tableItem.Items[index].Killed) : ""
+            targets := JSON.parse(BrowserUtil.GetTabs())
+            matches := mode == "元素匹配" ? BrowserElementInfo.MatchTabs(resolve(data.Selector), selType, () => tableItem.Items[index].Killed, targets)
+                : BrowserMatchingIds(targets, mode, value, currentId)
+            ids := BrowserCloseTargets(targets, matches, BrowserActions.TabCloseMode(InputField(data, "TabCloseMode", "匹配标签页")) == "非匹配标签页")
+            for id in ids {
+                if (tableItem.Items[index].Killed)
+                    return false
+                BrowserUtil.CloseTabByRef(id)
+            }
             return true
 
         case "获取标签页列表":

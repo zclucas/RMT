@@ -241,7 +241,7 @@ RegisterCommandResultVars(data) {
     }
     errorVar := data.HasOwnProp("ErrorVar") ? data.ErrorVar : ""
     names := [data.ResultVar, errorVar]
-    for field in ["TypeVar", "ClassVar", "HwndVar", "XVar", "YVar", "WindowXVar", "WindowYVar", "WidthVar", "HeightVar"]
+    for field in ["TypeVar", "ClassVar", "HwndVar", "StateVar", "ValueVar", "XVar", "YVar", "WindowXVar", "WindowYVar", "WidthVar", "HeightVar"]
         if (data.HasOwnProp(field))
             names.Push(data.%field%)
     for name in names

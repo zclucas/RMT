@@ -17,6 +17,7 @@ class BrowserGui extends CommentGui {
     _picking := false
     _updatingActions := false
     _playHotkeys := []
+    _pickHotkeys := []
     _testRunning := false
     WindowBindingContext := ""
 
@@ -27,7 +28,7 @@ class BrowserGui extends CommentGui {
         height := XAMLHost.CmdTitleBarHeight()
         main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(CmdEditorForm.FontSize())
         main.Rows(height, "Auto")
-        XAMLHost.AddCmdTitleBar(main, title, height)
+        XAMLHost.AddCmdTitleBar(main, title, height, "BtnClosePanel", "", "", "", Chr(0xE707))
 
         body := main.Add("StackPanel").Grid_Row(1).Margin("16,8,16,12").Grid_IsSharedSizeScope("True")
         this._Field(body, "备注：", "Remark", false)
@@ -47,17 +48,30 @@ class BrowserGui extends CommentGui {
         this._Choice(this._Row(browserGrid, "浏览器：", "CloseBrowserRow"), "CloseBrowserType", BrowserActions.CloseBrowserTypes).Grid_Column(1)
         openModeRow := this._Row(browserGrid, "选项设置：", "OpenModeRow", , GetLang("默认复用对应窗口；新窗口始终另开窗口；无痕模式复用对应无痕窗口。")).Grid_Column(2)
         this._Choice(openModeRow, "OpenMode", BrowserActions.OpenModes).Grid_Column(1)
-        this._Choice(this._Row(body, "匹配方式：", "PageSourceRow", , GetLang("网址和标题精确匹配，正则表达式按对应内容匹配；查找时短暂切换标签页，结束后恢复。")), "PageSource", BrowserPageInfo.Sources).Grid_Column(1)
+        pageSourceGrid := body.Add("Grid").Name("PageSourceRow").Cols("*", 16, "*")
+        this._Choice(this._Row(pageSourceGrid, "匹配方式：", , , GetLang("网址和标题精确匹配；元素匹配按CSS或XPath检查元素是否存在，需要CDP。查找时短暂切换标签页，结束后恢复。")), "PageSource", BrowserPageInfo.Sources).Grid_Column(1)
         currentRow := body.Add("Grid").Name("CurrentTabActionRow").Cols("*", 16, "*")
-        this._Choice(this._Row(currentRow, "标签操作：", , , GetLang("操作最近使用浏览器窗口的当前标签页，无需 CDP。")), "CurrentTabAction", BrowserActions.CurrentTabActions).Grid_Column(1)
+        tabAction := this._Choice(this._Row(currentRow, "标签操作：", , , GetLang("刷新、后退、前进与关闭无需 CDP；清空缓存需要 CDP，清理后刷新当前标签页。")), "CurrentTabAction", BrowserActions.CurrentTabActions).Grid_Column(1)
+        this._CurrentTabActionStyle(tabAction)
         matchGrid := body.Add("Grid").Name("TabMatchOptions").Cols("*", 16, "*")
         this._Choice(this._Row(matchGrid, "匹配方式："), "TabMatchMode", BrowserActions.TabMatchModes).Grid_Column(1)
-        matchValueRow := this._Row(matchGrid, "匹配值：", , , GetLang("ID、网址与标题精确匹配；序号从1开始，正则匹配网址或标题。支持变量 {变量名}。" )).Grid_Column(2)
+        matchValueRow := this._Row(matchGrid, "匹配值：", "TabMatchValueRow", , GetLang("ID、网址与标题精确匹配，支持正则表达式和变量 {变量名}。" )).Grid_Column(2)
         CmdEditorForm.Combo(matchValueRow, "TabMatchValue", true).Grid_Column(1)
-        this._Field(body, "浏览器路径：", "BrowserPath", false, 26, "BrowserPathRow")
-        this._Choice(this._Row(body, "标签页范围：", "CloseScopeRow"), "CloseScope", BrowserActions.CloseScopes).Grid_Column(1)
         targetRefRow := this._Row(body, "目标标签页：", "TargetRefRow", , GetLang("支持直接输入索引(1开始)、TargetID、标题/URL关键词，或选择变量 {变量名}"))
         CmdEditorForm.Combo(targetRefRow, "TargetRef", true).Grid_Column(1)
+        selector := this._Row(body, "网页元素：", "SelectorRow", ,
+            GetLang("左侧选择CSS或XPath，右侧填写选择器。元素匹配查找当前CDP连接中包含该元素的标签页。")).Add("Grid").Grid_Column(1)
+        selector.Cols("Auto", 6, "*", 6, "Auto", 6, "Auto")
+        this._Choice(selector, "SelectorType", BrowserGui.SelectorTypes).Grid_Column(0).Width(77)
+        CmdEditorForm.Combo(selector, "Selector", true).Grid_Column(2)
+        CmdEditorForm.IconButton(selector, "BtnPickSelector", 0xE707, "F1：拾取网页元素").Grid_Column(4)
+        CmdEditorForm.IconButton(selector, "BtnSelectorDetails", 0xE946, "选择器详情").Grid_Column(6)
+            .Background("{DynamicResource ControlBg}").BorderBrush("{DynamicResource ControlBorder}").BorderThickness(1)
+            .InjectResources(FrontInfoGui._ToolBtnHoverStyle())
+        closeOptions := body.Add("Grid").Name("TabCloseModeRow").Cols("*", 16, "*")
+        this._Choice(this._Row(closeOptions, "关闭方式："), "TabCloseMode", BrowserActions.TabCloseModes).Grid_Column(1)
+        this._Field(body, "浏览器路径：", "BrowserPath", false, 26, "BrowserPathRow")
+        this._Choice(this._Row(body, "标签页范围：", "CloseScopeRow"), "CloseScope", BrowserActions.CloseScopes).Grid_Column(1)
         urlRow := this._Row(body, "网址：", "UrlRow", "UrlLabel")
         urlInput := urlRow.Add("Grid").Grid_Column(1).Cols("*", 6, "Auto")
         CmdEditorForm.Combo(urlInput, "Url", true)
@@ -81,12 +95,31 @@ class BrowserGui extends CommentGui {
                     field == "网址" ? "Url" : field == "标题" ? "Title" : "State", 1)
         }
 
-        selector := this._Row(body, "网页元素：", "SelectorRow", ,
-            GetLang("左侧选择类型，右侧填写选择器。")).Add("Grid").Grid_Column(1)
-        selector.Cols("Auto", 6, "*", 6, "Auto")
-        this._Choice(selector, "SelectorType", BrowserGui.SelectorTypes).Grid_Column(0)
-        this._TextBox(selector, "Selector").Grid_Column(2).HorizontalScrollBarVisibility("Hidden")
-        CmdEditorForm.TextButton(selector, "BtnPickSelector", "拾取", "拾取网页元素").Grid_Column(4)
+        for action in ["元素信息", "元素位置/宽高"] {
+            elementOutputs := body.Add("Grid").Name(action == "元素信息" ? "ElementInfoOutputs" : "ElementPositionOutputs").Cols("*", 16, "*")
+            fields := BrowserElementInfo.Outputs(action), index := 0, rows := []
+            loop (fields.Count + 1) // 2
+                rows.Push("Auto")
+            elementOutputs.Rows(rows*)
+            labels := action == "元素信息" ? ["存在变量", "元素值变量", "元素变量", "标签页ID", "元素状态", "HTML变量"] : ["视口X变量", "视口Y变量", "页面X变量", "页面Y变量", "宽度变量", "高度变量"]
+            for label in labels {
+                name := fields[label]
+                tip := name == "ElementExistsVar" ? "1存在，0不存在；检测时不等待元素出现。"
+                    : name == "ElementValueVar" ? "表单读取当前值，勾选框返回0/1，其他元素读取文本。"
+                    : name == "ElementRefVar" ? "保存元素选择器，后续网页元素可填写 {变量名}，保持相同CSS或XPath类型；不存在时清空。"
+                    : name == "ElementTabIdVar" ? "保存匹配元素所在标签页ID；未找到时清空，留空不获取。"
+                    : name == "ElementHtmlVar" ? "保存完整元素HTML，包含标签与属性；留空不获取。"
+                    : name == "ElementStateVar" ? "返回交互-可见状态，如可交互-可见；未找到为不可见。"
+                    : InStr(name, "Page") ? "元素中心点相对整张网页左上角的坐标，单位为CSS像素。"
+                    : (name == "ElementXVar" || name == "ElementYVar") ? "元素中心点相对网页可视区域左上角的坐标，单位为CSS像素。"
+                    : "元素边界框尺寸，包含内边距与边框，单位为CSS像素。"
+                row := this._Row(elementOutputs, label "：", , , GetLang(tip)).Grid_Row(index // 2).Grid_Column(Mod(index, 2) * 2)
+                CmdEditorForm.Combo(row, name, true).Grid_Column(1)
+                if (name == "ElementTabIdVar" || name == "ElementStateVar" || name == "ElementHtmlVar")
+                    CmdEditorForm.OutputVariablePlaceholder(row, name, name == "ElementTabIdVar" ? "TabId" : name == "ElementHtmlVar" ? "ElHtml" : "ElState", 1)
+                index++
+            }
+        }
 
         this._Choice(this._Row(body, "等待状态：", "ConditionRow"), "Condition", BrowserGui.Conditions).Grid_Column(1)
         this._Choice(this._Row(body, "加载状态：", "LoadStateRow"), "LoadState", BrowserGui.LoadStates).Grid_Column(1)
@@ -149,12 +182,15 @@ class BrowserGui extends CommentGui {
         this.ui.OnEvent("BtnEditUrl", "Click", ObjBindMethod(this, "_QueueTextEditor", "Url"))
         this.ui.OnEvent("ActionGroup", "SelectionChanged", XamlWin.BindCurrent(this, "OnActionGroupChanged"))
         this.ui.OnEvent("ActionType", "SelectionChanged", XamlWin.BindCurrent(this, "OnActionTypeChanged"))
-        for name in ["BrowserType", "CloseBrowserType", "PageSource", "PageIdVar", "PageStateVar"]
+        for name in ["BrowserType", "CloseBrowserType", "PageSource", "PageIdVar", "PageStateVar", "CurrentTabAction", "TabMatchMode", "TabCloseMode"]
             this.ui.OnEvent(name, "SelectionChanged", XamlWin.BindCurrent(this, "OnFieldsChanged"))
         for name in ["PageIdVar", "PageStateVar"]
             this.ui.OnEvent(name, "TextChanged", XamlWin.BindCurrent(this, "OnFieldsChanged"))
         this.ui.OnEvent("BtnCdpHelp", "Click", XamlWin.BindCurrent(this, "ShowCDPHelp"))
-        this.ui.OnEvent("BtnPickSelector", "Click", (*) => SetTimer(this._PickSelector.Bind(this, this.ui), -1))
+        this.ui.OnEvent("BtnPickSelector", "Click", XamlWin.BindCurrent(this, "OnPickSelector"))
+        this.ui.OnEvent("BtnSelectorDetails", "Click", XamlWin.BindCurrent(this, "OnSelectorDetails"))
+        this.ui.OnEvent("BtnCmdF1", "Click", XamlWin.BindCurrent(this, "OnPickSelector"))
+        this.ui.Update("BtnCmdF1", "ToolTip", GetLang("F1：拾取网页元素"))
         this.ui.OnEvent("BtnPickKey", "Click", (*) => SetTimer(this._OpenKeyPicker.Bind(this), -1))
 
         BindCmdEditorChrome(this.ui, "#指令手册/浏览器", XamlWin.BindCurrent(this, "TriggerMacro"), "!l")
@@ -162,7 +198,10 @@ class BrowserGui extends CommentGui {
 
     OnWindowLoad(state, ctrl, event) {
         super.OnWindowLoad(state, ctrl, event)
-        this._playHotkeys := WinHotkey.Register(["!l"], XamlWin.BindCurrent(this, "TriggerMacro"), this.Hwnd())
+        if (!this._playHotkeys.Length)
+            this._playHotkeys := WinHotkey.Register(["!l"], XamlWin.BindCurrent(this, "TriggerMacro"), this.Hwnd())
+        if (!this._pickHotkeys.Length)
+            this._pickHotkeys := WinHotkey.Register(["F1"], XamlWin.BindCurrent(this, "OnPickSelector"), this.Hwnd())
     }
 
     TriggerMacro(*) {
@@ -180,6 +219,35 @@ class BrowserGui extends CommentGui {
     _UnregisterPlayHotkeys() {
         WinHotkey.UnregisterAll(this._playHotkeys)
         this._playHotkeys := []
+        WinHotkey.UnregisterAll(this._pickHotkeys)
+        this._pickHotkeys := []
+    }
+
+    _FillTabMatchModes(action, selected := "") {
+        if (selected == "")
+            selected := this.ui.Query("TabMatchMode")
+        modes := BrowserActions.MatchModes(action)
+        this._tabMatchAction := action
+        this._updatingMatchModes := true
+        try {
+            this._ComboPush("TabMatchMode", "ClearItems", "")
+            for mode in modes
+                this._ComboPush("TabMatchMode", "AddItem", GetLang(mode))
+            this._ComboPush("TabMatchMode", "SelectedIndex", CmdEnumIndex(selected, modes))
+        } finally this._updatingMatchModes := false
+    }
+
+    _CurrentTabActionStyle(combo) {
+        template := '<DataTemplate><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>'
+            . '<TextBlock Text="{Binding}" VerticalAlignment="Center"/>'
+            . '<TextBlock x:Name="TabActionGlyph" Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="16" Foreground="{DynamicResource TextSub}"/>'
+            . '</Grid><DataTemplate.Triggers>'
+        icons := ["E72C", "E72B", "E72A", "E711", "E74D"]
+        for index, action in BrowserActions.CurrentTabActions
+            template .= '<DataTrigger Binding="{Binding}" Value="' EscapeXamlXml(GetLang(action)) '"><Setter TargetName="TabActionGlyph" Property="Text" Value="&#x' icons[index] ';"/></DataTrigger>'
+        template .= '</DataTemplate.Triggers></DataTemplate>'
+        combo.InjectResources('<Style x:Key="BrowserTabActionItem" TargetType="ComboBoxItem" BasedOn="{StaticResource {x:Type ComboBoxItem}}"><Setter Property="HorizontalContentAlignment" Value="Stretch"/><Setter Property="ContentTemplate"><Setter.Value>' template '</Setter.Value></Setter></Style>')
+        combo.SetProp("ItemContainerStyle", "{DynamicResource BrowserTabActionItem}")
     }
 
     _Row(body, label, rowName := "", labelName := "", labelTip := "") {
@@ -242,7 +310,7 @@ class BrowserGui extends CommentGui {
         this._activeActions := actions
         batch := [{ControlName: "ActionType", PropertyName: "ClearItems", Value: ""}]
         for action in actions
-            batch.Push({ControlName: "ActionType", PropertyName: "AddItem", Value: GetLang(action)})
+            batch.Push({ControlName: "ActionType", PropertyName: "AddItem", Value: this._ActionLabel(action)})
         batch.Push({ControlName: "ActionType", PropertyName: "SelectedIndex", Value: 0})
         this._updatingActions := true
         try this.ui.BatchUpdate(batch)
@@ -261,7 +329,11 @@ class BrowserGui extends CommentGui {
             ? this._activeActions[index + 1] : this._activeActions[1]
     }
 
+    _ActionLabel(action) => GetLang(action == "元素信息" ? "基础信息" : action == "元素位置/宽高" ? "位置/宽高" : action == "提取控件值" ? "元素值" : action)
+
     OnFieldsChanged(*) {
+        if (this.HasOwnProp("_updatingMatchModes") && this._updatingMatchModes)
+            return
         state := this.ui.Query("BrowserType", "CloseBrowserType")
         action := this._Action(this.ui)
         browser := action == "关闭"
@@ -290,14 +362,20 @@ class BrowserGui extends CommentGui {
         isTab := BrowserActions.IsTabAction(action)
         isInfo := action == "标签页信息"
         isMatching := action == "切换标签页" || action == "关闭标签页"
+        if (isMatching && (!this.HasOwnProp("_tabMatchAction") || this._tabMatchAction != action))
+            this._FillTabMatchModes(action)
+        matchMode := isMatching ? CmdEnumZh(this.ui.Query("TabMatchMode"), BrowserActions.MatchModes(action)) : ""
         source := isInfo ? (pageSource != "" ? pageSource : CmdEnumZh(this.ui.Query("PageSource"), BrowserPageInfo.Sources)) : ""
         isMouseCoord := action == "鼠标移动" || action == "鼠标点击" || action == "鼠标滚轮"
-        hasSelector := BrowserActions.UsesSelector(action)
+        elementMatch := (isInfo && source == "元素匹配") || (isMatching && matchMode == "元素匹配")
+        hasSelector := BrowserActions.UsesSelector(action) || elementMatch
         rows := Map(
             "BrowserRow", isOpen, "CloseBrowserRow", isClose, "CloseScopeRow", isClose,
             "BrowserPathRow", (isOpen && browser == "自定义路径") || (isClose && browser == "自定义"),
             "CdpOptionRow", isOpen, "PageSourceRow", isInfo, "PageOutputs", isInfo,
             "CurrentTabActionRow", action == "当前标签页", "TabMatchOptions", isMatching,
+            "ElementInfoOutputs", action == "元素信息", "ElementPositionOutputs", action == "元素位置/宽高",
+            "TabMatchValueRow", isMatching && matchMode != "当前标签页" && !elementMatch, "TabCloseModeRow", action == "关闭标签页",
             "UrlRow", isOpen || action == "当前页跳转" || action == "新建标签页" || (isInfo && BrowserPageInfo.UsesMatchValue(source)),
             "TargetRefRow", BrowserActions.UsesTarget(action),
             "SelectorRow", hasSelector, "ConditionRow", action == "等待元素",
@@ -310,15 +388,19 @@ class BrowserGui extends CommentGui {
             "StorageTypeRow", action == "Storage操作",
             "JsCodeRow", action == "执行JS" || action == "Cookie操作" || action == "Storage操作",
             "AttrNameRow", attrLabels.Has(action),
-            "SavePathRow", action == "网页截图", "CommandTimeoutRow", !isTab && BrowserActions.UsesTimeout(action),
-            "SaveVarRow", !isTab && !BrowserActions.IsCloseAction(action))
+            "SavePathRow", action == "网页截图", "CommandTimeoutRow", !isTab && !BrowserActions.IsElementValue(action) && BrowserActions.UsesTimeout(action),
+            "SaveVarRow", !isTab && !BrowserActions.IsCloseAction(action) && !BrowserElementInfo.IsRead(action))
         for field, name in BrowserPageInfo.Outputs
             rows[name "Row"] := isInfo
         for name, visible in rows
             this._ComboPush(name, "Visibility", visible ? "Visible" : "Collapsed")
+        this._ComboPush("BtnCmdF1", "Visibility", hasSelector ? "Visible" : "Collapsed")
+        if (!hasSelector && this._picking)
+            this._FinishPicker()
         field := isInfo ? (pageField != "" ? pageField
-            : (this.ui.Query("PageIdVar") != "" || this.ui.Query("PageStateVar") != "") ? "标签页ID" : "") : ""
-        this._ComboPush("CdpNotice", "Visibility", BrowserActions.RequiresCDP(action, field) ? "Visible" : "Collapsed")
+            : (this.ui.Query("PageIdVar") != "" || this.ui.Query("PageStateVar") != "") ? "标签页ID" : "") : (action == "当前标签页" ? CmdEnumZh(this.ui.Query("CurrentTabAction"), BrowserActions.CurrentTabActions) : "")
+        closeMode := CmdEnumZh(this.ui.Query("TabCloseMode"), BrowserActions.TabCloseModes)
+        this._ComboPush("CdpNotice", "Visibility", BrowserActions.RequiresCDP(action, field, isInfo ? source : matchMode, closeMode) ? "Visible" : "Collapsed")
         this._ComboPush("UrlLabel", "Text", GetLang(isInfo && BrowserPageInfo.MatchesTitle(source) ? "标题：" : "网址："))
         if (attrLabels.Has(action))
             this._ComboPush("AttrNameLabel", "Text", attrLabels[action])
@@ -335,67 +417,156 @@ class BrowserGui extends CommentGui {
         }
     }
 
+    OnSelectorDetails(*) {
+        selector := this.ui.Query("Selector")
+        if (RegExMatch(Trim(selector), "^\{([^{}\r\n]+)\}$", &reference)) {
+            if (!TryGetVarValue(&value, reference[1], false, Map(), false)) {
+                RmtDialog.Info(GetLang("元素变量尚未赋值：") reference[1], GetLang("选择器详情"), this.Hwnd())
+                return
+            }
+            selector := String(value)
+        }
+        RmtDialog.Info(Trim(selector) != "" ? selector : GetLang("未拾取元素"), GetLang("选择器详情"), this.Hwnd())
+    }
+
+    OnPickSelector(*) {
+        if (IsObject(this.ui) && (this._picking || this.ui.Query("SelectorRow>Visibility") == "Visible"))
+            SetTimer(this._PickSelector.Bind(this, this.ui), -1)
+    }
+
+    _HasPickerBrowser() {
+        for hwnd in WinGetList("ahk_class Chrome_WidgetWin_1")
+            if (BrowserPageInfo.IsBrowser(hwnd) && IsObject(BrowserUtil.ManagedSessionForWindow(hwnd)))
+                return true
+        return false
+    }
+
+    _PickerSourceWindow() {
+        ; 按窗口前后顺序选择最近使用的浏览器，读取其当前标签页。
+        for hwnd in WinGetList("ahk_class Chrome_WidgetWin_1")
+            if (BrowserPageInfo.IsBrowser(hwnd) && DllCall("IsWindowVisible", "Ptr", hwnd))
+                return hwnd
+        return 0
+    }
+
+    _EnsurePickerBrowser() {
+        if (this._HasPickerBrowser())
+            return true
+        sourceWindow := this._PickerSourceWindow()
+        prompt := sourceWindow ? "只能拾取CDP窗口元素`n当前标签页用打开受控浏览器窗口"
+            : "只能拾取CDP窗口元素，打开受控浏览器窗口"
+        if (!RmtDialog.Confirm(GetLang(prompt), GetLang("拾取网页元素"), this.Hwnd()))
+            return false
+        url := sourceWindow ? BrowserPageInfo.ReadWindow(sourceWindow).url : "about:blank"
+        BrowserUtil.OpenUrl(url, "默认浏览器", "", false, 0, "", 9222, 10000, true, true)
+        return true
+    }
+
     _PickSelector(ui) {
-        if (this.ui != ui)
+        if (this.ui != ui || (!this._picking && ui.Query("SelectorRow>Visibility") != "Visible"))
             return
         if (this._picking) {
             this._FinishPicker()
             return
         }
+        if (MainSoftData.SelectAreaAction != "" || MainSoftData.GetAreaAction != "")
+            return
         this._picking := true
         try {
-            tabs := JSON.parse(BrowserUtil.GetTabs())
-            if (!tabs.Length)
-                throw Error(GetLang("没有可拾取的网页。"))
-            pages := []
-            for candidate in tabs
-                if (RegExMatch(candidate["url"], "i)^(https?|file)://"))
-                    pages.Push(candidate)
-            tab := pages.Length ? pages[1] : tabs[1]
-            url := ""
-            if (pages.Length != 1) {
-                tabs := pages.Length ? pages : tabs
-                prompt := GetLang("输入标签页编号或要打开的网页网址。")
-                for i, candidate in tabs
-                    prompt .= "`n" i ". " SubStr(candidate["title"] != "" ? candidate["title"] : candidate["url"], 1, 72)
-                result := RmtDialog.Input(prompt, GetLang("拾取网页元素"), pages.Length ? "1" : "", this.Hwnd())
-                if (result.Result != "OK" || this.ui != ui || !this._picking)
-                    return
-                value := Trim(result.Value)
-                if (IsInteger(value) && Integer(value) >= 1 && Integer(value) <= tabs.Length)
-                    tab := tabs[Integer(value)]
-                else if (RegExMatch(value, "i)^(https?|file)://"))
-                    url := value
-                else
-                    throw Error(GetLang("请输入有效的标签页编号或网址。"))
-            }
-            BrowserUtil.SwitchTab(tab["targetId"])
-            if (url != "")
-                BrowserUtil.Navigate(url)
-            if (!RegExMatch(BrowserUtil.GetUrl(), "i)^(https?|file)://"))
-                throw Error(GetLang("请先打开要拾取的网页。"))
-
-            this._pickerToken := "__rmtPick_" DllCall("GetCurrentProcessId", "UInt") "_" A_TickCount
-            selectorType := CmdEnumZh(ui.Query("SelectorType"), BrowserGui.SelectorTypes)
-            action := this._Action(ui)
-            preferControl := action == "点击" || action == "输入" || action == "清空"
-                || action == "选择下拉" || action == "勾选" || action == "提取控件值"
-            BrowserUtil.StartElementPicker(this._pickerToken, selectorType, preferControl)
-            this._pickTimer := this._PollPicker.Bind(this, ui, this._pickerToken, selectorType)
-            SetTimer(this._pickTimer, 150)
-            ui.Update("BtnPickSelector", "Content", GetLang("取消拾取"))
-            ui.Update("BtnPickSelector", "ToolTip", GetLang("取消拾取"))
-            Toast.Info(GetLang("在网页上单击选取，按 Esc 取消。"))
+            if (!this._EnsurePickerBrowser() || this.ui != ui || !this._picking)
+                return
+            this._pickerSelectorType := CmdEnumZh(ui.Query("SelectorType"), BrowserGui.SelectorTypes)
+            this._pickerKeys := WinHotkey.Register(["Enter", "Escape"], this._PickerKey.Bind(this, ui))
+            if (this._pickerKeys.Length != 2)
+                throw Error(GetLang("无法注册拾取确认热键。"))
+            this._pickerWindow := 0
+            this._pickerTab := ""
+            this._pickerLastProbe := 0
+            WinHide("ahk_id " this.Hwnd())
+            this._pickerHidden := true
+            SetSystemCursor("CROSS")
+            CursorOutputTip.Show("", 0x7FFFFFFF, false, false, true, "移动鼠标拾取元素")
+            this._pickTimer := this._PollPicker.Bind(this, ui)
+            SetTimer(this._pickTimer, 100)
+            ui.Update("BtnPickSelector", "Content", Chr(0xE711))
+            ui.Update("BtnPickSelector", "ToolTip", GetLang("F1：取消拾取"))
+            ui.Update("BtnCmdF1", "ToolTip", GetLang("F1：取消拾取"))
         } catch as e {
-            if (this.ui == ui) {
-                if (e is BrowserConnectionError)
-                    this.ShowCDPHelp()
-                else
-                    RmtDialog.Info(GetLang(e.Message), GetLang("拾取网页元素"), this.Hwnd())
-            }
+            this._FinishPicker()
+            if (this.ui == ui)
+                RmtDialog.Info(GetLang(e.Message), GetLang("拾取网页元素"), this.Hwnd())
         } finally {
             if (!this.HasOwnProp("_pickTimer") && this._picking)
                 this._FinishPicker()
+        }
+    }
+
+    _PickerKey(ui, key, *) {
+        Critical("On")
+        if (!this._picking || this.ui != ui)
+            return
+        if (key == "Escape") {
+            this._FinishPicker()
+            return
+        }
+        failure := ""
+        try {
+            if (!this._UpdatePickerTarget(true))
+                throw Error(GetLang("非CDP窗口无法拾取元素"))
+            result := BrowserUtil.Evaluate("window." this._pickerToken "?.confirm() ?? ''")
+            if (SubStr(result, 1, 7) != "picked:")
+                throw Error(GetLang("请将鼠标移到可拾取的网页元素上。"))
+            ui.Update("SelectorType", "SelectedIndex", CmdEnumIndex(this._pickerSelectorType, BrowserGui.SelectorTypes))
+            ui.Update("Selector", "Text", SubStr(result, 8))
+        } catch as e {
+            failure := e.Message
+        } finally {
+            this._FinishPicker()
+        }
+        Critical("Off")
+        if (failure != "" && this.ui == ui)
+            RmtDialog.Info(failure, GetLang("拾取网页元素"), this.Hwnd())
+    }
+
+    _PickerMouseWindow() {
+        CoordMode("Mouse", "Screen")
+        MouseGetPos(, , &hwnd)
+        return hwnd ? DllCall("GetAncestor", "Ptr", hwnd, "UInt", 2, "Ptr") : 0
+    }
+
+    _UpdatePickerTarget(force := false) {
+        hwnd := this._PickerMouseWindow()
+        session := hwnd && BrowserPageInfo.IsBrowser(hwnd) ? BrowserUtil.ManagedSessionForWindow(hwnd) : ""
+        if (!IsObject(session)) {
+            this._StopPickerPage()
+            this._pickerWindow := 0
+            return false
+        }
+        if (!force && hwnd == this._pickerWindow && A_TickCount - this._pickerLastProbe < 400)
+            return true
+        if (hwnd != this._pickerWindow)
+            this._StopPickerPage()
+        info := BrowserPageInfo.Snapshot(hwnd)
+        tab := BrowserPageInfo.TargetId(info, session["port"])
+        this._pickerLastProbe := A_TickCount
+        if (hwnd == this._pickerWindow && tab == this._pickerTab && this.HasOwnProp("_pickerToken"))
+            return true
+        this._StopPickerPage()
+        BrowserUtil.SwitchTab(tab)
+        this._pickerWindow := hwnd
+        this._pickerTab := tab
+        this._pickerToken := "__rmtPick_" DllCall("GetCurrentProcessId", "UInt") "_" A_TickCount
+        action := this._Action(this.ui)
+        preferControl := action == "点击" || action == "输入" || action == "清空"
+            || action == "选择下拉" || action == "勾选" || action == "提取控件值"
+        BrowserUtil.StartElementPicker(this._pickerToken, this._pickerSelectorType, preferControl)
+        return true
+    }
+
+    _StopPickerPage() {
+        if (this.HasOwnProp("_pickerToken")) {
+            try BrowserUtil.Evaluate("window." this._pickerToken "?.stop()")
+            this.DeleteProp("_pickerToken")
         }
     }
 
@@ -406,24 +577,24 @@ class BrowserGui extends CommentGui {
         RmtDialog.Info(text, GetLang("CDP 说明"), this.Hwnd())
     }
 
-    _PollPicker(ui, token, selectorType) {
-        if (this.ui != ui || this._pickerToken != token)
+    _PollPicker(ui) {
+        Critical("On")
+        if (this.ui != ui || !this._picking)
             return
         try {
-            state := BrowserUtil.Evaluate("window." token "?.result ?? 'missing'")
-            if (state == "pending")
+            if (!this._UpdatePickerTarget())
                 return
-            if (SubStr(state, 1, 7) == "picked:") {
-                ui.Update("SelectorType", "SelectedIndex", CmdEnumIndex(selectorType, BrowserGui.SelectorTypes))
-                ui.Update("Selector", "Text", SubStr(state, 8))
-            } else if (state != "cancelled") {
-                Toast.Info(GetLang("网页已切换或关闭，请重新拾取。"))
-            }
+            state := BrowserUtil.Evaluate("window." this._pickerToken "?.result ?? 'missing'")
+            if (state == "missing") {
+                this._StopPickerPage()
+                this._pickerWindow := 0
+            } else if (state != "pending")
+                this._FinishPicker()
         } catch {
-            Toast.Info(GetLang("网页已切换或关闭，请重新拾取。"))
+            ; 浏览器切页、加载时重新注入，保留全局确认和取消热键。
+            this._StopPickerPage()
+            this._pickerWindow := 0
         }
-        this._FinishPicker()
-        try WinActivate(this.Hwnd())
     }
 
     _OpenKeyPicker(*) {
@@ -458,14 +629,28 @@ class BrowserGui extends CommentGui {
             SetTimer(this._pickTimer, 0)
             this.DeleteProp("_pickTimer")
         }
-        if (this.HasOwnProp("_pickerToken")) {
-            try BrowserUtil.Evaluate("window." this._pickerToken "?.stop()")
-            this.DeleteProp("_pickerToken")
+        if (this.HasOwnProp("_pickerKeys")) {
+            WinHotkey.UnregisterAll(this._pickerKeys)
+            this.DeleteProp("_pickerKeys")
+        }
+        this._StopPickerPage()
+        if (this.HasOwnProp("_pickerHidden") && this._pickerHidden) {
+            this._pickerHidden := false
+            CursorOutputTip.Show("")
+            SetSystemCursor()
+            if (IsObject(this.ui)) {
+                wasDetectingHidden := A_DetectHiddenWindows
+                DetectHiddenWindows(true)
+                try WinShow("ahk_id " this.Hwnd())
+                finally DetectHiddenWindows(wasDetectingHidden)
+                try WinActivate("ahk_id " this.Hwnd())
+            }
         }
         this._picking := false
         if (IsObject(this.ui)) {
-            this.ui.Update("BtnPickSelector", "Content", GetLang("拾取"))
-            this.ui.Update("BtnPickSelector", "ToolTip", GetLang("拾取网页元素"))
+            this.ui.Update("BtnPickSelector", "Content", Chr(0xE707))
+            this.ui.Update("BtnPickSelector", "ToolTip", GetLang("F1：拾取网页元素"))
+            this.ui.Update("BtnCmdF1", "ToolTip", GetLang("F1：拾取网页元素"))
         }
     }
 
@@ -536,16 +721,21 @@ class BrowserGui extends CommentGui {
                 this._ComboPush("TargetRef", "AddItem", "{" varName "}")
                 this._ComboPush("TabMatchValue", "AddItem", "{" varName "}")
                 this._ComboPush("Url", "AddItem", "{" varName "}")
+                this._ComboPush("Selector", "AddItem", "{" varName "}")
             }
         }
         for name in ["Url", "TargetRef", "Selector", "JsCode", "AttrName", "BrowserPath", "CoordX", "CoordY"]
             this._ComboPush(name, "Text", String(this.Data.%name%))
         this._ComboPush("SaveVar", "Text", GetLang(this.Data.SaveVar))
         this._ComboPush("TabMatchValue", "Text", this.Data.TargetRef)
-        this._ComboPush("TabMatchMode", "SelectedIndex", CmdEnumIndex(BrowserPageInfo.NormalizeSource(this.Data.TabMatchMode), BrowserActions.TabMatchModes))
+        this._FillTabMatchModes(actionType, this.Data.TabMatchMode)
+        this._ComboPush("TabCloseMode", "SelectedIndex", CmdEnumIndex(BrowserActions.TabCloseMode(this.Data.TabCloseMode), BrowserActions.TabCloseModes))
         this._ComboPush("CurrentTabAction", "SelectedIndex", CmdEnumIndex(this.Data.CurrentTabAction, BrowserActions.CurrentTabActions))
         for field, name in BrowserPageInfo.Outputs
             this._ComboPush(name, "Text", this.Data.%name%)
+        for action in ["元素信息", "元素位置/宽高"]
+            for label, name in BrowserElementInfo.Outputs(action)
+                this._ComboPush(name, "Text", this.Data.%name%)
         this._ComboPush(actionType == "网页截图" ? "SavePath" : "Text", "Text", String(this.Data.Text))
         this._ComboPush("ClearBefore", "IsChecked", this.Data.ClearBefore ? "True" : "False")
         this._ComboPush("Checked", "IsChecked", this.Data.Checked ? "True" : "False")
@@ -562,24 +752,28 @@ class BrowserGui extends CommentGui {
                     this._ComboPush("ActionGroup", "SelectedIndex", groupIndex - 1)
                     this._ComboPush("ActionType", "ClearItems", "")
                     for name in group.actions
-                        this._ComboPush("ActionType", "AddItem", GetLang(name))
+                        this._ComboPush("ActionType", "AddItem", this._ActionLabel(name))
                     this._ComboPush("ActionType", "SelectedIndex", actionIndex - 1)
                     break 2
                 }
             }
         }
         ; 历史操作只在编辑原指令时保留，避免打开再保存改变已有宏。
-        for legacyAction in BrowserActions.LegacyTabActions {
-            if (actionType != legacyAction)
-                continue
-            this._activeActions := BrowserActions.Groups[1].actions.Clone()
-            this._activeActions.Push(actionType)
-            this._ComboPush("ActionGroup", "SelectedIndex", 0)
-            this._ComboPush("ActionType", "ClearItems", "")
-            for action in this._activeActions
-                this._ComboPush("ActionType", "AddItem", GetLang(action))
-            this._ComboPush("ActionType", "SelectedIndex", this._activeActions.Length - 1)
-            break
+        for groupIndex, group in BrowserActions.Groups {
+            legacyActions := group.name == "网页" ? BrowserActions.LegacyTabActions
+                : group.name == "元素信息" ? BrowserActions.LegacyElementValueActions : []
+            for legacyAction in legacyActions {
+                if (actionType != legacyAction)
+                    continue
+                this._activeActions := group.actions.Clone()
+                this._activeActions.Push(actionType)
+                this._ComboPush("ActionGroup", "SelectedIndex", groupIndex - 1)
+                this._ComboPush("ActionType", "ClearItems", "")
+                for action in this._activeActions
+                    this._ComboPush("ActionType", "AddItem", this._ActionLabel(action))
+                this._ComboPush("ActionType", "SelectedIndex", this._activeActions.Length - 1)
+                break 2
+            }
         }
         for name, values in Map("SelectorType", BrowserGui.SelectorTypes, "Condition", BrowserGui.Conditions,
             "LoadState", BrowserGui.LoadStates, "BrowserType", this._browserNames, "MouseBtn", BrowserGui.MouseButtons, "StorageType", BrowserGui.StorageTypes)
@@ -607,10 +801,14 @@ class BrowserGui extends CommentGui {
             "SelectorType", "Selector", "Condition", "LoadState", "Text", "SavePath", "ClearBefore",
             "Checked", "FullPage", "IncludeTag", "OpenMode", "JsCode", "AttrName", "SaveVar",
             "CoordX", "CoordY", "MouseBtn", "StorageType", "PageSource", "UseCDP", "PageIdVar", "PageUrlVar", "PageTitleVar", "PageStateVar",
-            "TabMatchMode", "TabMatchValue", "CurrentTabAction")
+            "TabMatchMode", "TabMatchValue", "CurrentTabAction", "TabCloseMode")
         data.ActionType := this._Action(this.ui)
+        for action in ["元素信息", "元素位置/宽高"]
+            for label, name in BrowserElementInfo.Outputs(action)
+                data.%name% := GetVarName(Trim(this.ui.Query(name)))
         data.CurrentTabAction := CmdEnumZh(state["CurrentTabAction"], BrowserActions.CurrentTabActions)
-        data.TabMatchMode := CmdEnumZh(state["TabMatchMode"], BrowserActions.TabMatchModes)
+        data.TabMatchMode := CmdEnumZh(state["TabMatchMode"], BrowserActions.MatchModes(data.ActionType))
+        data.TabCloseMode := CmdEnumZh(state["TabCloseMode"], BrowserActions.TabCloseModes)
         data.OpenMode := CmdEnumZh(state["OpenMode"], BrowserActions.OpenModes)
         data.UseCDP := state["UseCDP"] == "True"
         data.PageSource := CmdEnumZh(state["PageSource"], BrowserPageInfo.Sources)
@@ -634,10 +832,10 @@ class BrowserGui extends CommentGui {
             "LoadState", BrowserGui.LoadStates, "BrowserType", this._browserNames, "MouseBtn", BrowserGui.MouseButtons, "StorageType", BrowserGui.StorageTypes)
             data.%name% := CmdEnumZh(state[name], values)
         isTab := BrowserActions.IsTabAction(data.ActionType)
-        if (isTab) {
-            ; 标签页操作不读取隐藏的输出、超时参数，使用内置等待策略。
+        if (isTab || BrowserActions.IsElementValue(data.ActionType)) {
+            ; 标签页和元素值不读取隐藏的超时参数，使用内置等待策略。
             data.TimeoutMs := TimeoutPolicy.DefaultMs
-            data.TimeoutAction := TimeoutPolicy.DefaultAction
+            data.TimeoutAction := isTab ? TimeoutPolicy.DefaultAction : "停止"
             data.TimeoutStatusVar := ""
         } else if (BrowserActions.UsesTimeout(data.ActionType))
             CommandTimeoutFields.Read(this.ui, data)
@@ -645,11 +843,13 @@ class BrowserGui extends CommentGui {
             data.%name% := state[name]
         if (data.ActionType == "切换标签页" || data.ActionType == "关闭标签页")
             data.TargetRef := Trim(state["TabMatchValue"])
+        if (BrowserElementInfo.IsRead(data.ActionType))
+            data.TargetRef := ""
         data.Text := state[data.ActionType == "网页截图" ? "SavePath" : "Text"]
         data.ClearBefore := state["ClearBefore"] == "True"
         data.Checked := state["Checked"] == "True"
         data.OuterHtml := state[data.ActionType == "网页截图" ? "FullPage" : "IncludeTag"] == "True"
-        data.SaveVar := isTab ? "" : GetVarName(Trim(state["SaveVar"]))
+        data.SaveVar := isTab || BrowserElementInfo.IsRead(data.ActionType) ? "" : GetVarName(Trim(state["SaveVar"]))
         return data
     }
 
@@ -657,7 +857,9 @@ class BrowserGui extends CommentGui {
         data := this._ReadData()
         message := ""
         if (data.ActionType == "标签页信息") {
-            if (BrowserPageInfo.UsesMatchValue(data.PageSource) && Trim(data.Url) == "")
+            if (data.PageSource == "元素匹配" && Trim(data.Selector) == "")
+                message := GetLang("元素选择器不能为空。")
+            else if (BrowserPageInfo.UsesMatchValue(data.PageSource) && Trim(data.Url) == "")
                 message := GetLang("请填写标签页匹配值。")
             else {
                 selected := false, names := Map()
@@ -681,7 +883,9 @@ class BrowserGui extends CommentGui {
                 }
             }
         } else if (data.ActionType == "切换标签页" || data.ActionType == "关闭标签页") {
-            if (data.TargetRef == "")
+            if (data.TabMatchMode == "元素匹配" && Trim(data.Selector) == "")
+                message := GetLang("元素选择器不能为空。")
+            else if (data.TabMatchMode != "当前标签页" && data.TabMatchMode != "元素匹配" && data.TargetRef == "")
                 message := GetLang("请填写标签页匹配值。")
             else if (data.TabMatchMode == "序号" && !InStr(data.TargetRef, "{") && (!IsInteger(data.TargetRef) || data.TargetRef < 1))
                 message := GetLang("标签页序号必须为正整数。")
@@ -711,11 +915,35 @@ class BrowserGui extends CommentGui {
             RmtDialog.Info(message, GetLang("浏览器"), this.Hwnd())
             return false
         }
+        if (BrowserElementInfo.IsRead(data.ActionType)) {
+            selected := false, names := Map()
+            for label, name in BrowserElementInfo.Outputs(data.ActionType) {
+                value := data.%name%
+                if (value == "")
+                    continue
+                selected := true
+                if (!CheckVarNameIfValid(value))
+                    return false
+                if (names.Has(value)) {
+                    RmtDialog.Info(GetLang("各信息请使用不同的变量名。"), GetLang("浏览器"), this.Hwnd())
+                    return false
+                }
+                names[value] := true
+            }
+            if (!selected) {
+                RmtDialog.Info(GetLang("请至少填写一个信息变量。"), GetLang("浏览器"), this.Hwnd())
+                return false
+            }
+        }
         if (data.SaveVar != "" && !CheckVarNameIfValid(data.SaveVar))
             return false
-        if (!BrowserActions.UsesTimeout(data.ActionType))
+        if (!BrowserActions.UsesTimeout(data.ActionType) || BrowserActions.IsElementValue(data.ActionType))
             return true
         results := []
+        if (BrowserElementInfo.IsRead(data.ActionType))
+            for label, name in BrowserElementInfo.Outputs(data.ActionType)
+                if (data.%name% != "")
+                    results.Push(data.%name%)
         if (data.SaveVar != "")
             for suffix in ["", "_Success", "_Error", "_ElapsedMs"]
                 results.Push(data.SaveVar suffix)
@@ -732,6 +960,10 @@ class BrowserGui extends CommentGui {
         }
         if (this.Data.ActionType == "标签页信息")
             for field, name in BrowserPageInfo.Outputs
+                if (this.Data.%name% != "")
+                    MySoftData.GlobalVariMap[this.Data.%name%] := true
+        if (BrowserElementInfo.IsRead(this.Data.ActionType))
+            for label, name in BrowserElementInfo.Outputs(this.Data.ActionType)
                 if (this.Data.%name% != "")
                     MySoftData.GlobalVariMap[this.Data.%name%] := true
         SaveMacroCMDData(this.Data)

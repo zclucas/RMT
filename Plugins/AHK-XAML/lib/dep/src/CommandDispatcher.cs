@@ -79,6 +79,8 @@ public partial class AhkWpfEngine
 
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
+        if (msg == 0x0046) // WM_WINDOWPOSCHANGING
+            GuardPanelTitlePosition(lParam);
         // 拖动时把自绘阴影跟紧窗口。系统阴影在直角窗口上会裁掉底边，这里不再靠它。
         if (msg == 0x0047)
         {
@@ -4264,8 +4266,24 @@ public partial class AhkWpfEngine
         }
     }
 
+    static double TitleChromeFontSize(Window owner, double themeSize)
+    {
+        return owner != null && owner.FindName("CmdEditorTitle") != null
+            ? Math.Max(6, themeSize - 2) : themeSize + 2;
+    }
+
     static void ApplyTitleBarNode(DependencyObject node, double themeSize)
     {
+        var glyph = node as FrameworkElement;
+        string glyphTag = glyph == null ? null : glyph.Tag as string;
+        if (glyphTag != null && glyphTag.StartsWith("RmtTitleChromeGlyph:", StringComparison.Ordinal))
+        {
+            double ratio;
+            if (double.TryParse(glyphTag.Substring("RmtTitleChromeGlyph:".Length),
+                System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out ratio))
+                glyph.Width = glyph.Height = TitleChromeFontSize(Window.GetWindow(glyph), themeSize) * ratio;
+            return;
+        }
         TextBlock tb = node as TextBlock;
         if (tb != null)
         {
@@ -4290,7 +4308,7 @@ public partial class AhkWpfEngine
                         if (tb.Name == "TitleIconGlyph")
                             tb.FontSize = (owner.FindName("MacroEditorTitle") != null) ? 20 : 14;
                         else
-                            tb.FontSize = (owner.FindName("MacroEditorTitle") != null) ? 20 : themeSize;
+                            tb.FontSize = TitleChromeFontSize(owner, themeSize);
                     }
                 }
 
@@ -4299,7 +4317,10 @@ public partial class AhkWpfEngine
             return;
         }
         Button btn = node as Button;
-        if (btn == null || string.IsNullOrEmpty(btn.Name))
+        if (btn == null)
+            return;
+        btn.FontSize = TitleChromeFontSize(Window.GetWindow(btn), themeSize);
+        if (string.IsNullOrEmpty(btn.Name))
             return;
         if (btn.Name != "BtnClosePanel" && btn.Name != "BtnClose" && btn.Name != "BtnWinClose"
             && btn.Name != "BtnClosePicker"
@@ -4403,7 +4424,9 @@ public partial class AhkWpfEngine
         while (p != null && guard++ < 40)
         {
             FrameworkElement fe = p as FrameworkElement;
-            if (fe != null && fe.Name == "DragArea")
+            if (fe != null && (fe.Name == "DragArea" || fe.Name == "TitleBarRoot"))
+                return true;
+            if (p is Button && IsTitleChromeNamed(p))
                 return true;
             DependencyObject next = LogicalTreeHelper.GetParent(p);
             if (next == null)

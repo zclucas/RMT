@@ -376,6 +376,27 @@ BROWSER_API int Browser_Reload(int ignoreCache) {
     }
 }
 
+BROWSER_API int Browser_ClearCacheAndReload() {
+    std::lock_guard<std::mutex> lock(g_browserMutex);
+    try {
+        if (!EnsureActivePage()) return -1;
+        auto response = g_activePage->client().Network.clearBrowserCache();
+        if (response.hasError) {
+            SetLastError("Clear browser cache failed: " + response.errorMessage, -1);
+            return -1;
+        }
+        if (!g_activePage->reload(true)) {
+            SetLastError(g_activePage->lastError().empty() ? "Reload failed" : g_activePage->lastError(), -1);
+            return -1;
+        }
+        SetLastError("", 0);
+        return 0;
+    } catch (const std::exception& e) {
+        SetLastError(e.what(), -1);
+        return -1;
+    }
+}
+
 BROWSER_API int Browser_GoBack() {
     std::lock_guard<std::mutex> lock(g_browserMutex);
     try {

@@ -211,11 +211,13 @@ SaveMacroCMDData(Data) {
 ; 统一拦截普通编辑器、图形节点与其他直接保存入口，读取参数不按保存名称校验。
 ValidateCommandVariableNames(cmd, data) {
     fields := ["SaveName", "SaveVar", "VarName", "ResultSaveName", "CoordXName", "CoordYName", "AllSaveName",
-        "TimeoutStatusVar", "ResultVar", "ErrorVar", "ControlVar", "TypeVar", "ClassVar", "HwndVar",
+        "TimeoutStatusVar", "ResultVar", "ErrorVar", "ControlVar", "ValueVar", "StateVar", "TypeVar", "ClassVar", "HwndVar",
         "XVar", "YVar", "WindowXVar", "WindowYVar", "WidthVar", "HeightVar", "CountVar", "NameVar",
         "PidVar", "PathVar", "ExistVar", "StatusVar", "StartTimeVar", "UptimeVar", "CpuVar", "GpuVar",
         "ResultArray", "WidthVarName", "HeightVarName", "ResponseVar", "ConfVar", "RatioVar", "DepthVar",
-        "PageIdVar", "PageUrlVar", "PageTitleVar", "PageStateVar"]
+        "PageIdVar", "PageUrlVar", "PageTitleVar", "PageStateVar",
+        "ElementExistsVar", "ElementValueVar", "ElementRefVar", "ElementTabIdVar", "ElementStateVar", "ElementHtmlVar",
+        "ElementXVar", "ElementYVar", "ElementPageXVar", "ElementPageYVar", "ElementWidthVar", "ElementHeightVar"]
     Loop 12
         fields.Push("ResultVar" A_Index)
     if (cmd == "时间") {

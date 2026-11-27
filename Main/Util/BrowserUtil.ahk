@@ -875,11 +875,11 @@ class BrowserUtil {
                     event.preventDefault();
                     event.stopImmediatePropagation();
                 }
-                function click(event) {
-                    if (event.button !== 0) return;
-                    suppress(event);
-                    const target = targetFor(event.target);
-                    if (target) finish('picked:' + selectorFor(target));
+                function confirm() {
+                    const target = targetFor(pointer ? document.elementFromPoint(...pointer)
+                        : Array.from(document.querySelectorAll(':hover')).pop());
+                    if (target && !target.matches('iframe,frame')) finish('picked:' + selectorFor(target));
+                    return picker.result;
                 }
                 function escape(event) {
                     if (event.key !== 'Escape') return;
@@ -898,6 +898,7 @@ class BrowserUtil {
                 }
                 const picker = {
                     result: 'pending',
+                    confirm,
                     stop() {
                         finish('cancelled');
                         delete window[token];
@@ -905,7 +906,7 @@ class BrowserUtil {
                     }
                 };
                 const listeners = {pointermove: hover, pointerout: leave, blur: leave,
-                    pointerdown: suppress, pointerup: suppress, click, keydown: escape};
+                    pointerdown: suppress, pointerup: suppress, click: suppress, keydown: escape};
                 const deadline = setTimeout(() => finish('cancelled'), 120000);
                 window[token] = window.__rmtActivePicker = picker;
                 for (const [type, listener] of Object.entries(listeners))
@@ -998,7 +999,16 @@ class BrowserUtil {
         return true
     }
 
-    static CurrentTabAction(operation, cancelled := "") {
+    static ClearCacheAndReload() {
+        if (!this.InitDll())
+            throw Error("RMT_Browser.dll 未找到或加载失败")
+        result := DllCall("RMT_Browser\Browser_ClearCacheAndReload", "Cdecl Int")
+        if (result != 0)
+            this._ThrowLastError()
+        return true
+    }
+
+    static CurrentTabAction(operation, cancelled := "", port := 9222) {
         snapshot := "", hwnd := 0
         for candidate in WinGetList("ahk_class Chrome_WidgetWin_1") {
             BrowserPageInfo.CheckCancelled(cancelled)
@@ -1016,6 +1026,11 @@ class BrowserUtil {
         if (!IsObject(snapshot))
             throw TargetError(GetLang("未找到带标签页的浏览器窗口。"))
         BrowserPageInfo.CheckCancelled(cancelled)
+        if (operation == "清空缓存") {
+            id := BrowserPageInfo.TargetId(snapshot, port)
+            this.SwitchTab(id)
+            return this.ClearCacheAndReload()
+        }
         if (operation == "关闭") {
             walker := WindowControl._Object(14, WindowControl._Automation())
             for tab in snapshot.tabs {

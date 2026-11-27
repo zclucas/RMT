@@ -447,13 +447,13 @@ class TriggerKeyInfo {
                     isRunning := true
                 if (isRunning) {
                     this.LastDownWasStop := true
-                    MyStopMacro(t, itemIndex, false, RegExMatch(this.Key, "i)Joy") ? "手柄" : "快捷键")
+                    MyStopMacro(t, itemIndex, false, RegExMatch(this.GetTK(), "i)Joy") ? "手柄" : "快捷键")
                     return
                 }
-                OnToggleTriggerMacro(t, itemIndex, RegExMatch(this.Key, "i)Joy") ? "手柄" : "快捷键")
+                OnToggleTriggerMacro(t, itemIndex, RegExMatch(this.GetTK(), "i)Joy") ? "手柄" : "快捷键")
             }
             else
-                StartTriggeredMacro(t, itemIndex, press, this, RegExMatch(this.Key, "i)Joy") ? "手柄" : "快捷键")
+                StartTriggeredMacro(t, itemIndex, press, this, RegExMatch(this.GetTK(), "i)Joy") ? "手柄" : "快捷键")
         }
         else if (this.targetKind == "菜单模块") {
             t := GetTableByID(this.tableID)
@@ -495,7 +495,7 @@ class TriggerKeyInfo {
             if (!t || !item || !item.HasOwnProp("LoosenStopRun") || item.LoosenStopRun != press)
                 return
             item.DeleteProp("LoosenStopRun")
-            MyStopMacro(t, item, false, RegExMatch(this.Key, "i)Joy") ? "手柄" : "快捷键")
+            MyStopMacro(t, item, false, RegExMatch(this.GetTK(), "i)Joy") ? "手柄" : "快捷键")
         }
         else if (this.targetKind == "菜单模块") {
             this.forbidTrigger := false

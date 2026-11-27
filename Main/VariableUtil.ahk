@@ -96,6 +96,10 @@ SetGlobalData(macroStr, visitMap) {
                     for field, name in BrowserPageInfo.OutputVariables(Data)
                         if (name != "")
                             VariableMap[name] := true
+                if (BrowserElementInfo.IsRead(BrowserActions.Action(Data.ActionType)))
+                    for label, field in BrowserElementInfo.Outputs(BrowserActions.Action(Data.ActionType))
+                        if (InputField(Data, field, "") != "")
+                            VariableMap[Data.%field%] := true
                 if (BrowserActions.UsesTimeout(BrowserActions.Action(Data.ActionType)))
                     TimeoutPolicy.RegisterStatus(Data)
                 if (Data.HasOwnProp("SaveVar") && Data.SaveVar != ""
@@ -353,12 +357,15 @@ RegisterVariableIconTypes(cmd, data) {
             if (BrowserActions.Action(data.ActionType) == "标签页信息") {
                 for field, name in BrowserPageInfo.OutputVariables(data)
                     VariableIconOutput(outputs, name, text)
+            } else if (BrowserElementInfo.IsRead(BrowserActions.Action(data.ActionType))) {
+                for label, field in BrowserElementInfo.Outputs(BrowserActions.Action(data.ActionType))
+                    VariableIconOutput(outputs, InputField(data, field, ""), field == "ElementStateVar" || field == "ElementRefVar" || field == "ElementTabIdVar" || field == "ElementHtmlVar" ? text : field == "ElementValueVar" ? "" : number)
             } else if (data.HasOwnProp("SaveVar"))
                 VariableIconOutput(outputs, data.SaveVar, "")
         default:
             ; 其他写入入口先登记为未知，避免同名变量保留另一条指令的类型。
             for field in ["SaveName", "SaveVar", "VarName", "ResultSaveName", "ResultVar", "ErrorVar", "ControlVar",
-                "TypeVar", "ClassVar", "HwndVar", "XVar", "YVar", "WindowXVar", "WindowYVar", "WidthVar", "HeightVar"] {
+                "TypeVar", "ClassVar", "HwndVar", "StateVar", "ValueVar", "XVar", "YVar", "WindowXVar", "WindowYVar", "WidthVar", "HeightVar"] {
                 if (!data.HasOwnProp(field))
                     continue
                 glyph := ""
@@ -369,7 +376,7 @@ RegisterVariableIconTypes(cmd, data) {
                         glyph := coord
                     else if (field == "WidthVar" || field == "HeightVar")
                         glyph := number
-                    else if (field == "TypeVar" || field == "ClassVar")
+                    else if (field == "TypeVar" || field == "ClassVar" || field == "StateVar")
                         glyph := text
                 } else if (cmd == "按键检测" || cmd == "手柄检测")
                     glyph := Chr(0xE73E)

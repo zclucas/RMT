@@ -65,6 +65,7 @@
 #Include ..\Gui\MacroGraph\MacroGraphGui.ahk
 #Include ..\Gui\MenuWheelGui.ahk
 #Include ..\Gui\MenuMacroSettingGui.ahk
+#Include Util\UIMacroScreen.ahk
 #Include ..\Gui\UIMacroGui.ahk
 #Include ..\Gui\UIMacroSettingGui.ahk
 #Include Util\UIMacroStepBinding.ahk

@@ -881,8 +881,7 @@ class XAMLHost {
     }
 
     static MacroTitleGlyphSize() {
-        ; 与主界面标题栏 rabit 图标 20×20 一致
-        return 20
+        return XAMLHost.FormatFontSize(XAMLHost.GetThemeFontSize() + 2)
     }
 
     static CmdTitleFontSize() {
@@ -898,10 +897,7 @@ class XAMLHost {
     }
 
     static CmdTitleGlyphSize() {
-        scale := XAMLHost.GetMainViewboxScale()
-        if (!IsNumber(scale) || scale < 1)
-            scale := 1
-        return XAMLHost.FormatFontSize(Max(10, XAMLHost.MacroTitleGlyphSize() / scale))
+        return XAMLHost.CmdTitleFontSize()
     }
 
     static MacroBodyFontSize() {
@@ -910,15 +906,17 @@ class XAMLHost {
     }
 
     ; 标题栏关闭钮：与主界面 BtnWinClose 同款（46×标题栏高、TitleBarCloseButton、右上圆角 hover）
-    static AddTitleCloseBtn(parent, name := "BtnClosePanel", titleHeight := "30", btnWidth := "46", glyphSize := 10) {
+    static AddTitleCloseBtn(parent, name := "BtnClosePanel", titleHeight := "30", btnWidth := "46", glyphSize := 0) {
         btn := XAMLHost.AddTitleChromeBtn(parent, name, titleHeight, Chr(0xE8BB), "Visible", "{StaticResource TitleBarCloseButton}", btnWidth, glyphSize)
         try btn.Margin("0")
         return btn
     }
 
-    static AddTitleChromeBtn(parent, name, titleHeight := "30", glyph := "", visibility := "Visible", style := "{StaticResource TitleBarChromeButton}", btnWidth := "46", glyphSize := 10, includeRangeGlyph := false) {
+    static AddTitleChromeBtn(parent, name, titleHeight := "30", glyph := "", visibility := "Visible", style := "{StaticResource TitleBarChromeButton}", btnWidth := "46", glyphSize := 0, includeRangeGlyph := false) {
+        if (!glyphSize)
+            glyphSize := XAMLHost.TitleFontSize()
         btn := parent.Add("Button").Name(name)
-            .Style(style)
+            .Style(style).FontSize(glyphSize)
             .WindowChrome_IsHitTestVisibleInChrome("True")
             .Width(btnWidth).MinWidth(btnWidth).Height(titleHeight).MinHeight(titleHeight).Padding("0")
             .VerticalAlignment("Stretch").Background("Transparent")
@@ -943,6 +941,7 @@ class XAMLHost {
         if (IsObject(spec)) {
             brush := glyph = Chr(0xE8BB) ? "{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" : "{DynamicResource TitleBarForeground}"
             icon := parent.Add("Path").Name(name).Data(spec.data)
+                .Tag("RmtTitleChromeGlyph:" XAMLHost.FormatFontSize(drawSize / glyphSize))
                 .Width(drawSize).Height(drawSize).Stretch("Uniform")
                 .HorizontalAlignment("Center").VerticalAlignment("Center")
             ; Path.FillRule 的默认值就是 EvenOdd（定位针、取色针中间的孔靠它挖出来）。
@@ -957,7 +956,7 @@ class XAMLHost {
             return icon
         }
         return parent.Add("TextBlock").Name(name).Text(glyph).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol")
-            .FontSize(drawSize).VerticalAlignment("Center").HorizontalAlignment("Center")
+            .FontSize(glyphSize).VerticalAlignment("Center").HorizontalAlignment("Center")
     }
 
     static _HasSegoeFluent() {
@@ -1022,7 +1021,9 @@ class XAMLHost {
     }
 
     ; 框选范围：虚线圆角方框
-    static AddTitleChromeDashRectBtn(parent, name, titleHeight := "30", visibility := "Visible", style := "{StaticResource TitleBarChromeButton}", btnWidth := "46", boxSize := 12) {
+    static AddTitleChromeDashRectBtn(parent, name, titleHeight := "30", visibility := "Visible", style := "{StaticResource TitleBarChromeButton}", btnWidth := "46", boxSize := 0) {
+        if (!boxSize)
+            boxSize := XAMLHost.TitleFontSize()
         btn := parent.Add("Button").Name(name)
             .Style(style)
             .WindowChrome_IsHitTestVisibleInChrome("True")
@@ -1030,7 +1031,7 @@ class XAMLHost {
             .VerticalAlignment("Stretch").Background("Transparent")
             .Foreground("{DynamicResource TitleBarForeground}").BorderThickness(0)
             .Visibility(visibility)
-        btn.Add("Rectangle").Name(name "Glyph").Width(boxSize).Height(boxSize)
+        btn.Add("Rectangle").Name(name "Glyph").Tag("RmtTitleChromeGlyph:1").Width(boxSize).Height(boxSize)
             .RadiusX("2").RadiusY("2").Fill("Transparent")
             .Stroke("{DynamicResource TitleBarForeground}").StrokeThickness("1.4")
             .StrokeDashArray("2 1.6").HorizontalAlignment("Center").VerticalAlignment("Center")
@@ -1701,8 +1702,11 @@ class XAMLHost {
         gs := String(glyphSize)
         pin := String(XAMLHost._ChromeGlyphDrawSize(Chr(0xECAF), glyphSize))
         for name in ["BtnClosePanelGlyph", "BtnMinimizeGlyph", "BtnMaximizeGlyph", "BtnPinGlyph", "BtnCmdPointEditGlyph", "BtnCmdPreviewGlyph", "BtnCmdF1Glyph", "BtnCmdF2Glyph", "BtnCmdF3Glyph", "BtnCmdTargeterGlyph", "BtnCmdPlayGlyph", "BtnCmdHelpGlyph", "BtnCmdVideoGlyph"] {
-            try host.Update(name, "FontSize", name = "BtnCmdF1Glyph" ? pin : gs)
+            try host.Update(name, "FontSize", gs)
         }
+        closeSize := XAMLHost._ChromeGlyphDrawSize(Chr(0xE8BB), glyphSize)
+        try host.Update("BtnClosePanelGlyph", "Width", closeSize)
+        try host.Update("BtnClosePanelGlyph", "Height", closeSize)
         try host.Update("BtnCmdF1Glyph", "Width", pin)
         try host.Update("BtnCmdF1Glyph", "Height", pin)
         rangeSize := XAMLHost._ChromeGlyphDrawSize("RangeSelect", glyphSize)

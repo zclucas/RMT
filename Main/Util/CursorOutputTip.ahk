@@ -10,13 +10,13 @@ class CursorOutputTip {
     static isPickHint := false
     static temporaryPath := ""
 
-    static Show(value, duration := 5000, isImage := false, temporary := false, pickHint := false) {
+    static Show(value, duration := 5000, isImage := false, temporary := false, pickHint := false, pickLabel := "移动鼠标定位控件") {
         static flush := ObjBindMethod(CursorOutputTip, "_Flush")
         if (!this.tick)
             this.tick := ObjBindMethod(this, "_Tick")
         if (IsObject(this.pending) && this.pending.temporary)
             PromptReleaseImage(this.pending.value)
-        this.pending := {value: String(value), duration: duration, isImage: isImage, temporary: temporary, pickHint: pickHint}
+        this.pending := {value: String(value), duration: duration, isImage: isImage, temporary: temporary, pickHint: pickHint, pickLabel: pickLabel}
         ; Worker 消息和 XAML 事件回调都要先返回，再建窗。
         SetTimer(flush, -1)
     }
@@ -54,7 +54,7 @@ class CursorOutputTip {
                 content := border.Add("StackPanel").TextElement_FontFamily(MainSoftData.FontType)
                     .TextElement_FontSize(XAMLHost.FontSize()).TextElement_Foreground(AppThemeUtil.ResolveColor(colors, "Win_InputText"))
                 if (request.pickHint)
-                    this._PickHeader(content, colors)
+                    this._PickHeader(content, colors, request.pickLabel)
                 content.Add("TextBlock").Name("TipText").TextWrapping("Wrap")
                     .Foreground(AppThemeUtil.ResolveColor(colors, "Win_InputText"))
                     .FontFamily(MainSoftData.FontType).FontSize(XAMLHost.FontSize())
@@ -74,15 +74,17 @@ class CursorOutputTip {
         } else {
             this.ui.Update("TipText", "Text", request.value)
         }
-        if (request.pickHint)
+        if (request.pickHint) {
+            this.ui.Update("PickHintCaption", "Text", GetLang(request.pickLabel))
             this.ui.Update("TipText", "Visibility", request.value == "" ? "Collapsed" : "Visible")
+        }
         this.deadline := A_TickCount + request.duration
         SetTimer(this.tick, 16)
     }
 
-    static _PickHeader(content, colors) {
+    static _PickHeader(content, colors, label := "移动鼠标定位控件") {
         header := content.Add("WrapPanel").Name("PickHintHeader").VerticalAlignment("Center")
-        header.Add("TextBlock").Text(GetLang("移动鼠标定位控件")).VerticalAlignment("Center").Margin("0,0,8,0")
+        header.Add("TextBlock").Name("PickHintCaption").Text(GetLang(label)).VerticalAlignment("Center").Margin("0,0,8,0")
         for key, label in Map("Enter", "确定", "Esc", "取消") {
             header.Add("Border").Name("PickKey" key).CornerRadius(3).BorderThickness("1,1,1,2")
                 .BorderBrush(AppThemeUtil.ResolveColor(colors, "Win_InputStroke"))

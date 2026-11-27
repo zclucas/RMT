@@ -6,7 +6,7 @@ class BrowserPageReadError extends Error {
 
 ; 普通浏览器通过 UIA 读取，不启动或接管浏览器。
 class BrowserPageInfo {
-    static Sources := ["当前标签页", "网址", "标题", "正则表达式-网址", "正则表达式-标题"]
+    static Sources := ["当前标签页", "网址", "标题", "正则表达式-网址", "正则表达式-标题", "元素匹配"]
     static Fields := ["标签页ID", "网址", "标题", "加载状态"]
     static Outputs := Map("标签页ID", "PageIdVar", "网址", "PageUrlVar", "标题", "PageTitleVar", "加载状态", "PageStateVar")
 

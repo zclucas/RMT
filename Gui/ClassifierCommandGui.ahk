@@ -68,6 +68,7 @@ class ClassifierCommandGui extends CommentGui {
         combo := CmdEditorForm.Combo(row, name, true).Grid_Column(1)
         if (!showTip)
             combo.ToolTipService_IsEnabled("False")
+        return row
     }
 
     _Choice(body, label) {
@@ -505,20 +506,36 @@ class ControlInfoGui extends WindowControlGui {
         this._Variable(size, "高度变量：", "HeightVar", 2)
         results := body.Add("Grid").Cols("*", 16, "*")
         this._Variable(results, "结果变量：", "ResultVar", 0, false)
-        this._Variable(results, "控件变量：", "ControlVar", 2, false)
+        this._Variable(results, "控件值变量：", "ValueVar", 2, false)
         handles := body.Add("Grid").Name("InfoHandleRow").Cols("*", 16, "*")
-        this._Variable(handles, "句柄ID变量：", "HwndVar", 0, false)
+        this._Variable(handles, "控件变量：", "ControlVar", 0, false)
+        hwndRow := this._Variable(handles, "句柄ID变量：", "HwndVar", 2, false)
+        CmdEditorForm.OutputVariablePlaceholder(hwndRow, "HwndVar", "ConHwnd", 1)
+        states := body.Add("Grid").Name("InfoStateRow").Cols("*", 16, "*")
+        stateRow := this._Variable(states, "控件状态：", "StateVar", 0, false)
+        CmdEditorForm.OutputVariablePlaceholder(stateRow, "StateVar", "ConState", 1)
+    }
+
+    _BuildAndShow() {
+        this.Choices := WindowControl.InfoActions
+        super._BuildAndShow()
     }
 
     _SavedChoice(value) {
         action := WindowControl.NormalizeAction(value)
+        if (action == "读取控件值") {
+            ; 旧值指令只在编辑原指令时提供，保留其结果变量语义。
+            this.Choices := WindowControl.InfoActions.Clone()
+            this.Choices.Push(action)
+            this._ComboPush(this.ChoiceField, "AddItem", this._ChoiceLabel(action))
+        }
         return action == "读取控件信息" ? "检测控件存在" : action
     }
 
     Init(cmd) {
         super.Init(cmd)
         defaults := ControlInfoData()
-        for field in ["ControlVar", "HwndVar", "XVar", "YVar", "WindowXVar", "WindowYVar", "WidthVar", "HeightVar"] {
+        for field in ["ValueVar", "ControlVar", "HwndVar", "StateVar", "XVar", "YVar", "WindowXVar", "WindowYVar", "WidthVar", "HeightVar"] {
             for name in GetGuiVarArr()
                 this._ComboPush(field, "AddItem", name)
             this._ComboPush(field, "Text", this.Data.HasOwnProp(field) ? this.Data.%field% : defaults.%field%)
@@ -554,8 +571,10 @@ class ControlInfoGui extends WindowControlGui {
         seen := Map()
         fields := data.ActionType == "读取位置/宽高" ? WindowControl.PositionFields : ["ResultVar"]
         if (data.ActionType == "检测控件存在") {
+            fields.Push("ValueVar")
             fields.Push("ControlVar")
             fields.Push("HwndVar")
+            fields.Push("StateVar")
         }
         for field in fields {
             name := data.%field%
@@ -589,7 +608,7 @@ class ControlInfoGui extends WindowControlGui {
             this.SaveData()
             if (RunEditorMacroPreview(this.GetCommandStr(), false, this.WindowBindingContext) && this.ui == ui) {
                 fields := this.Data.ActionType == "读取位置/宽高" ? WindowControl.PositionFields
-                    : this.Data.ActionType == "检测控件存在" ? ["ResultVar", "ControlVar", "HwndVar"] : ["ResultVar"]
+                    : this.Data.ActionType == "检测控件存在" ? ["ResultVar", "ValueVar", "ControlVar", "HwndVar", "StateVar"] : ["ResultVar"]
                 message := ""
                 for field in fields {
                     name := this.Data.%field%
@@ -640,6 +659,10 @@ class ControlInfoGui extends WindowControlGui {
             this._ComboPush(field, "ToolTip", GetLang("控件中心点相对所属主窗口客户区左上角的坐标。"))
         this._ComboPush("InfoSizeRow", "Visibility", position ? "Visible" : "Collapsed")
         this._ComboPush("InfoHandleRow", "Visibility", action == "检测控件存在" ? "Visible" : "Collapsed")
+        this._ComboPush("InfoStateRow", "Visibility", action == "检测控件存在" ? "Visible" : "Collapsed")
+        this._ComboPush("ValueVarRow", "Visibility", action == "检测控件存在" ? "Visible" : "Collapsed")
+        this._ComboPush("ValueVarLabel", "ToolTip", GetLang("保存控件当前值；勾选框返回0/1，半选返回0.5。"))
+        this._ComboPush("StateVarLabel", "ToolTip", GetLang("返回交互-可见状态，如可交互-可见；未找到为不可见。"))
         this._ComboPush("HwndVar", "ToolTip", "")
         this._ComboPush("HwndVarLabel", "ToolTip", GetLang("控件自身的窗口句柄；不存在或没有独立句柄时为 0。"))
         this._ComboPush("ControlVar", "ToolTip", "")
@@ -651,8 +674,10 @@ class ControlInfoGui extends WindowControlGui {
         data := super._ReadData()
         for field in ["TypeVar", "ClassVar"]
             data.%field% := ""
+        data.ValueVar := data.ActionType == "检测控件存在" ? GetVarName(Trim(this.ui.Query("ValueVar"))) : ""
         data.ControlVar := data.ActionType == "检测控件存在" ? GetVarName(Trim(this.ui.Query("ControlVar"))) : ""
         data.HwndVar := data.ActionType == "检测控件存在" ? GetVarName(Trim(this.ui.Query("HwndVar"))) : ""
+        data.StateVar := data.ActionType == "检测控件存在" ? GetVarName(Trim(this.ui.Query("StateVar"))) : ""
         for field in WindowControl.PositionFields
             data.%field% := data.ActionType == "读取位置/宽高" ? GetVarName(Trim(this.ui.Query(field))) : ""
         if (data.ActionType == "读取位置/宽高")
