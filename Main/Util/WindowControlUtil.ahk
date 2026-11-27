@@ -683,6 +683,18 @@ class WindowControl {
             }
             if (pattern := this._Pattern(element, "selection"))
                 return this._Value(this._Int(pattern, 6) ? 1 : 0, "选中状态（0/1）")
+            ; 部分 UIA 提供者将原生 Edit 的文本截到4096字；直接读取原生文本。
+            if (type == 50004 && (hwnd := this._NativeControl(element, "edit"))
+                && !(DllCall("GetWindowLongW", "Ptr", hwnd, "Int", -16, "UInt") & 0x20)) {
+                length := this._Send(hwnd, 0xE) ; WM_GETTEXTLENGTH
+                if (preview)
+                    length := Min(length, 100)
+                if (length > 32 * 1024 * 1024)
+                    throw Error(GetLang("控件文本超过64MB，无法完整读取。"))
+                text := Buffer((length + 1) * 2, 0)
+                copied := this._Send(hwnd, 0xD, length + 1, text.Ptr) ; WM_GETTEXT
+                return this._Value(StrGet(text.Ptr, copied, "UTF-16"), "文本")
+            }
             if (pattern := this._Pattern(element, "text")) {
                 range := this._Object(7, pattern)
                 return this._Value(this._String(range, 12, "Int", preview ? 100 : -1), "文本")
@@ -978,7 +990,8 @@ class WindowControl {
         if (!hwnd)
             return 0
         name := WinGetClass(hwnd)
-        return kind == "combo" ? (RegExMatch(name, "i)^(ComboBox|WindowsForms10\.COMBOBOX(?:\..*)?)$") ? hwnd : 0)
+        return kind == "edit" ? (RegExMatch(name, "i)^(Edit|WindowsForms10\.EDIT(?:\..*)?)$") ? hwnd : 0)
+            : kind == "combo" ? (RegExMatch(name, "i)^(ComboBox|WindowsForms10\.COMBOBOX(?:\..*)?)$") ? hwnd : 0)
             : (name == "msctls_progress32" ? hwnd : 0)
     }
 

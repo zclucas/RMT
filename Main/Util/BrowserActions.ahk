@@ -45,9 +45,6 @@ class BrowserActions {
     static LegacyTabMatchModes := ["自动匹配", "标签页ID", "序号", "网址", "标题", "正则表达式-网址", "正则表达式-标题", "当前标签页", "元素匹配"]
     static MatchModes(action) => action == "关闭标签页" ? this.CloseTabMatchModes : this.TabMatchModes
     static MatchMode(value) => CmdEnumZh(BrowserPageInfo.NormalizeSource(value), this.LegacyTabMatchModes)
-    ; 仅供历史指令继续执行和编辑，不再作为新增操作提供。
-    static LegacyElementValueActions := ["提取控件值", "提取文本", "提取属性", "提取HTML"]
-    static LegacyTabActions := ["当前页跳转", "新建标签页", "获取当前标签页ID", "关闭浏览器", "关闭", "刷新", "后退", "前进"]
 
     static Normalize(action) {
         switch action {
@@ -72,8 +69,6 @@ class BrowserActions {
         return data.HasOwnProp("Incognito") && data.Incognito ? "无痕模式" : "默认"
     }
 
-    static IsElementValue(action) => action == "提取控件值" || action == "提取文本" || action == "提取属性" || action == "提取HTML"
-
     static IsCloseAction(action) => action == "关闭" || action == "关闭浏览器"
 
     static ClosesCurrentTabOnly(matchMode, closeMode := "匹配标签页") {
@@ -94,9 +89,6 @@ class BrowserActions {
         action := this.Normalize(action)
         if (action == "刷新" || action == "后退" || action == "前进")
             return true
-        for name in this.LegacyTabActions
-            if (name == action)
-                return true
         for group in this.Groups {
             if (group.name != "网页")
                 continue

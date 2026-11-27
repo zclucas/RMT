@@ -388,7 +388,7 @@ class BrowserGui extends CommentGui {
             "StorageTypeRow", action == "Storage操作",
             "JsCodeRow", action == "执行JS" || action == "Cookie操作" || action == "Storage操作",
             "AttrNameRow", attrLabels.Has(action),
-            "SavePathRow", action == "网页截图", "CommandTimeoutRow", !isTab && !BrowserActions.IsElementValue(action) && BrowserActions.UsesTimeout(action),
+            "SavePathRow", action == "网页截图", "CommandTimeoutRow", !isTab && BrowserActions.UsesTimeout(action),
             "SaveVarRow", !isTab && !BrowserActions.IsCloseAction(action) && !BrowserElementInfo.IsRead(action))
         for field, name in BrowserPageInfo.Outputs
             rows[name "Row"] := isInfo
@@ -745,9 +745,11 @@ class BrowserGui extends CommentGui {
         this._ComboPush("FullPage", "IsChecked", actionType == "网页截图" && this.Data.OuterHtml ? "True" : "False")
         this._ComboPush("IncludeTag", "IsChecked", actionType != "提取HTML" || this.Data.OuterHtml ? "True" : "False")
 
+        actionFound := false
         for groupIndex, group in BrowserActions.Groups {
             for actionIndex, action in group.actions {
                 if (action == actionType) {
+                    actionFound := true
                     this._activeActions := group.actions
                     this._ComboPush("ActionGroup", "SelectedIndex", groupIndex - 1)
                     this._ComboPush("ActionType", "ClearItems", "")
@@ -758,23 +760,8 @@ class BrowserGui extends CommentGui {
                 }
             }
         }
-        ; 历史操作只在编辑原指令时保留，避免打开再保存改变已有宏。
-        for groupIndex, group in BrowserActions.Groups {
-            legacyActions := group.name == "网页" ? BrowserActions.LegacyTabActions
-                : group.name == "元素信息" ? BrowserActions.LegacyElementValueActions : []
-            for legacyAction in legacyActions {
-                if (actionType != legacyAction)
-                    continue
-                this._activeActions := group.actions.Clone()
-                this._activeActions.Push(actionType)
-                this._ComboPush("ActionGroup", "SelectedIndex", groupIndex - 1)
-                this._ComboPush("ActionType", "ClearItems", "")
-                for action in this._activeActions
-                    this._ComboPush("ActionType", "AddItem", this._ActionLabel(action))
-                this._ComboPush("ActionType", "SelectedIndex", this._activeActions.Length - 1)
-                break 2
-            }
-        }
+        if (!actionFound)
+            throw ValueError(GetLang("不支持的浏览器操作：") actionType)
         for name, values in Map("SelectorType", BrowserGui.SelectorTypes, "Condition", BrowserGui.Conditions,
             "LoadState", BrowserGui.LoadStates, "BrowserType", this._browserNames, "MouseBtn", BrowserGui.MouseButtons, "StorageType", BrowserGui.StorageTypes)
             this._ComboPush(name, "SelectedIndex", CmdEnumIndex((name == "BrowserType" ? browserType : this.Data.%name%), values))
@@ -805,7 +792,7 @@ class BrowserGui extends CommentGui {
         data.ActionType := this._Action(this.ui)
         for action in ["元素信息", "元素位置/宽高"]
             for label, name in BrowserElementInfo.Outputs(action)
-                data.%name% := GetVarName(Trim(this.ui.Query(name)))
+                data.%name% := data.ActionType == action ? GetVarName(Trim(this.ui.Query(name))) : ""
         data.CurrentTabAction := CmdEnumZh(state["CurrentTabAction"], BrowserActions.CurrentTabActions)
         data.TabMatchMode := CmdEnumZh(state["TabMatchMode"], BrowserActions.MatchModes(data.ActionType))
         data.TabCloseMode := CmdEnumZh(state["TabCloseMode"], BrowserActions.TabCloseModes)
@@ -813,7 +800,7 @@ class BrowserGui extends CommentGui {
         data.UseCDP := state["UseCDP"] == "True"
         data.PageSource := CmdEnumZh(state["PageSource"], BrowserPageInfo.Sources)
         for field, name in BrowserPageInfo.Outputs
-            data.%name% := GetVarName(Trim(state[name]))
+            data.%name% := data.ActionType == "标签页信息" ? GetVarName(Trim(state[name])) : ""
         if (data.HasOwnProp("PageField"))
             data.DeleteProp("PageField")
         if (data.HasOwnProp("WinInfo"))
@@ -832,8 +819,8 @@ class BrowserGui extends CommentGui {
             "LoadState", BrowserGui.LoadStates, "BrowserType", this._browserNames, "MouseBtn", BrowserGui.MouseButtons, "StorageType", BrowserGui.StorageTypes)
             data.%name% := CmdEnumZh(state[name], values)
         isTab := BrowserActions.IsTabAction(data.ActionType)
-        if (isTab || BrowserActions.IsElementValue(data.ActionType)) {
-            ; 标签页和元素值不读取隐藏的超时参数，使用内置等待策略。
+        if (isTab || !BrowserActions.UsesTimeout(data.ActionType)) {
+            ; 不读取隐藏的超时参数，避免切换操作后沿用变量超时或重试设置。
             data.TimeoutMs := TimeoutPolicy.DefaultMs
             data.TimeoutAction := isTab ? TimeoutPolicy.DefaultAction : "停止"
             data.TimeoutStatusVar := ""
@@ -937,7 +924,7 @@ class BrowserGui extends CommentGui {
         }
         if (data.SaveVar != "" && !CheckVarNameIfValid(data.SaveVar))
             return false
-        if (!BrowserActions.UsesTimeout(data.ActionType) || BrowserActions.IsElementValue(data.ActionType))
+        if (!BrowserActions.UsesTimeout(data.ActionType))
             return true
         results := []
         if (BrowserElementInfo.IsRead(data.ActionType))

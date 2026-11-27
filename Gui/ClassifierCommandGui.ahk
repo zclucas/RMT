@@ -516,20 +516,12 @@ class ControlInfoGui extends WindowControlGui {
         CmdEditorForm.OutputVariablePlaceholder(stateRow, "StateVar", "ConState", 1)
     }
 
-    _BuildAndShow() {
-        this.Choices := WindowControl.InfoActions
-        super._BuildAndShow()
-    }
-
     _SavedChoice(value) {
         action := WindowControl.NormalizeAction(value)
-        if (action == "读取控件值") {
-            ; 旧值指令只在编辑原指令时提供，保留其结果变量语义。
-            this.Choices := WindowControl.InfoActions.Clone()
-            this.Choices.Push(action)
-            this._ComboPush(this.ChoiceField, "AddItem", this._ChoiceLabel(action))
-        }
-        return action == "读取控件信息" ? "检测控件存在" : action
+        for choice in this.Choices
+            if (action == choice)
+                return action
+        throw ValueError(GetLang("不支持的控件信息操作：") action)
     }
 
     Init(cmd) {
@@ -576,17 +568,23 @@ class ControlInfoGui extends WindowControlGui {
             fields.Push("HwndVar")
             fields.Push("StateVar")
         }
+        selected := false
         for field in fields {
             name := data.%field%
             if (name == "")
                 continue
             if (!CheckVarNameIfValid(name))
                 return false
+            selected := true
             if (seen.Has(name)) {
                 RmtDialog.Info(GetLang("保存结果的变量不能相同。"), GetLang(this.CmdKey), this.Hwnd())
                 return false
             }
             seen[name] := true
+        }
+        if (!selected) {
+            RmtDialog.Info(GetLang("请至少填写一个信息变量。"), GetLang(this.CmdKey), this.Hwnd())
+            return false
         }
         return true
     }
@@ -638,9 +636,8 @@ class ControlInfoGui extends WindowControlGui {
         this._playHotkeys := []
     }
 
-    ; 仅调整显示名称，保留旧操作键及数字枚举，兼容已保存的宏。
+    ; 显示名称与指令内部操作键分离。
     _ChoiceLabel(choice) => choice == "检测控件存在" ? GetLang("基础信息")
-        : choice == "读取控件值" ? GetLang("控件值")
         : choice == "读取位置/宽高" ? GetLang("控件位置/宽高") : super._ChoiceLabel(choice)
 
     _UpdateChoice(action) {

@@ -747,6 +747,29 @@ class BrowserUtil {
         return StrGet(buf.Ptr, "UTF-8")
     }
 
+    ; 只读表达式允许重新求值扩容；操作脚本仍使用 Evaluate，避免重复执行操作。
+    static EvaluateRead(script, timeoutMs := 5000) {
+        if (!this.InitDll())
+            throw Error("RMT_Browser.dll 未找到或加载失败")
+        deadline := A_TickCount + Integer(timeoutMs), capacity := 65536
+        loop {
+            remaining := deadline - A_TickCount
+            if (remaining <= 0)
+                throw BrowserTimeoutError(GetLang("读取网页信息超时。"))
+            buf := Buffer(capacity, 0)
+            res := DllCall("RMT_Browser\Browser_Evaluate", "Ptr", this._Utf8(script), "Ptr", buf.Ptr,
+                "Int", capacity, "Int", remaining, "Cdecl Int")
+            if (res != 0)
+                this._ThrowLastError()
+            ; 在 UTF-8 解码前检查字节数，避免截断多字节字符后误判长度。
+            if (DllCall("lstrlenA", "Ptr", buf.Ptr, "Int") < capacity - 1)
+                return StrGet(buf.Ptr, "UTF-8")
+            if (capacity >= 64 * 1024 * 1024)
+                throw Error(GetLang("网页信息超过64MB，无法完整读取。"))
+            capacity *= 2
+        }
+    }
+
     static StartElementPicker(token, selectorType, preferControl := false) {
         args := JSON.stringify([token, selectorType, preferControl], 0)
         script := "

@@ -103,10 +103,11 @@ class BrowserElementInfo {
         position := BrowserActions.Action(data.ActionType) == "元素位置/宽高"
         if (position)
             BrowserUtil.WaitElement(selector, selectorType, "appear", Integer(data.TimeoutMs))
-        args := JSON.stringify([selector, selectorType, position, !position && InputField(data, "ElementValueVar", "") != ""], 0)
-        result := JSON.parse(BrowserUtil.Evaluate("
+        args := JSON.stringify([selector, selectorType, position, !position && InputField(data, "ElementValueVar", "") != "",
+            !position && InputField(data, "ElementHtmlVar", "") != ""], 0)
+        result := JSON.parse(BrowserUtil.EvaluateRead("
         (
-            (([selector, type, position, readValue]) => {
+            (([selector, type, position, readValue, readHtml]) => {
                 let el;
                 try {
                     el = type.toLowerCase() === 'xpath'
@@ -117,21 +118,21 @@ class BrowserElementInfo {
                 } catch (error) {
                     return JSON.stringify({error: String(error.message)});
                 }
-                if (!el) return JSON.stringify({ElementExistsVar: 0, ElementRefVar: '', ElementStateVar: '不可见', ElementValueVar: ''});
+                if (!el) return JSON.stringify({ElementExistsVar: 0, ElementRefVar: '', ElementStateVar: '不可见', ElementValueVar: '', ElementHtmlVar: ''});
                 const style = getComputedStyle(el);
                 const rects = el.getClientRects();
                 const visible = style.visibility !== 'hidden' && style.visibility !== 'collapse'
                     && Array.from(rects).some(r => r.width > 0 && r.height > 0);
                 const interactive = visible && !el.matches(':disabled') && !el.closest('[inert]')
                     && el.getAttribute('aria-disabled') !== 'true' && style.pointerEvents !== 'none';
-                const result = {ElementExistsVar: 1, ElementRefVar: selector, ElementValueVar: '',
+                const result = {ElementExistsVar: 1, ElementRefVar: selector, ElementValueVar: '', ElementHtmlVar: readHtml ? el.outerHTML : '',
                     ElementStateVar: (interactive ? '可交互' : '不可交互') + '-' + (visible ? '可见' : '不可见')};
                 if (readValue) {
                     if (el.type === 'checkbox' || el.type === 'radio')
                         result.ElementValueVar = el.checked ? 1 : 0;
                     else if (el.multiple && el.selectedOptions)
                         result.ElementValueVar = JSON.stringify(Array.from(el.selectedOptions, option => option.value));
-                    else if ('value' in el)
+                    else if (el.matches('input,textarea,select,output,progress,meter'))
                         result.ElementValueVar = String(el.value ?? '');
                     else
                         result.ElementValueVar = el.innerText ?? el.textContent ?? '';
@@ -153,9 +154,6 @@ class BrowserElementInfo {
         if (position && !result["ElementExistsVar"])
             throw TargetError(GetLang("未找到匹配的网页元素。"))
         result["ElementTabIdVar"] := result["ElementExistsVar"] ? BrowserUtil.GetActiveTabId() : ""
-        result["ElementHtmlVar"] := ""
-        if (!position && result["ElementExistsVar"] && InputField(data, "ElementHtmlVar", "") != "")
-            result["ElementHtmlVar"] := BrowserUtil.GetHtml(selector, selectorType, 1, Integer(data.TimeoutMs))
         return result
     }
 }
