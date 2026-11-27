@@ -648,7 +648,7 @@ class AppThemeUtil {
         panelTitleText := AppThemeUtil.ResolveColor(colors, "Panel_TitleText")
         ; 页签选中背景：主题强调色低透明度（各主题自动适配，见主窗口 tabItemStyle 的 TabSelBg）
         tabSelBg := AppThemeUtil.WithAlpha(progress, "80")
-        btnPressBg := AppThemeUtil.AdjustRgbBrightness(groupStroke, 0.90)
+        btnPressBg := AppThemeUtil.AdjustRgbBrightness(editHoverBg, 0.90)
         actionPressBg := AppThemeUtil.AdjustRgbBrightness(actionHoverBg, 0.92)
         ; 主界面主要轮廓描边：与「配置管理」按钮 hover 背景同色（ControlBorder / GroupStroke）
         outlineStroke := groupStroke
@@ -902,6 +902,6 @@ class AppThemeUtil {
     ; 已收缩：各窗标题栏铬钮请用 Style="{StaticResource TitleBarCloseButton}"（XAML_Host 补丁也会强制套上）。
     ; 本方法仅作旧 InjectResources 兼容，视觉与 TitleBarCloseButton 相同。
     static TitleCloseBtnStyle() {
-        return '<Style TargetType="Button"><Setter Property="VerticalAlignment" Value="Stretch"/><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button"><Border x:Name="border" Background="{TemplateBinding Background}" CornerRadius="{DynamicResource CloseBtnRadius}" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0"/></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="border" Property="Background" Value="{DynamicResource ControlBorder}"/></Trigger><Trigger Property="IsPressed" Value="True"><Setter TargetName="border" Property="Background" Value="{DynamicResource BtnPressBg}"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>'
+        return '<Style TargetType="Button"><Setter Property="VerticalAlignment" Value="Stretch"/><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button"><Border x:Name="border" Background="{TemplateBinding Background}" CornerRadius="{DynamicResource CloseBtnRadius}" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0"/></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="border" Property="Background" Value="{DynamicResource EditHoverBg}"/></Trigger><Trigger Property="IsPressed" Value="True"><Setter TargetName="border" Property="Background" Value="{DynamicResource BtnPressBg}"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>'
     }
 }

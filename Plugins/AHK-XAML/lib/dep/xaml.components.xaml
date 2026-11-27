@@ -7,6 +7,14 @@
     <SolidColorBrush x:Key="ControlBorder" Color="#20FFFFFF"/>
     <SolidColorBrush x:Key="DropdownBg" Color="#1E1E1E"/>
     <SolidColorBrush x:Key="Accent" Color="#0A84FF"/>
+    <!-- 按钮交互色在主题应用时覆盖；独立组件也有强调色后备值。 -->
+    <SolidColorBrush x:Key="EditHoverBg" Color="#260A84FF"/>
+    <SolidColorBrush x:Key="EditHoverStroke" Color="#0A84FF"/>
+    <SolidColorBrush x:Key="BtnPressBg" Color="#400A84FF"/>
+    <SolidColorBrush x:Key="TabSelBg" Color="#800A84FF"/>
+    <SolidColorBrush x:Key="ActionHoverBg" Color="#106EBE"/>
+    <SolidColorBrush x:Key="ActionHoverStroke" Color="#106EBE"/>
+    <SolidColorBrush x:Key="ActionPressBg" Color="#0E5FA5"/>
     
     <SolidColorBrush x:Key="FocusVisualBrush" Color="#80FFFFFF"/>
 
@@ -594,7 +602,7 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="border" Property="Background" Value="{DynamicResource ControlBorder}"/>
+                            <Setter TargetName="border" Property="Background" Value="{DynamicResource EditHoverBg}"/>
                         </Trigger>
                         <Trigger Property="IsPressed" Value="True">
                             <Setter TargetName="border" Property="Background" Value="{DynamicResource BtnPressBg}"/>
@@ -615,7 +623,7 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="border" Property="Background" Value="{DynamicResource ControlBorder}"/>
+                            <Setter TargetName="border" Property="Background" Value="{DynamicResource EditHoverBg}"/>
                         </Trigger>
                         <Trigger Property="IsPressed" Value="True">
                             <Setter TargetName="border" Property="Background" Value="{DynamicResource BtnPressBg}"/>
@@ -644,10 +652,10 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Border" Property="Background" Value="#20FFFFFF"/>
+                            <Setter TargetName="Border" Property="Background" Value="{DynamicResource EditHoverBg}"/>
                         </Trigger>
                         <Trigger Property="IsPressed" Value="True">
-                            <Setter TargetName="Border" Property="Background" Value="#33000000"/>
+                            <Setter TargetName="Border" Property="Background" Value="{DynamicResource BtnPressBg}"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -675,7 +683,7 @@
                         </Trigger>
                         <Trigger Property="IsMouseOver" Value="True">
                             <Setter TargetName="Border" Property="BorderBrush" Value="{DynamicResource Accent}"/>
-                            <Setter TargetName="Border" Property="Background" Value="{DynamicResource ControlBorder}"/>
+                            <Setter TargetName="Border" Property="Background" Value="{DynamicResource EditHoverBg}"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -701,10 +709,10 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Border" Property="Background" Value="#20FFFFFF"/>
+                            <Setter TargetName="Border" Property="Background" Value="{DynamicResource EditHoverBg}"/>
                         </Trigger>
                         <Trigger Property="IsPressed" Value="True">
-                            <Setter TargetName="Border" Property="Background" Value="#33000000"/>
+                            <Setter TargetName="Border" Property="Background" Value="{DynamicResource BtnPressBg}"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -737,10 +745,10 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Border" Property="Background" Value="#20FFFFFF"/>
+                            <Setter TargetName="Border" Property="Background" Value="{DynamicResource EditHoverBg}"/>
                         </Trigger>
                         <Trigger Property="IsChecked" Value="True">
-                            <Setter TargetName="Border" Property="Background" Value="#33000000"/>
+                            <Setter TargetName="Border" Property="Background" Value="{DynamicResource TabSelBg}"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -1005,7 +1013,7 @@
                                         <Setter Property="Foreground" Value="White"/>
                                     </Trigger>
                                     <Trigger Property="IsMouseOver" Value="True">
-                                        <Setter TargetName="Bd" Property="Background" Value="#30FFFFFF"/>
+                                        <Setter TargetName="Bd" Property="Background" Value="{DynamicResource EditHoverBg}"/>
                                     </Trigger>
                                     <Trigger Property="IsInactive" Value="True">
                                         <Setter Property="Foreground" Value="{DynamicResource TextSub}"/>
@@ -1031,7 +1039,7 @@
                                 </Border>
                                 <ControlTemplate.Triggers>
                                     <Trigger Property="IsMouseOver" Value="True">
-                                        <Setter TargetName="Bd" Property="Background" Value="#30FFFFFF"/>
+                                        <Setter TargetName="Bd" Property="Background" Value="{DynamicResource EditHoverBg}"/>
                                     </Trigger>
                                 </ControlTemplate.Triggers>
                             </ControlTemplate>
@@ -1075,7 +1083,7 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Bd" Property="Background" Value="#20FFFFFF"/>
+                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource EditHoverBg}"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -1201,7 +1209,7 @@
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
                             <Setter Property="Foreground" Value="{DynamicResource TextMain}"/>
-                            <Setter Property="Background" Value="#15FFFFFF"/>
+                            <Setter Property="Background" Value="{DynamicResource EditHoverBg}"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -1284,10 +1292,10 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter Property="Background" Value="#15FFFFFF"/>
+                            <Setter Property="Background" Value="{DynamicResource EditHoverBg}"/>
                         </Trigger>
                         <Trigger Property="IsChecked" Value="True">
-                            <Setter Property="Background" Value="#25FFFFFF"/>
+                            <Setter Property="Background" Value="{DynamicResource TabSelBg}"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -1331,7 +1339,7 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Bd" Property="Background" Value="#10FFFFFF"/>
+                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource EditHoverBg}"/>
                             <Setter Property="TextElement.Foreground" Value="{DynamicResource TextMain}"/>
                         </Trigger>
                         <Trigger Property="IsSelected" Value="True">
@@ -1379,11 +1387,11 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Bd" Property="Background" Value="#15FFFFFF"/>
-                            <Setter TargetName="Bd" Property="BorderBrush" Value="#25FFFFFF"/>
+                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource EditHoverBg}"/>
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource EditHoverStroke}"/>
                         </Trigger>
                         <Trigger Property="IsPressed" Value="True">
-                            <Setter TargetName="Bd" Property="Background" Value="#25FFFFFF"/>
+                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource BtnPressBg}"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -1411,11 +1419,11 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Bd" Property="Background" Value="#15FFFFFF"/>
-                            <Setter TargetName="Bd" Property="BorderBrush" Value="#25FFFFFF"/>
+                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource EditHoverBg}"/>
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource EditHoverStroke}"/>
                         </Trigger>
                         <Trigger Property="IsPressed" Value="True">
-                            <Setter TargetName="Bd" Property="Background" Value="#25FFFFFF"/>
+                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource BtnPressBg}"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>

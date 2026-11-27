@@ -167,7 +167,8 @@ class FeedbackGui {
         this._AddBtn(attachRow, "RemoveAttachment", GetLang("移除"), 66).Grid_Column(2).IsEnabled("False")
         details.Add("CheckBox").Name("AttachCurrentConfig").Content(GetLang("附上当前配置文件"))
             .IsChecked("True").Foreground("{DynamicResource TextMain}").Margin("2,8,0,0")
-        steps := details.Add("Expander").Header("指令诊断（随反馈附带）").Margin("2,6,0,0")
+        steps := details.Add("Expander").Name("DiagnosticsPanel").Header("指令诊断（随反馈附带）").Margin("2,6,0,0")
+            .Visibility(this._kind == "bug" ? "Visible" : "Collapsed")
         steps.Add("ScrollViewer").MaxHeight(100).VerticalScrollBarVisibility("Auto")
             .Add("TextBlock").Name("RecentOperations").Text(FeedbackDiagnostics.Report(this._diagnostics))
             .Foreground("{DynamicResource TextSub}").FontSize(12).TextWrapping("Wrap")
@@ -279,7 +280,7 @@ class FeedbackGui {
         if (this._IsDirty()) {
             owner := 0
             try owner := this.ui.wpfHwnd
-            if (!RmtDialog.Confirm(GetLang("内容还没提交，关掉就没了。确定关闭？"), GetLang("关闭反馈"), owner))
+            if (!RmtDialog.Confirm(GetLang("内容还没提交，如果不提交问题将一直存在`n确定关闭？"), GetLang("关闭反馈"), owner))
                 return
         }
         this.Close()
@@ -327,6 +328,7 @@ class FeedbackGui {
             return
         isBug := this._kind = "bug"
         try this.ui.Update("AttachCurrentConfig", "Visibility", isBug ? "Visible" : "Collapsed")
+        this.ui.Update("DiagnosticsPanel", "Visibility", isBug ? "Visible" : "Collapsed")
         this._SyncToggle("KindBug", isBug)
         this._SyncToggle("KindIdea", !isBug)
         this.ui.Update("BugPanel", "Visibility", isBug ? "Visible" : "Collapsed")
@@ -718,9 +720,9 @@ class FeedbackGui {
         }
         if (links != "")
             raw .= "**" GetLang("附件") "**`n`n" links "`n"
-        details := FeedbackDiagnostics.Details(this._diagnostics)
-        return raw "---`n`n    " StrReplace(RTrim(details, "`n"), "`n", "`n    ")
-            . "`n`n**" GetLang("环境信息") "**`n`n" this._EnvPreview()
+        details := this._kind == "bug" ? FeedbackDiagnostics.Details(this._diagnostics) : ""
+        return raw "---`n`n" (details != "" ? "    " StrReplace(RTrim(details, "`n"), "`n", "`n    ") "`n`n" : "")
+            . "**" GetLang("环境信息") "**`n`n" this._EnvPreview()
     }
 
     _VersionTag() {

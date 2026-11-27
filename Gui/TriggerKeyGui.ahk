@@ -463,7 +463,7 @@ class TriggerKeyGui {
             . '<Border x:Name="bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="3" SnapsToDevicePixels="True" UseLayoutRounding="True">'
             . '<ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>'
             . '<ControlTemplate.Triggers>'
-            . '<Trigger Property="IsMouseOver" Value="True"><Setter TargetName="bd" Property="Background" Value="{DynamicResource ControlBorder}"/><Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource Accent}"/></Trigger>'
+            . '<Trigger Property="IsMouseOver" Value="True"><Setter TargetName="bd" Property="Background" Value="{DynamicResource EditHoverBg}"/><Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource Accent}"/></Trigger>'
             . '<Trigger Property="IsPressed" Value="True"><Setter TargetName="bd" Property="Background" Value="{DynamicResource BtnPressBg}"/><Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource Accent}"/></Trigger>'
             . '</ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>'
 

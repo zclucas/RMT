@@ -1504,7 +1504,7 @@ internal static class RmtCommonStyles
     internal static Brush FallbackButtonChrome(string name, params FrameworkElement[] roots)
     {
         string[] keys = name == "HoverBackground"
-            ? new[] { "ActionHoverBg", "ControlBorder" }
+            ? new[] { "ActionHoverBg", "EditHoverBg" }
             : new[] { "ActionPressBg", "BtnPressBg", "ActionHoverBg", "ActionBg" };
         foreach (string key in keys)
         {
@@ -2368,7 +2368,7 @@ internal sealed class RmtStyleEditor : Window
                 <Condition Property='IsMouseOver' Value='True'/>
                 <Condition Property='IsSelected' Value='False'/>
               </MultiTrigger.Conditions>
-                <Setter TargetName='Bd' Property='Background' Value='{DynamicResource ControlBorder}'/>
+                <Setter TargetName='Bd' Property='Background' Value='{DynamicResource EditHoverBg}'/>
                 <Setter TargetName='Bd' Property='BorderBrush' Value='{DynamicResource Accent}'/>
               </MultiTrigger>
               <Trigger Property='IsSelected' Value='True'>
@@ -4825,7 +4825,7 @@ internal sealed class RmtStyleEditor : Window
         button.SetResourceReference(Control.BackgroundProperty, "ControlBg");
         button.SetResourceReference(Control.ForegroundProperty, "TextMain");
         button.SetResourceReference(Control.BorderBrushProperty, "OutlineStroke");
-        BindButtonChrome(button, "ControlBorder", "BtnPressBg");
+        BindButtonChrome(button, "EditHoverBg", "BtnPressBg");
         button.BorderThickness = new Thickness(1.5);
         button.Padding = new Thickness(10, 0, 10, 0);
         button.Cursor = Cursors.Hand;

@@ -265,7 +265,7 @@ class VariableGui {
             . '<Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource Accent}"/>'
             . '</Trigger>'
             . '<Trigger Property="IsPressed" Value="True">'
-            . '<Setter TargetName="Bd" Property="Background" Value="{DynamicResource ControlBorder}"/>'
+            . '<Setter TargetName="Bd" Property="Background" Value="{DynamicResource BtnPressBg}"/>'
             . '</Trigger>'
             . '</ControlTemplate.Triggers>'
             . '</ControlTemplate></Button.Template>'
