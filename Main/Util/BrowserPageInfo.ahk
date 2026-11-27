@@ -10,32 +10,17 @@ class BrowserPageInfo {
     static Fields := ["标签页ID", "网址", "标题", "加载状态"]
     static Outputs := Map("标签页ID", "PageIdVar", "网址", "PageUrlVar", "标题", "PageTitleVar", "加载状态", "PageStateVar")
 
-    static NormalizeSource(source) {
-        switch source {
-            case "当前页签", "当前分页": return "当前标签页"
-            case "目标网址": return "网址"
-            case "正则网址", "正则表达式匹配网址": return "正则表达式-网址"
-        }
-        return source
-    }
+    static NormalizeSource(source) => BrowserActions._Choice(source, this.Sources, "标签页匹配方式")
+    static NormalizeField(field) => BrowserActions._Choice(field, this.Fields, "标签页信息")
 
-    static NormalizeField(field) => field == "页签ID" || field == "分页ID" ? "标签页ID" : field
-
-    static UsesMatchValue(source) => this.NormalizeSource(source) == "网址" || this.NormalizeSource(source) == "标题" || this.IsRegex(source)
-    static IsRegex(source) => this.NormalizeSource(source) == "正则表达式-网址" || this.NormalizeSource(source) == "正则表达式-标题"
-    static MatchesTitle(source) => this.NormalizeSource(source) == "标题" || this.NormalizeSource(source) == "正则表达式-标题"
+    static UsesMatchValue(source) => GetLangKey(source) == "网址" || GetLangKey(source) == "标题" || this.IsRegex(source)
+    static IsRegex(source) => GetLangKey(source) == "正则表达式-网址" || GetLangKey(source) == "正则表达式-标题"
+    static MatchesTitle(source) => GetLangKey(source) == "标题" || GetLangKey(source) == "正则表达式-标题"
 
     static OutputVariables(data) {
-        outputs := Map(), hasOutputs := false
-        for field, name in this.Outputs {
-            hasOutputs := hasOutputs || data.HasOwnProp(name)
-            outputs[field] := data.HasOwnProp(name) ? data.%name% : ""
-        }
-        ; 旧单项配置转换成对应的独立变量，显式留空的新配置不回退。
-        if (!hasOutputs && data.HasOwnProp("SaveVar") && data.SaveVar != "") {
-            field := CmdEnumZh(this.NormalizeField(InputField(data, "PageField", "网址")), this.Fields)
-            outputs[field] := data.SaveVar
-        }
+        outputs := Map()
+        for field, name in this.Outputs
+            outputs[field] := data.%name%
         return outputs
     }
 
@@ -46,12 +31,12 @@ class BrowserPageInfo {
             return false
     }
 
-    static Read(source, field, targetUrl := "", winInfo := "", port := 9222, cancelled := "") {
+    static Read(source, field, targetUrl := "", port := 9222, cancelled := "") {
         field := this.NormalizeField(field)
-        return this.ReadFields(source, [field], targetUrl, winInfo, port, cancelled)[field]
+        return this.ReadFields(source, [field], targetUrl, port, cancelled)[field]
     }
 
-    static ReadFields(source, fields, targetUrl := "", winInfo := "", port := 9222, cancelled := "") {
+    static ReadFields(source, fields, targetUrl := "", port := 9222, cancelled := "") {
         source := this.NormalizeSource(source)
         normalizedFields := []
         for field in fields
@@ -61,17 +46,10 @@ class BrowserPageInfo {
         for field in fields
             if (field != "标题")
                 requireUrl := true
-        if (source == "窗口绑定") {
-            windows := []
-            for hwnd in GetHwndList(winInfo)
-                if (this.IsBrowser(hwnd))
-                    windows.Push(hwnd)
-        } else {
-            windows := []
-            for hwnd in WinGetList("ahk_class Chrome_WidgetWin_1")
-                if (this.IsBrowser(hwnd) && DllCall("IsWindowVisible", "Ptr", hwnd))
-                    windows.Push(hwnd)
-        }
+        windows := []
+        for hwnd in WinGetList("ahk_class Chrome_WidgetWin_1")
+            if (this.IsBrowser(hwnd) && DllCall("IsWindowVisible", "Ptr", hwnd))
+                windows.Push(hwnd)
         if (!windows.Length)
             throw TargetError(GetLang("未找到支持的浏览器窗口。"))
         if (this.UsesMatchValue(source)) {

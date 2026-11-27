@@ -289,7 +289,6 @@ MacroCommandActions() {
         "等待确定", OnWaitConfirm,
         "网络请求", OnHttpRequest,
         "浏览器", OnBrowser,
-        "窗口控件", OnWindowControl,
         "控件信息", OnWindowControl,
         "控件操作", OnWindowControl,
         "AI判断", OnAiDecision,

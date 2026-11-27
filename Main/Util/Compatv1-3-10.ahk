@@ -87,7 +87,7 @@ Compat13_CollectConditionVariables(data, stem, vars) {
     if (data.HasOwnProp("LegacyTextProcess"))
         Compat13_CollectConditionVariables(data.LegacyTextProcess, "VariableFile", vars)
     for field in ["SaveName", "SaveVar", "VarName", "ResultSaveName", "CoordXName", "CoordYName",
-        "TimeoutStatusVar", "ResultVar", "ErrorVar", "ControlVar", "ValueVar", "StateVar", "TypeVar", "ClassVar", "HwndVar",
+        "TimeoutStatusVar", "ResultVar", "ErrorVar", "ControlVar", "ValueVar", "StateVar", "ClassVar", "HwndVar",
         "XVar", "YVar", "WindowXVar", "WindowYVar", "WidthVar", "HeightVar", "CountVar", "NameVar",
         "PidVar", "PathVar", "ExistVar", "StatusVar", "StartTimeVar", "UptimeVar", "CpuVar", "GpuVar",
         "ResponseVar", "ConfVar", "RatioVar", "DepthVar"] {

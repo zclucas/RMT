@@ -2123,7 +2123,7 @@ GenerateCommandAutoRemark(data) {
             if (value("StateType") != "")
                 remark .= "（" GetLang(value("StateType")) "）"
             result := value("VarName")
-        case "控件信息", "控件操作", "窗口控件":
+        case "控件信息", "控件操作":
             action := WindowControl.NormalizeAction(value("ActionType"))
             remark := GetLang(action == "检测控件存在" ? "检测控件" : action == "写入控件值" ? "修改控件值" : action)
             if (action == "等待控件出现")

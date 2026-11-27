@@ -941,36 +941,6 @@ class BrowserUtil {
             throw Error(GetLang("无法在当前网页启动元素拾取。"))
     }
 
-    static GetText(selector, selectorType := "CSS", timeoutMs := 5000) {
-        if (!this.InitDll())
-            throw Error("RMT_Browser.dll 未找到或加载失败")
-        buf := Buffer(65536, 0)
-        res := DllCall("RMT_Browser\Browser_GetText", "Ptr", this._Utf8(selector), "Ptr", this._Utf8(StrLower(selectorType)), "Ptr", buf.Ptr, "Int", 65536, "Int", timeoutMs, "Cdecl Int")
-        if (res != 0)
-            this._ThrowLastError()
-        return StrGet(buf.Ptr, "UTF-8")
-    }
-
-    static GetAttribute(selector, selectorType := "CSS", attrName := "href", timeoutMs := 5000) {
-        if (!this.InitDll())
-            throw Error("RMT_Browser.dll 未找到或加载失败")
-        buf := Buffer(65536, 0)
-        res := DllCall("RMT_Browser\Browser_GetAttribute", "Ptr", this._Utf8(selector), "Ptr", this._Utf8(StrLower(selectorType)), "Ptr", this._Utf8(attrName), "Ptr", buf.Ptr, "Int", 65536, "Int", timeoutMs, "Cdecl Int")
-        if (res != 0)
-            this._ThrowLastError()
-        return StrGet(buf.Ptr, "UTF-8")
-    }
-
-    static GetHtml(selector := "", selectorType := "CSS", outerHtml := 1, timeoutMs := 5000) {
-        if (!this.InitDll())
-            throw Error("RMT_Browser.dll 未找到或加载失败")
-        buf := Buffer(131072, 0)
-        res := DllCall("RMT_Browser\Browser_GetHtml", "Ptr", this._Utf8(selector), "Ptr", this._Utf8(StrLower(selectorType)), "Int", outerHtml, "Ptr", buf.Ptr, "Int", 131072, "Int", timeoutMs, "Cdecl Int")
-        if (res != 0)
-            this._ThrowLastError()
-        return StrGet(buf.Ptr, "UTF-8")
-    }
-
     static GetUrl() {
         if (!this.InitDll())
             throw Error("RMT_Browser.dll 未找到或加载失败")
@@ -1075,97 +1045,6 @@ class BrowserUtil {
         ; WM_APPCOMMAND 直接交给目标浏览器处理，无需 CDP 或切换前台焦点。
         SendMessage(0x319, hwnd, commands[operation] << 16, , hwnd, , , , 1000)
         return true
-    }
-
-    static CloseWindows(browser, scope, customPath, cancelled) {
-        scope := StrReplace(StrReplace(scope, "页签", "标签页"), "分页", "标签页")
-        static browsers := Map("chrome.exe", "Chrome", "msedge.exe", "Edge", "chromium.exe", "Chromium",
-            "brave.exe", "Brave", "vivaldi.exe", "Vivaldi", "opera.exe", "Opera")
-        customPath := Trim(customPath, ' "')
-        if (browser == "自定义" ? customPath == "" : (browser != "Chrome" && browser != "Edge" && browser != "所有浏览器"))
-            return
-        if (scope != "所有标签页" && scope != "非当前标签页" && scope != "当前标签页")
-            return
-
-        for hwnd in WinGetList("ahk_class Chrome_WidgetWin_1") {
-            if (cancelled())
-                break
-            try {
-                if (DllCall("GetWindow", "Ptr", hwnd, "UInt", 4, "Ptr")) ; GW_OWNER
-                    continue
-                name := browsers.Get(StrLower(WinGetProcessName(hwnd)), "")
-                if (browser == "自定义" ? WinGetProcessPath(hwnd) != customPath
-                    : (name == "" || (browser != "所有浏览器" && name != browser)))
-                    continue
-                this._CloseWindow(hwnd, scope, cancelled)
-            }
-        }
-    }
-
-    static _CloseWindow(hwnd, scope, cancelled) {
-        if (scope == "所有标签页") {
-            WinClose(hwnd)
-            return
-        }
-        automation := WindowControl._Automation()
-        root := WindowControl._Object(6, automation, "Ptr", hwnd)
-        walker := WindowControl._Object(14, automation)
-        tabs := []
-        this._CollectWindowTabs(root, walker, tabs)
-        current := 0
-        for index, tab in tabs {
-            if (WindowControl._Int(tab.selection, 6)) { ; get_CurrentIsSelected
-                current := index
-                break
-            }
-        }
-        if (!current)
-            return
-
-        restore := false
-        try {
-            for index, tab in tabs {
-                if (cancelled())
-                    break
-                if ((index == current) != (scope == "当前标签页"))
-                    continue
-                try {
-                    if (this._InvokeTabClose(tab.element, walker))
-                        continue
-                    ; 紧凑标签页可能只在选中时提供关闭按钮。
-                    if (index != current) {
-                        restore := true
-                        ComCall(3, tab.selection) ; Select
-                    }
-                    if (!cancelled() && WindowControl._Int(tab.selection, 6)
-                        && (index == current || !this._InvokeTabClose(tab.element, walker))
-                        && !this._MiddleClickTab(hwnd, tab, cancelled))
-                        break
-                }
-            }
-        } finally {
-            if (restore)
-                try ComCall(3, tabs[current].selection)
-        }
-    }
-
-    static _CollectWindowTabs(element, walker, tabs) {
-        if (!element)
-            return
-        type := WindowControl._Int(element, 21)
-        if (type == 50030) ; 跳过网页文档
-            return
-        if (type == 50019 && RegExMatch(WindowControl._String(element, 30), "^(?:Edge)?Tab$")) {
-            selection := WindowControl._Pattern(element, "selection")
-            if (selection)
-                tabs.Push({element: element, selection: selection})
-            return
-        }
-        child := WindowControl._Object(4, walker, "Ptr", element)
-        while (child) {
-            this._CollectWindowTabs(child, walker, tabs)
-            child := WindowControl._Object(6, walker, "Ptr", child)
-        }
     }
 
     static _InvokeTabClose(tab, walker) {

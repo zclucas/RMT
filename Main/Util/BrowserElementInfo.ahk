@@ -39,7 +39,7 @@ class BrowserElementInfo {
                 BrowserPageInfo.CheckCancelled(cancelled)
                 id := target.Has("targetId") ? target["targetId"] : target["id"]
                 BrowserUtil.SwitchTab(id)
-                info := this.Read({ActionType:"元素信息", TimeoutMs:TimeoutPolicy.DefaultMs}, selector, selectorType)
+                info := this.Read({ActionType:"元素信息", TimeoutMs:TimeoutPolicy.DefaultMs, ElementValueVar:"", ElementHtmlVar:""}, selector, selectorType)
                 if (info["ElementExistsVar"])
                     matches.Push(id)
             }
@@ -103,8 +103,8 @@ class BrowserElementInfo {
         position := BrowserActions.Action(data.ActionType) == "元素位置/宽高"
         if (position)
             BrowserUtil.WaitElement(selector, selectorType, "appear", Integer(data.TimeoutMs))
-        args := JSON.stringify([selector, selectorType, position, !position && InputField(data, "ElementValueVar", "") != "",
-            !position && InputField(data, "ElementHtmlVar", "") != ""], 0)
+        args := JSON.stringify([selector, selectorType, position, !position && data.ElementValueVar != "",
+            !position && data.ElementHtmlVar != ""], 0)
         result := JSON.parse(BrowserUtil.EvaluateRead("
         (
             (([selector, type, position, readValue, readHtml]) => {

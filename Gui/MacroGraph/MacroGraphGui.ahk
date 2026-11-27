@@ -88,7 +88,6 @@ class MacroGraphGui {
         this.RunProGui := RunProGui()
         this.HttpRequestGui := HttpRequestGui()
         this.BrowserGui := BrowserGui()
-        this.WindowControlGui := WindowControlGui()
         this.ControlInfoGui := ControlInfoGui()
         this.ControlOperationGui := ControlOperationGui()
         this.AiDecisionGui := AiDecisionGui()

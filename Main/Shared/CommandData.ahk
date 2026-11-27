@@ -110,7 +110,10 @@ GetMacroCMDData(serialStr) {
 
     DataFile := MySoftData.DataFileMap[cmd]
     DataClass := MySoftData.DataClassMap[cmd]
-    saveStr := ReadCommandConfig(DataFile, serialStr, cmd)
+    ; 浏览器、控件指令始于1.3，只读取当前规范键；译名键回退留给1.2.2指令。
+    saveStr := cmd == "浏览器" || cmd == "控件信息" || cmd == "控件操作"
+        ? CfgRead(DataFile, SettingSection, normalizedSerialStr, "")
+        : ReadCommandConfig(DataFile, serialStr, cmd)
     Data := saveStr == "" ? DataClass() : JSON.parse(saveStr, , false)
     Data.SerialStr := normalizedSerialStr
     NormalizeCommandData(cmd, Data)
@@ -211,7 +214,7 @@ SaveMacroCMDData(Data) {
 ; 统一拦截普通编辑器、图形节点与其他直接保存入口，读取参数不按保存名称校验。
 ValidateCommandVariableNames(cmd, data) {
     fields := ["SaveName", "SaveVar", "VarName", "ResultSaveName", "CoordXName", "CoordYName", "AllSaveName",
-        "TimeoutStatusVar", "ResultVar", "ErrorVar", "ControlVar", "ValueVar", "StateVar", "TypeVar", "ClassVar", "HwndVar",
+        "TimeoutStatusVar", "ResultVar", "ErrorVar", "ControlVar", "ValueVar", "StateVar", "ClassVar", "HwndVar",
         "XVar", "YVar", "WindowXVar", "WindowYVar", "WidthVar", "HeightVar", "CountVar", "NameVar",
         "PidVar", "PathVar", "ExistVar", "StatusVar", "StartTimeVar", "UptimeVar", "CpuVar", "GpuVar",
         "ResultArray", "WidthVarName", "HeightVarName", "ResponseVar", "ConfVar", "RatioVar", "DepthVar",

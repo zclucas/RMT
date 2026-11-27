@@ -1583,7 +1583,6 @@ class BrowserData {
         this.SerialStr := ""
         this.ActionType := "打开网址"
         this.BrowserType := "默认浏览器" ; 默认浏览器/Chrome/Edge/Brave/Vivaldi/Opera/Chromium/自定义路径
-        this.CloseScope := "所有标签页"
         this.CurrentTabAction := "刷新"
         this.TabMatchMode := "标签页ID"
         this.TabCloseMode := "匹配标签页"
@@ -1608,7 +1607,7 @@ class BrowserData {
         this.Text := ""
         this.ClearBefore := 1
         this.Checked := 1
-        this.OuterHtml := 1
+        this.FullPage := false
         this.JsCode := ""
         this.AttrName := "href"
         this.MouseBtn := "左键" ; 左键 / 右键 / 中键
@@ -1623,7 +1622,7 @@ class BrowserData {
         this.TimeoutAction := TimeoutPolicy.DefaultAction
         this.TimeoutStatusVar := TimeoutPolicy.DefaultStatusVar
         this.Headless := 0
-        this.OpenMode := "默认" ; 默认/新窗口/无痕模式，兼容旧 Incognito 配置
+        this.OpenMode := "默认" ; 默认/新窗口/无痕模式
         this.UseCDP := true
         this.PageSource := "当前标签页"
         this.PageIdVar := "PageId"
@@ -1633,8 +1632,6 @@ class BrowserData {
         this.BrowserPort := 9222
         this.BrowserPath := ""
         this.UserDataDir := ""
-        this.OnError := "停止" ; 停止 / 忽略 / 重试
-        this.RetryCount := 3
     }
 }
 

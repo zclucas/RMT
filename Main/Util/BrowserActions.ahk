@@ -1,94 +1,56 @@
 #Requires AutoHotkey v2.0
 
 class BrowserActions {
-    ; 保留历史数字配置的索引；新动作在 Groups 中注册即可。
-    static _legacyNames := [
-        "打开网址", "新建分页", "切换分页", "关闭分页", "获取分页列表",
-        "等待元素", "等待文字", "等待加载",
-        "点击", "双击", "右键", "输入", "清空", "选择下拉", "勾选", "滚动至元素", "悬停", "元素数量", "元素状态",
-        "鼠标移动", "鼠标点击", "鼠标滚轮", "按键输入",
-        "Cookie操作", "Storage操作",
-        "执行JS", "提取文本", "提取属性", "提取HTML", "获取网址", "获取标题", "网页截图",
-        "刷新", "后退", "前进", "关闭标签", "关闭浏览器", "当前页跳转", "提取控件值", "关闭", "获取当前分页ID",
-        "标签页信息", "当前标签页", "切换标签页", "关闭标签页", "获取标签页列表"
-    ]
     static Names {
         get {
             static names := 0
             if (!names) {
-                names := this._legacyNames.Clone()
-                seen := Map()
-                for action in names
-                    seen[action] := true
-                for group in this.Groups {
-                    for action in group.actions {
-                        if (!seen.Has(action)) {
-                            names.Push(action)
-                            seen[action] := true
-                        }
-                    }
-                }
+                names := []
+                for group in this.Groups
+                    for action in group.actions
+                        names.Push(action)
             }
             return names
         }
     }
 
-    static CloseBrowserTypes := ["Chrome", "Edge", "所有浏览器", "自定义"]
-    static CloseScopes := ["所有标签页", "非当前标签页", "当前标签页"]
     static OpenModes := ["默认", "新窗口", "无痕模式"]
     static BrowserTypes := ["默认浏览器", "Chrome", "Edge", "Brave", "Vivaldi", "Opera", "Chromium", "自定义路径"]
     static CurrentTabActions := ["刷新", "后退", "前进", "关闭", "清空缓存"]
     static TabMatchModes := ["标签页ID", "网址", "标题", "正则表达式-网址", "正则表达式-标题", "元素匹配"]
     static CloseTabMatchModes := ["当前标签页", "标签页ID", "网址", "标题", "正则表达式-网址", "正则表达式-标题", "元素匹配"]
     static TabCloseModes := ["匹配标签页", "非匹配标签页"]
-    static TabCloseMode(value) => RegExReplace(GetLangKey(value), "^关闭(?=(?:非)?匹配标签页$)")
-    static LegacyTabMatchModes := ["自动匹配", "标签页ID", "序号", "网址", "标题", "正则表达式-网址", "正则表达式-标题", "当前标签页", "元素匹配"]
+    static TabCloseMode(value) => this._Choice(value, this.TabCloseModes, "关闭方式")
     static MatchModes(action) => action == "关闭标签页" ? this.CloseTabMatchModes : this.TabMatchModes
-    static MatchMode(value) => CmdEnumZh(BrowserPageInfo.NormalizeSource(value), this.LegacyTabMatchModes)
+    static MatchMode(value, action := "关闭标签页") => this._Choice(value, this.MatchModes(action), "标签页匹配方式")
+    static Action(value) => this._Choice(value, this.Names, "浏览器操作")
+    static BrowserType(value) => this._Choice(value, this.BrowserTypes, "浏览器类型")
+    static GetOpenMode(data) => this._Choice(data.OpenMode, this.OpenModes, "打开方式")
 
-    static Normalize(action) {
-        switch action {
-            case "元素值": return "提取控件值"
-            case "页签信息": return "标签页信息"
-            case "切换分页": return "切换标签页"
-            case "关闭分页", "关闭标签": return "关闭标签页"
-            case "新建分页": return "新建标签页"
-            case "获取分页列表": return "获取标签页列表"
-            case "获取当前分页ID": return "获取当前标签页ID"
-        }
-        return action
+    static _Choice(value, choices, label) {
+        value := GetLangKey(value)
+        for choice in choices
+            if (Type(value) == "String" && value == choice)
+                return choice
+        throw ValueError(GetLang("不支持的") GetLang(label) "：" value)
     }
-
-    static Action(value) => this.Normalize(CmdEnumZh(this.Normalize(GetLangKey(value)), this.Names))
-
-    static BrowserType(value) => GetLangKey(value) == "系统默认浏览器" ? "默认浏览器" : GetLangKey(value)
-
-    static GetOpenMode(data) {
-        if (data.HasOwnProp("OpenMode"))
-            return CmdEnumZh(data.OpenMode, this.OpenModes)
-        return data.HasOwnProp("Incognito") && data.Incognito ? "无痕模式" : "默认"
-    }
-
-    static IsCloseAction(action) => action == "关闭" || action == "关闭浏览器"
 
     static ClosesCurrentTabOnly(matchMode, closeMode := "匹配标签页") {
-        return this.MatchMode(matchMode) == "当前标签页" && this.TabCloseMode(closeMode) == "匹配标签页"
+        return GetLangKey(matchMode) == "当前标签页" && GetLangKey(closeMode) == "匹配标签页"
     }
 
     static RequiresCDP(action, pageField := "网址", matchMode := "", closeMode := "匹配标签页") {
-        action := this.Normalize(action)
+        action := this.Action(action)
         if (matchMode == "元素匹配")
             return true
         if (action == "关闭标签页" && this.ClosesCurrentTabOnly(matchMode, closeMode))
             return false
-        return (action == "当前标签页" && pageField == "清空缓存") || (action != "打开网址" && action != "关闭" && action != "当前标签页"
-            && (this.Normalize(action) != "标签页信息" || pageField == "标签页ID" || pageField == "页签ID" || pageField == "加载状态"))
+        return (action == "当前标签页" && pageField == "清空缓存") || (action != "打开网址" && action != "当前标签页"
+            && (this.Action(action) != "标签页信息" || pageField == "标签页ID" || pageField == "加载状态"))
     }
 
     static IsTabAction(action) {
-        action := this.Normalize(action)
-        if (action == "刷新" || action == "后退" || action == "前进")
-            return true
+        action := this.Action(action)
         for group in this.Groups {
             if (group.name != "网页")
                 continue
@@ -101,16 +63,11 @@ class BrowserActions {
 
     static UsesTimeout(action) {
         static actions := Map(
-            "打开网址", true, "当前页跳转", true, "等待元素", true, "等待文字", true, "等待加载", true,
+            "打开网址", true, "等待元素", true, "等待文字", true, "等待加载", true,
             "点击", true, "双击", true, "右键", true, "输入", true, "清空", true, "选择下拉", true,
             "勾选", true, "滚动至元素", true, "悬停", true, "执行JS", true,
-            "提取文本", true, "提取控件值", true, "提取属性", true, "提取HTML", true, "元素位置/宽高", true)
+            "元素位置/宽高", true)
         return actions.Has(action)
-    }
-
-    static GetCloseBrowserType(value) {
-        name := GetLangKey(value)
-        return name == "自定义路径" ? "自定义" : name
     }
 
     ; 分组结构定义
@@ -148,15 +105,15 @@ class BrowserActions {
     static UsesSelector(action) {
         static actions := Map("等待元素", true, "等待文字", true, "点击", true, "双击", true, "右键", true,
             "输入", true, "清空", true, "选择下拉", true, "勾选", true, "滚动至元素", true, "悬停", true,
-            "元素数量", true, "元素状态", true, "提取文本", true, "提取控件值", true, "提取属性", true, "提取HTML", true,
+            "元素数量", true, "元素状态", true,
             "元素信息", true, "元素位置/宽高", true)
         return actions.Has(action)
     }
 
     static UsesTarget(action) {
         return (this.UsesSelector(action) && !BrowserElementInfo.IsRead(action)) || action == "执行JS" || action == "网页截图"
-            || action == "获取网址" || action == "获取标题" || action == "当前页跳转"
-            || action == "刷新" || action == "后退" || action == "前进" || action == "等待加载"
+            || action == "获取网址" || action == "获取标题"
+            || action == "等待加载"
             || action == "鼠标移动" || action == "鼠标点击" || action == "鼠标滚轮"
             || action == "按键输入" || action == "Storage操作" || action == "Cookie操作"
     }

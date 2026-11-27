@@ -78,7 +78,7 @@ SetGlobalData(macroStr, visitMap) {
             case "输入":
                 if (Data.Type == "弹窗" || Data.Type == "状态" || Data.Type == "选择" || Data.Type == "多选")
                     VariableMap[Data.SaveName] := true
-            case "窗口控件", "控件信息", "控件操作", "AI判断":
+            case "控件信息", "控件操作", "AI判断":
                 RegisterCommandResultVars(Data)
                 if (baseCmd == "AI判断" || WindowControl.UsesTimeout(CmdEnumZh(Data.ActionType, WindowControl.Actions)))
                     TimeoutPolicy.RegisterStatus(Data)
@@ -102,8 +102,7 @@ SetGlobalData(macroStr, visitMap) {
                             VariableMap[Data.%field%] := true
                 if (BrowserActions.UsesTimeout(BrowserActions.Action(Data.ActionType)))
                     TimeoutPolicy.RegisterStatus(Data)
-                if (Data.HasOwnProp("SaveVar") && Data.SaveVar != ""
-                    && !BrowserActions.IsCloseAction(BrowserActions.Action(Data.ActionType)))
+                if (Data.SaveVar != "")
                     for suffix in ["", "_Success", "_Error", "_ElapsedMs"]
                         VariableMap[Data.SaveVar suffix] := true
             case "网络请求":
@@ -365,7 +364,7 @@ RegisterVariableIconTypes(cmd, data) {
         default:
             ; 其他写入入口先登记为未知，避免同名变量保留另一条指令的类型。
             for field in ["SaveName", "SaveVar", "VarName", "ResultSaveName", "ResultVar", "ErrorVar", "ControlVar",
-                "TypeVar", "ClassVar", "HwndVar", "StateVar", "ValueVar", "XVar", "YVar", "WindowXVar", "WindowYVar", "WidthVar", "HeightVar"] {
+                "ClassVar", "HwndVar", "StateVar", "ValueVar", "XVar", "YVar", "WindowXVar", "WindowYVar", "WidthVar", "HeightVar"] {
                 if (!data.HasOwnProp(field))
                     continue
                 glyph := ""
@@ -376,7 +375,7 @@ RegisterVariableIconTypes(cmd, data) {
                         glyph := coord
                     else if (field == "WidthVar" || field == "HeightVar")
                         glyph := number
-                    else if (field == "TypeVar" || field == "ClassVar" || field == "StateVar")
+                    else if (field == "StateVar")
                         glyph := text
                 } else if (cmd == "按键检测" || cmd == "手柄检测")
                     glyph := Chr(0xE73E)

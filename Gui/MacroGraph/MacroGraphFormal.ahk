@@ -38,7 +38,6 @@ class MacroGraphFormalMixin {
             GetLang("运行Pro"), this.RunProGui,
             GetLang("网络请求"), this.HttpRequestGui,
             GetLang("浏览器"), this.BrowserGui,
-            GetLang("窗口控件"), this.WindowControlGui,
             GetLang("控件信息"), this.ControlInfoGui,
             GetLang("控件操作"), this.ControlOperationGui,
             GetLang("AI判断"), this.AiDecisionGui,
@@ -344,7 +343,7 @@ class MacroGraphFormalMixin {
     }
 
     _IsFullEditorCommand(type) {
-        return type == GetLang("浏览器") || type == GetLang("窗口控件") || type == GetLang("控件信息") || type == GetLang("控件操作") || type == GetLang("AI判断") || type == GetLang("YOLO检测")
+        return type == GetLang("浏览器") || type == GetLang("控件信息") || type == GetLang("控件操作") || type == GetLang("AI判断") || type == GetLang("YOLO检测")
             || type == GetLang("翻译") || type == GetLang("进程管理")
     }
 
