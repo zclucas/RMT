@@ -26,7 +26,7 @@
 
 ## 🌐 多語言支援
 
-軟體介面支援以下 8 種語言。點擊語言名稱可閱讀對應的 GitHub 專案說明；在軟體「設定」中可以切換介面語言。
+軟體介面支援以下語言。在軟體「設定」中可以切換介面語言。如需其他語言，請提供回饋。
 
 [简体中文](../README.md) · [繁體中文](README.zh-TW.md) · [English](README.en.md) · [Español](README.es.md) · [Français](README.fr.md) · [Deutsch](README.de.md) · [Italiano](README.it.md) · [Türkçe](README.tr.md)
 
@@ -68,6 +68,12 @@ RMT（若夢兔）是完全免費的開源項目。<br>
 | 微信 | 支付寶 | 愛發電（月度守護） |
 |------|--------|------------------|
 | ![微信打賞](../Images/Soft/WeiXin.png) | ![支付寶打賞](../Images/Soft/ZhiFuBao.png) | ![愛發電贊助](../Images/Soft/AiFaDian.png) |
+
+| Stripe · 2 美元 / 月 | Stripe · 5 美元 / 月 |
+|---|---|
+| [![Stripe · 2 美元 / 月](../Images/Soft/Stripe2.png)](https://buy.stripe.com/6oU7sKfKC90i5HO8YK9IQ02) | [![Stripe · 5 美元 / 月](../Images/Soft/Stripe5.png)](https://buy.stripe.com/dRm00i7e67We0nu8YK9IQ03) |
+
+透過 Stripe 按月贊助，點擊 QR 碼可開啟對應的訂閱頁面。
 
 > 💡 你的支持將激勵我不斷維護與優化！<br>
 > 愛發電支持按月贊助，平臺會收取約 6% 手續費；微信與支付寶適合單次贊助。<br>

@@ -26,7 +26,7 @@
 
 ## 🌐 Language Support
 
-The interface supports the following eight languages. Select a language to read its GitHub README. Change the application language in Settings.
+The interface supports the languages below. You can change the interface language in Settings. Please send feedback if you need another language.
 
 [简体中文](../README.md) · [繁體中文](README.zh-TW.md) · [English](README.en.md) · [Español](README.es.md) · [Français](README.fr.md) · [Deutsch](README.de.md) · [Italiano](README.it.md) · [Türkçe](README.tr.md)
 
@@ -62,6 +62,12 @@ If you find it helpful, you’re welcome to buy me a coffee! ☕
 | WeChat | Alipay |
 |---------|---------|
 | ![WeChat](../Images/Soft/WeiXin.png) | ![Alipay](../Images/Soft/ZhiFuBao.png) |
+
+| Stripe · US$2 / month | Stripe · US$5 / month |
+|---|---|
+| [![Stripe · US$2 / month](../Images/Soft/Stripe2.png)](https://buy.stripe.com/6oU7sKfKC90i5HO8YK9IQ02) | [![Stripe · US$5 / month](../Images/Soft/Stripe5.png)](https://buy.stripe.com/dRm00i7e67We0nu8YK9IQ03) |
+
+Support RMT with a monthly Stripe subscription. Click a QR code to open the corresponding subscription page.
 
 > 💡 Your support encourages me to keep improving and maintaining the project!<br>
 > If you can’t donate, you can still support by giving the project a **⭐ Star** or **sharing it** with others!

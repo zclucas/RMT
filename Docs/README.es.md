@@ -26,7 +26,7 @@
 
 ## 🌐 Idiomas disponibles
 
-La interfaz admite los ocho idiomas siguientes. Selecciona un idioma para leer su README en GitHub. Puedes cambiar el idioma de la aplicación en Configuración.
+La interfaz admite los idiomas siguientes. Puedes cambiar el idioma de la interfaz en Configuración. Si necesitas otro idioma, envíanos tus comentarios.
 
 [简体中文](../README.md) · [繁體中文](README.zh-TW.md) · [English](README.en.md) · [Español](README.es.md) · [Français](README.fr.md) · [Deutsch](README.de.md) · [Italiano](README.it.md) · [Türkçe](README.tr.md)
 
@@ -62,6 +62,12 @@ Si te resulta útil, ¡puedes invitarme un café! ☕
 | WeChat | Alipay |
 |---------|---------|
 | ![WeChat](../Images/Soft/WeiXin.png) | ![Alipay](../Images/Soft/ZhiFuBao.png) |
+
+| Stripe · 2 USD / mes | Stripe · 5 USD / mes |
+|---|---|
+| [![Stripe · 2 USD / mes](../Images/Soft/Stripe2.png)](https://buy.stripe.com/6oU7sKfKC90i5HO8YK9IQ02) | [![Stripe · 5 USD / mes](../Images/Soft/Stripe5.png)](https://buy.stripe.com/dRm00i7e67We0nu8YK9IQ03) |
+
+Apoya RMT con una suscripción mensual de Stripe. Haz clic en un código QR para abrir la página de suscripción correspondiente.
 
 > 💡 ¡Tu apoyo me anima a seguir mejorando y manteniendo el proyecto!<br>
 > Si no puedes donar, ¡también puedes apoyar dándole al proyecto una **⭐ Estrella** o **compartiéndolo** con otros!

@@ -26,7 +26,7 @@
 
 ## 🌐 Dil Desteği
 
-Arayüz aşağıdaki sekiz dili destekler. GitHub README dosyasını okumak için bir dil seçin. Uygulamanın arayüz dilini Ayarlar bölümünden değiştirebilirsiniz.
+Arayüz aşağıdaki dilleri destekler. Arayüz dilini Ayarlar bölümünden değiştirebilirsiniz. Başka bir dile ihtiyacınız varsa lütfen geri bildirim gönderin.
 
 [简体中文](../README.md) · [繁體中文](README.zh-TW.md) · [English](README.en.md) · [Español](README.es.md) · [Français](README.fr.md) · [Deutsch](README.de.md) · [Italiano](README.it.md) · [Türkçe](README.tr.md)
 
@@ -62,6 +62,12 @@ Faydalı bulursanız bana bir kahve ısmarlayabilirsiniz! ☕
 | WeChat | Alipay |
 |---------|---------|
 | ![WeChat](../Images/Soft/WeiXin.png) | ![Alipay](../Images/Soft/ZhiFuBao.png) |
+
+| Stripe · Aylık 2 ABD doları | Stripe · Aylık 5 ABD doları |
+|---|---|
+| [![Stripe · Aylık 2 ABD doları](../Images/Soft/Stripe2.png)](https://buy.stripe.com/6oU7sKfKC90i5HO8YK9IQ02) | [![Stripe · Aylık 5 ABD doları](../Images/Soft/Stripe5.png)](https://buy.stripe.com/dRm00i7e67We0nu8YK9IQ03) |
+
+Aylık Stripe aboneliğiyle RMT’yi destekleyebilirsiniz. İlgili abonelik sayfasını açmak için bir QR koduna tıklayın.
 
 > 💡 Desteğiniz, projeyi geliştirmeye ve sürdürmeye devam etmem için beni motive ediyor!<br>
 > Bağış yapamıyorsanız bile projeye **⭐ Star** vererek veya başkalarıyla **paylaşarak** destek olabilirsiniz!

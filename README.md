@@ -26,7 +26,7 @@
 
 ## 🌐 多语言支持
 
-软件界面支持以下 8 种语言。点击语言名称可阅读对应的 GitHub 项目说明；在软件「设置」中可以切换界面语言。
+软件界面支持以下语言。在软件「设置」中可以切换界面语言。如需其他语言，请进行反馈
 
 [简体中文](README.md) · [繁體中文](Docs/README.zh-TW.md) · [English](Docs/README.en.md) · [Español](Docs/README.es.md) · [Français](Docs/README.fr.md) · [Deutsch](Docs/README.de.md) · [Italiano](Docs/README.it.md) · [Türkçe](Docs/README.tr.md)
 
@@ -68,6 +68,12 @@ RMT（若梦兔）是完全免费的开源项目。<br>
 | 微信 | 支付宝 | 爱发电（月度守护） |
 |------|--------|------------------|
 | ![微信打赏](Images/Soft/WeiXin.png) | ![支付宝打赏](Images/Soft/ZhiFuBao.png) | ![爱发电赞助](Images/Soft/AiFaDian.png) |
+
+| Stripe · 2 美元 / 月 | Stripe · 5 美元 / 月 |
+|---|---|
+| [![Stripe · 2 美元 / 月](Images/Soft/Stripe2.png)](https://buy.stripe.com/6oU7sKfKC90i5HO8YK9IQ02) | [![Stripe · 5 美元 / 月](Images/Soft/Stripe5.png)](https://buy.stripe.com/dRm00i7e67We0nu8YK9IQ03) |
+
+通过 Stripe 按月赞助，点击二维码可打开对应的订阅页面。
 
 > 💡 你的支持将激励我不断维护与优化！<br>
 > 爱发电支持按月赞助，平台会收取约 6% 手续费；微信与支付宝适合单次赞助。<br>
