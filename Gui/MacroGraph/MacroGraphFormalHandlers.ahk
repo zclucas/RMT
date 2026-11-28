@@ -1,4 +1,4 @@
-﻿#Requires AutoHotkey v2.0
+#Requires AutoHotkey v2.0
 
 ; 形式化节点：内联变更处理、显隐刷新、摘要（与 MacroGraphFormal.ahk 配套）
 

@@ -1,4 +1,4 @@
-﻿#Requires AutoHotkey v2.0
+#Requires AutoHotkey v2.0
 
 ; ============================================================================
 ; MacroGraphGui 职能拆分 —— 节点界面构建
