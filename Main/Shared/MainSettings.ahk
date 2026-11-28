@@ -154,6 +154,8 @@ LoadMainSetting() {
     ; §23 网络触发：监听端口（默认 16888，NetworkNormalizePort 钳制 1-65535）
     MainSoftData.NetworkPort := NetworkNormalizePort(CfgRead(SettingFile, SettingSection, "NetworkPort", 16888))
     MySoftData.CMDTip := CfgRead(SettingFile, SettingSection, "CMDTip", false)
+    MainSoftData.ShowL2dMascot := !!CfgRead(SettingFile, SettingSection, "ShowL2dMascot", false)
+    MainSoftData.L2dMascotHotkey := CfgRead(SettingFile, SettingSection, "L2dMascotHotkey", "")
     MainSoftData.CheckForeground := CfgRead(SettingFile, SettingSection, "CheckForeground", false)
     MainSoftData.ScreenShotType := CfgRead(SettingFile, SettingSection, "ScreenShotType", 3)
     MainSoftData.KeyDownDownType := CfgRead(SettingFile, SettingSection, "KeyDownDown", 1)

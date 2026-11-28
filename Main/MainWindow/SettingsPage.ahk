@@ -443,6 +443,8 @@
         }
         if (uiFoldNames.Length == 0)
             uiFoldNames.Push(GetLang("面板") " 1")
+        l2dHk := MainSoftData.HasProp("L2dMascotHotkey") ? String(MainSoftData.L2dMascotHotkey) : ""
+        l2dHkDisp := l2dHk == "" ? GetLang("无") : FormatHotkeyDisplay(l2dHk)
         triggerPage := page("trigger"
             , twoCol(
                 card(GetLang("轮盘"), "&#xEB05;", tog(GetLang("固定位置"), "WheelFixedPosCon", MainSoftData.FixedMenuWheel, GetLang("固定在屏幕中下方"))
@@ -452,8 +454,10 @@
                     . card(GetLang("时间-倒计时"), "&#xE916;", cmb(GetLang("样式"), "CountDownStyleCon", GetLangArr(["时分秒", "智能", "秒"]), MainSoftData.CountDownStyle)
                         . tog(GetLang("补零"), "CountDownPadCon", MainSoftData.CountDownPadZero, GetLang("如 1:30:9 显示为 01:30:09；仅秒不补"))
                         . sld(GetLang("透明度"), "CountDownAlphaCon", "CountDownAlphaVal", MainSoftData.CountDownAlpha, 0, 100, 1)
-                        . sld(GetLang("字体大小"), "CountDownFontCon", "CountDownFontVal", MainSoftData.CountDownFontSize, 8, 72, 1), "0,10,0,0", "", "countdown")
-                , card(GetLang("界面宏-浮窗"), "&#xE78B;", sld(GetLang("按钮宽度"), "UIPanelBtnWidthCon", "UIPanelBtnWidthVal", MainSoftData.UIPanelBtnWidth, 40, 250, 5)
+                        . sld(GetLang("字体大小"), "CountDownFontCon", "CountDownFontVal", MainSoftData.CountDownFontSize, 8, 72, 1), "0,18,0,0", "", "countdown")
+                    . card(GetLang("看板娘"), "&#xE99A;", tog(GetLang("显示看板娘"), "ChkL2dMascot", MainSoftData.ShowL2dMascot, GetLang("独立窗口显示若梦兔，不影响宏运行"))
+                        . row(GetLang("快捷键"), '<Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="40"/></Grid.ColumnDefinitions><TextBox Name="Val_L2dMascotHotkey" Text="' this._XmlEsc(l2dHkDisp) '" IsReadOnly="True"/><Button Grid.Column="1" Name="BtnEdit_L2dMascotHotkey" Content="&#xE70F;" FontFamily="' iconFont '" ToolTip="' GetLang("录入快捷键") '" Margin="8,0,0,0" Padding="0"/></Grid>'), "0,18,0,0", "", "l2d")
+                , card(GetLang("界面宏-浮窗"), "&#xE737;", sld(GetLang("按钮宽度"), "UIPanelBtnWidthCon", "UIPanelBtnWidthVal", MainSoftData.UIPanelBtnWidth, 40, 250, 5)
                     . sld(GetLang("按钮高度"), "UIPanelBtnHeightCon", "UIPanelBtnHeightVal", MainSoftData.UIPanelBtnHeight, 20, 60, 2)
                     . sld(GetLang("字体大小"), "UIPanelFontSizeCon", "UIPanelFontSizeVal", MainSoftData.UIPanelFontSize, 8, 24, 1)
                     . sld(GetLang("每行个数"), "UIPanelColsCon", "UIPanelColsVal", MainSoftData.UIPanelCols, 1, 6, 1)
@@ -645,6 +649,8 @@
         this._Bind("CountDownAlphaCon", "ValueChanged", ObjBindMethod(this, "OnSettingSlider", "CountDownAlpha", "CountDownAlphaVal", 0, 100))
         this._Bind("CountDownStyleCon", "SelectionChanged", ObjBindMethod(this, "OnComboIndex", "CountDownStyle"))
         this._Bind("CountDownPadCon", "Click", ObjBindMethod(this, "OnCheckEdit", "CountDownPadZero"))
+        this._Bind("ChkL2dMascot", "Click", ObjBindMethod(this, "OnCheckEdit", "ShowL2dMascot"))
+        this._Bind("BtnEdit_L2dMascotHotkey", "Click", ObjBindMethod(this, "OnSettingEditHotkey", "L2dMascotHotkey", true))
 
         for spec in [["MenuWheelScale", "WheelScaleCon", "WheelScaleVal", 50, 200],
             ["UIPanelBtnWidth", "UIPanelBtnWidthCon", "UIPanelBtnWidthVal", 40, 250],

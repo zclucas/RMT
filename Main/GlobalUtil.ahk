@@ -24,6 +24,7 @@
 #Include Util\RmtDownloadManager.ahk
 #Include Util\RmtUpdate.ahk
 #Include RMTUtil.ahk
+#Include L2dHost.ahk
 #Include WorkPool.ahk
 #Include ..\Gui\InputFileDialog.ahk
 #Include MainWindowXaml.ahk

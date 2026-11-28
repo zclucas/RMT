@@ -13,7 +13,7 @@
         pageId := ""
         if (RegExMatch(ctrl, "i)^(Edit(Hold|PreInterval|Interval|Coord)|CmbKeyDown|CmbMacroStop|ChkNoVariable|ChkForeground|ChkContinuous|ChkAutoLoosen|StartTipAudio|EndTipAudio)"))
             pageId := "macro"
-        else if (RegExMatch(ctrl, "i)^(Wheel|UIPanel|CountDown)") )
+        else if (RegExMatch(ctrl, "i)^(Wheel|UIPanel|CountDown|ChkL2d|Val_L2dMascot)") )
             pageId := "trigger"
         else if (RegExMatch(ctrl, "i)^(ShowBorder|HoldMuti|AutoLoosenCon|BackgroundTog|BackgroundWin|KeyboardTog|MouseTog|MouseTrail|JoyTog|JoyInterval)") )
             pageId := "record"
@@ -66,6 +66,7 @@
             {id: "logErr", fields: [{key: "SysLogMinLevel", def: "warn,error", ctrl: "LogLevel_warn", kind: "logLevel"}, {key: "LogWarnBubble", def: true, ctrl: "ChkLogWarnBubble", kind: "chk"}, {key: "LogErrorBadge", def: true, ctrl: "ChkLogErrorBadge", kind: "chk"}, {key: "CMDLogFilePath", def: "", ctrl: "CmdTipLogPathCon", kind: "txt"}, {key: "CMDLogAutoClear", def: 2, ctrl: "CmdTipAutoClearCon", kind: "cmb0"}]},
             {id: "wheel", fields: [{key: "FixedMenuWheel", def: false, ctrl: "WheelFixedPosCon", kind: "chk"}, {key: "MenuWheelShowTooltip", def: false, ctrl: "WheelShowTooltipCon", kind: "chk"}, {key: "MenuWheelSelectMode", def: 2, ctrl: "WheelSelectModeCon", kind: "cmb"}, {key: "MenuWheelScale", def: 100, ctrl: "WheelScaleCon", kind: "sld", val: "WheelScaleVal"}]},
             {id: "countdown", fields: [{key: "CountDownStyle", def: 2, ctrl: "CountDownStyleCon", kind: "cmb"}, {key: "CountDownPadZero", def: true, ctrl: "CountDownPadCon", kind: "chk"}, {key: "CountDownAlpha", def: 70, ctrl: "CountDownAlphaCon", kind: "sld", val: "CountDownAlphaVal"}, {key: "CountDownFontSize", def: 15, ctrl: "CountDownFontCon", kind: "sld", val: "CountDownFontVal"}]},
+            {id: "l2d", fields: [{key: "ShowL2dMascot", def: false, ctrl: "ChkL2dMascot", kind: "chk", hook: "l2d"}, {key: "L2dMascotHotkey", def: "", ctrl: "Val_L2dMascotHotkey", kind: "hk"}]},
             {id: "uipanel", fields: [{key: "UIPanelBtnWidth", def: 80, ctrl: "UIPanelBtnWidthCon", kind: "sld", val: "UIPanelBtnWidthVal"}, {key: "UIPanelBtnHeight", def: 34, ctrl: "UIPanelBtnHeightCon", kind: "sld", val: "UIPanelBtnHeightVal"}, {key: "UIPanelFontSize", def: 12, ctrl: "UIPanelFontSizeCon", kind: "sld", val: "UIPanelFontSizeVal"}, {key: "UIPanelCols", def: 3, ctrl: "UIPanelColsCon", kind: "sld", val: "UIPanelColsVal"}, {key: "UIPanelShowOnActive", def: true, ctrl: "UIPanelShowOnActiveCon", kind: "chk"}]},
             {id: "theme", fields: [{key: "AppTheme", def: "Default", ctrl: "ThemePresetCon", kind: "theme"}]},
             {id: "font", fields: [{key: "FontType", def: ResolveUiFont(MainSoftData.FontList), ctrl: "CmbFont", kind: "cmbText"}, {key: "UiScale", def: 100, ctrl: "ThemeUiScaleCon", kind: "uiScale"}]},
@@ -169,6 +170,8 @@
                     OnBootStartChanged("")
                 else if (f.HasOwnProp("hook") && f.hook == "admin")
                     OnAdminStartChanged("")
+                else if (f.HasOwnProp("hook") && f.hook == "l2d")
+                    L2dHost.ApplyEnabled(!!def)
                 else if (f.key == "IsDataReport")
                     RmtUpdate.SyncHelp()
             case "chkMy":
@@ -215,6 +218,8 @@
             case "hk":
                 MainSoftData.%f.key% := def
                 try this.ui.Update(f.ctrl, "Text", (def == "" ? GetLang("无") : FormatHotkeyDisplay(def)))
+                if (f.key == "L2dMascotHotkey")
+                    BindL2dMascotHotkey()
             case "theme":
                 tidx := 0
                 for ti, tp in AppThemeUtil.Presets {
@@ -331,6 +336,8 @@
             MainSoftData.%fieldName% := newVal
             try this.ui.Update("Val_" fieldName, "Text", (newVal == "" ? GetLang("无") : FormatHotkeyDisplay(newVal)))
             this.MarkSettingDirty("Val_" fieldName)
+            if (fieldName == "L2dMascotHotkey")
+                BindL2dMascotHotkey()
             this._ignoreConfirmUntil := A_TickCount + 500
             try WinActivate("ahk_id " this.ui.wpfHwnd)
         }
@@ -773,6 +780,8 @@
         this.MarkSettingDirty(ctrl)
         if (fieldName == "IsDataReport")
             RmtUpdate.SyncHelp()
+        else if (fieldName == "ShowL2dMascot")
+            L2dHost.ApplyEnabled(MainSoftData.ShowL2dMascot)
     }
 
     ; §10 显示页签勾选：写入 TabVisibleMap（保存后重启生效）

@@ -109,6 +109,8 @@ OnSaveSetting(*) {
     CheckAndAddDirty("CheckForeground", MainSoftData.CheckForeground)
     CheckAndAddDirty("IsAdminStart", MainSoftData.IsAdminStart)
     CheckAndAddDirty("CMDTip", MySoftData.CMDTip)
+    CheckAndAddDirty("ShowL2dMascot", MainSoftData.HasProp("ShowL2dMascot") ? MainSoftData.ShowL2dMascot : false)
+    CheckAndAddDirty("L2dMascotHotkey", MainSoftData.HasProp("L2dMascotHotkey") ? MainSoftData.L2dMascotHotkey : "")
     CheckAndAddDirty("ScreenShotType", MainSoftData.ScreenShotType)
     CheckAndAddDirty("SearchImageType", MainSoftData.SearchImageType)
     CheckAndAddDirty("SearchImageAdaptive", MainSoftData.SearchImageAdaptive)
@@ -2357,6 +2359,7 @@ UpdateMacroRunningCount(LastState, State) {
         MySoftData.IsMacroWorking := curState
         UpdateMacroTrayIcon()
         MyCMDTipGui.OnToggleMacroWorkState()
+        L2dHost.OnMacroWorking(curState)
     }
 }
 

@@ -33,6 +33,8 @@ _bmad-output
 优化.md
 Plugins/SupportQr/bin/
 Plugins/SupportQr/obj/
+Plugins/L2dHost/*.pos
+Plugins/L2dHost/*.obj
 .workbuddy/
 Cache/
 .arch/

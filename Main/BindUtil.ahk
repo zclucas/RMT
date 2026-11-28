@@ -60,6 +60,7 @@ BindKey() {
     BindShortcut(MainSoftData.ScreenShotHotKey, OnToolScreenShot)
     BindShortcut(MainSoftData.FreePasteHotKey, OnToolFreePaste)
     BindShortcut(MainSoftData.ToolRecordMacroHotKey, OnHotToolRecordMacro)
+    BindL2dMascotHotkey()
     InitTriggerKeyMap()
     BindMenuHotKey()
     BindUIPanelHotKey()
@@ -219,6 +220,36 @@ BindShortcut(triggerInfo, action) {
             Hotkey(key, action)
         }
         catch as e {
+        }
+    }
+}
+
+BindL2dMascotHotkey() {
+    static lastKey := ""
+    if (lastKey != "") {
+        try Hotkey(lastKey, "Off")
+        try Hotkey(lastKey, "")
+        lastKey := ""
+    }
+    hk := MainSoftData.HasProp("L2dMascotHotkey") ? Trim(MainSoftData.L2dMascotHotkey) : ""
+    if (hk == "")
+        return
+    key := IsComboKey(hk) ? hk : "$*~" hk
+    try {
+        Hotkey(key, OnL2dMascotHotkey)
+        lastKey := key
+    }
+}
+
+OnL2dMascotHotkey(*) {
+    if (!MainSoftData.HasProp("ShowL2dMascot"))
+        MainSoftData.ShowL2dMascot := false
+    MainSoftData.ShowL2dMascot := !MainSoftData.ShowL2dMascot
+    L2dHost.ApplyEnabled(MainSoftData.ShowL2dMascot)
+    try {
+        if (IsSet(MyMainWin) && IsObject(MyMainWin)) {
+            MyMainWin.ui.Update("ChkL2dMascot", "IsChecked", MainSoftData.ShowL2dMascot ? "True" : "False")
+            MyMainWin.MarkSettingDirty("ChkL2dMascot")
         }
     }
 }
@@ -657,6 +688,11 @@ OnExitSoft(*) {
             MyVoiceEngine.Stop()
     } catch as e {
         RMTLogSys(RMT_LV_WARN, "Exit", "语音引擎停止失败: " (e.HasProp("Message") ? e.Message : ""))
+    }
+
+    try L2dHost.Stop()
+    catch as e {
+        RMTLogSys(RMT_LV_WARN, "Exit", "L2dHost 停止失败: " (e.HasProp("Message") ? e.Message : ""))
     }
 
     ; ③ 关掉本目录带的 MCP 服务。Cursor 若另挂了别的副本，路径对不上就不动。
