@@ -308,6 +308,15 @@ def mirror_model(tag, asset):
         if len(raw) <= 1024 * 1024 and json.loads(raw) == expected:
             return dict(tag=tag, name=MODEL, size=asset['size'], digest=asset['digest'])
     if tag == 'Common':
+        # A filtered Common sync must secure archived model pins too.
+        for source in pages(gh, '/releases'):
+            if source['draft'] or source['tag_name'] in ('Common', 'Patch'):
+                continue
+            pinned = next((a for a in pages(gh, '/releases/' + str(source['id']) + '/assets')
+                           if a['name'] == MODEL and a.get('state') == 'uploaded'), None)
+            if pinned:
+                ensure_release(source)
+                mirror_model(source['tag_name'], pinned)
         policy = Path(__file__).resolve().parents[2] / 'Scripts/AssetDownloadPolicy.json'
         transport = json.loads(policy.read_text(encoding='utf-8-sig'))['model']['transport']
         result = prepare_model(transport)
