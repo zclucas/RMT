@@ -1,4 +1,5 @@
-/* Independent mascot host: load .p2lrt, layered window, named pipe. MIT runtime via p2l_runtime.dll. */
+/* Independent mascot host: load .p2lrt, layered window, named pipe.
+   MIT runtime via p2l_runtime.dll. Notices: THIRD_PARTY_NOTICES.txt. */
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <stdint.h>
