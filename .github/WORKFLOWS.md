@@ -1,35 +1,30 @@
 # GitHub Actions 工作流
 
-- `pr-check.yml`（PR 检查）：PR 与 Dev 推送时编译并检查源码编码。
-- `release.yml`（版本发布）：版本标签触发打包和本仓库发布，成功后在同一工作流内调用 GitCode 任务发布两站资源。
-- `sync-gitcode.yml`（GitCode 同步与资源管理）：集中自动镜像、手动维护和版本发布调用的资源上传。
+## 编译校验（pr-check.yml）
 
-版本发布仅由版本标签触发。资源上传依赖本次打包成功，只读取同次运行的产物；已删除独立资源上传工作流及按历史 run 手动补传功能。
-GitCode 工作流的 `publish` 模式仅供版本发布内部调用，不在手动操作列表中。
+PR 创建或更新、Dev 分支推送时执行编译与源码编码检查。不打包发行、不发布附件。
 
-## 资源维护操作
+## Github资源管理（release.yml）
 
-默认 `plan-presentation` 只预览重建计划，不修改远端资源。一次只能选择一种操作。
+GitHub 的发行版、资源附件、清单和资源标签均由此入口管理。
 
-- `mirror`：同步代码、分支、标签及本仓库发行附件。
-- `sync`：补齐 GitCode 资源，可用 `tag` 和 `asset_name` 缩小范围，留空同步全部。
-- `shared-url`：更新 Common / Patch 文件，先归档旧版本依赖；必须填写分类、附件名、下载地址和 SHA-256。
-- `complete-catalogs`：补齐初始资源清单缺失的离线包记录。
-- `presentation`：仅整理发行说明与排序。
-- `normalize`：合并共用包、清理旧附件并整理清单。
-- `catalog-names`：统一资源清单名称。
-- `retire-obsolete`：清理 Common、Patch 与测试版中的废弃资源，跳过正式版。
-- `restore-stable`：恢复 v1.2 原始附件及清单。
-- `migrate`：按版本、Common、Patch 重组历史资源位置。
-- `sponsor-cleanup`：校验 Sponsor.zip 后清理单独的赞助图片。
-- `rebuild-presentation`：从校验备份重建 GitCode 发行顺序；建议先运行默认预览。
+- 版本标签 `v*` 推送：校验版本号、语言包和更新日志，双架构打包，发布本仓库 Release 与附件，再发布 RMTAssets 分层资源。
+- 手动运行：默认 `inspect` 只查看 GitHub 发行列表；可选择共享资源更新、清单补齐、发行说明与标签排序整理、历史资源迁移、恢复或废弃资源清理。
+- GitHub 写操作使用 `RMT_RESOURCE_PROVIDER=github`，不直接修改 GitCode。
+- 发布或维护成功后调用 `GitCode同步`，读取已完成的 GitHub 资源并同步到 GitCode。
+- 已删除按历史 run 手动补传；版本发布仅消费本次打包产物，校验标签及提交一致性。
 
-同步、共享更新与赞助清理默认使用 Ubuntu；历史整理保留 macOS runner。可通过 `resource_runner` 覆盖。
-资源维护与发布资源共用并发组，避免同时改写资源；代码镜像使用独立并发组。历史迁移模式仍保留，不会自动执行。
+手动维护模式：`shared-url`、`complete-catalogs`、`presentation`、`normalize`、`catalog-names`、`retire-obsolete`、`restore-stable`、`migrate`、`sponsor-cleanup`。既有版本依赖与正式版附件保护规则保持有效。
 
-## 已整合的入口
+## GitCode同步（sync-gitcode.yml）
 
-`backfill-assets.yml`、`update-shared-resource.yml` 的维护操作统一放入 `sync-gitcode.yml`。
-`upload-assets.yml` 已并入版本发布，其资源任务调用统一 GitCode 工作流，移除手动补传。
-`sync-gitcode-assets.yml` 无调用方，已移除。
-`package.yml`、`verify.yml`、`webview-verify.yml` 已由现有编译检查及版本发布替代。
+全部 GitCode 写操作集中到此工作流，GitHub 令牌只读。
+
+- 分支/标签推送、创建、删除及每日北京时间 12:17：镜像 GitHub 的分支和标签。
+- 标签推送或 GitHub Release 发布、编辑：额外同步本仓库发行版及附件。
+- Github资源管理成功后的内部调用 `mirror-all`：同步代码、本仓库发行附件以及 RMTAssets 资源附件与清单。
+- 手动 `mirror`：同步两仓库；`sync`：仅同步资源，可按标签或附件过滤。
+- 手动默认 `plan-presentation`：只预览 GitCode 发行顺序；`rebuild-presentation`：按校验备份重建 GitCode 发行顺序。
+
+两个管理入口共用资源写入并发组，顺序执行，避免一边发布一边读取未完成资源。
+历史维护能力已经迁入相应平台入口，不再保留独立资源上传、资源维护工作流。

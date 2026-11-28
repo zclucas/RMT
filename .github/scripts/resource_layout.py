@@ -108,6 +108,7 @@ class Store:
     def __init__(self, directory):
         self.directory = Path(directory)
         self.verified = set()
+        self.github_only = os.environ.get("RMT_RESOURCE_PROVIDER") == "github"
 
     def releases(self):
         return [r for r in mirror.pages(mirror.gh, '/releases') if not r['draft']]
@@ -157,7 +158,8 @@ class Store:
             subprocess.run(['gh', 'release', 'create', tag, '--repo', 'zclucas/RMTAssets',
                             '--target', 'main', '--title', tag, '--notes', 'RMT ' + tag + ' resources',
                             '--latest=false'] + (['--prerelease'] if VERSION_TAG.fullmatch(tag) and 'F' in tag else []), check=True)
-        mirror.ensure_release(self.source(tag))
+        if not self.github_only:
+            mirror.ensure_release(self.source(tag))
 
     def download(self, tag, asset):
         directory = self.directory / tag
@@ -230,10 +232,11 @@ class Store:
             raise ValueError('GitHub asset differs: ' + tag + '/' + name)
         expected = metadata(name, entry)
         mirror.readback(tag, expected, source['browser_download_url'])
-        if name == mirror.MODEL:
-            self.verify_model(tag, entry)
-        else:
-            mirror.readback(tag, expected)
+        if not self.github_only:
+            if name == mirror.MODEL:
+                self.verify_model(tag, entry)
+            else:
+                mirror.readback(tag, expected)
         self.verified.add(identity)
 
     def put(self, tag, name, path, replace=False):
@@ -255,23 +258,24 @@ class Store:
                 shutil.copyfile(path, staged)
             subprocess.run(['gh', 'release', 'upload', tag, str(staged), '--repo',
                             'zclucas/RMTAssets'] + (['--clobber'] if before else []), check=True)
-        if name == mirror.MODEL:
-            if tag == 'Common':
-                model_dir = self.directory / 'lfs-update'
-                model_dir.mkdir(exist_ok=True)
-                mirror.try_lfs(path, metadata(name, entry), model_dir)
+        if not self.github_only:
+            if name == mirror.MODEL:
+                if tag == 'Common':
+                    model_dir = self.directory / 'lfs-update'
+                    model_dir.mkdir(exist_ok=True)
+                    mirror.try_lfs(path, metadata(name, entry), model_dir)
+                else:
+                    # Archive the immutable LFS object ID, never a pointer to "latest".
+                    descriptor = dict(version=1, format='lfs', name=mirror.MODEL, size=entry['size'],
+                                      sha256=entry['sha256'], lfs_endpoint=mirror.REMOTE + '/info/lfs/objects/batch')
+                    descriptor_path = self.directory / (tag + '-model.parts.json')
+                    descriptor_path.write_text(json.dumps(descriptor, indent=2), encoding='utf-8')
+                    mirror.upload(tag, descriptor_path,
+                                  dict(name=name + '.parts.json', size=descriptor_path.stat().st_size,
+                                       digest=mirror.sha(descriptor_path)))
+                self.verify_model(tag, entry)
             else:
-                # Archive the immutable LFS object ID, never a pointer to "latest".
-                descriptor = dict(version=1, format='lfs', name=mirror.MODEL, size=entry['size'],
-                                  sha256=entry['sha256'], lfs_endpoint=mirror.REMOTE + '/info/lfs/objects/batch')
-                descriptor_path = self.directory / (tag + '-model.parts.json')
-                descriptor_path.write_text(json.dumps(descriptor, indent=2), encoding='utf-8')
-                mirror.upload(tag, descriptor_path,
-                              dict(name=name + '.parts.json', size=descriptor_path.stat().st_size,
-                                   digest=mirror.sha(descriptor_path)))
-            self.verify_model(tag, entry)
-        else:
-            mirror.upload(tag, path, metadata(name, entry), max_time=600)
+                mirror.upload(tag, path, metadata(name, entry), max_time=600)
         source = self.asset(tag, name)
         if not source or source.get('digest') != 'sha256:' + entry['sha256'] or source['size'] != entry['size']:
             raise ValueError('Uploaded GitHub metadata differs')
@@ -287,14 +291,15 @@ class Store:
             raise ValueError('Stable release assets are append-only: ' + tag + '/' + name)
         print('Retire {}/{}'.format(tag, name), flush=True)
         # Only exact filenames selected in the validated migration plan are removed.
-        target = mirror.release(tag)
-        for asset in mirror.attachments(target):
-            if asset['name'] == name:
-                mirror.gc('/releases/' + tag + '/attach_files/' + str(int(asset['id'])), method='DELETE')
+        if not self.github_only:
+            target = mirror.release(tag)
+            for asset in mirror.attachments(target):
+                if asset['name'] == name:
+                    mirror.gc('/releases/' + tag + '/attach_files/' + str(int(asset['id'])), method='DELETE')
         source = self.asset(tag, name)
         if source:
             mirror.gh('/releases/assets/' + str(int(source['id'])), method='DELETE')
-        if self.asset(tag, name) or any(a['name'] == name for a in mirror.attachments(mirror.release(tag))):
+        if self.asset(tag, name) or (not self.github_only and any(a['name'] == name for a in mirror.attachments(mirror.release(tag)))):
             raise ValueError('Asset remains after removal: ' + tag + '/' + name)
 
     def put_catalog(self, catalog, append_missing=False):

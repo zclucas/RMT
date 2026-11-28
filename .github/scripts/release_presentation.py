@@ -57,6 +57,8 @@ def align_tag_dates(store, wanted):
             email='resources@users.noreply.github.com',
             date=desired[tag].isoformat().replace('+00:00', 'Z'))))
         mirror.gh('/git/refs/tags/' + tag, data=dict(sha=obj['sha'], force=True), method='PATCH')
+    if store.github_only:
+        return {tag: date.isoformat().replace('+00:00', 'Z') for tag, date in desired.items()}
     # GitCode maintains a separate Git history (including its LFS model). Preserve
     # each original commit there too, and assign matching annotated-tag dates.
     checkout = store.directory / 'presentation-tags'
@@ -97,6 +99,8 @@ def organize_releases(store):
                 mirror.gh('/releases/' + str(source['id']),
                           data=dict(draft=False, make_latest='false'), method='PATCH')
     github_order = [r['tag_name'] for r in store.releases()]
+    if store.github_only:
+        return dict(expected_order=wanted, github_order=github_order, order_matches=github_order == wanted)
     gitcode_order = [r['tag_name'] for r in mirror.pages(mirror.gc, '/releases?direction=desc')]
     tags = mirror.pages(mirror.gc, '/tags')
     return dict(expected_order=wanted, github_order=github_order, gitcode_order=gitcode_order,
@@ -113,4 +117,5 @@ def refresh_descriptions(store, tags=None):
         if source.get('name') != tag or source.get('body') != body:
             mirror.gh('/releases/' + str(source['id']),
                       data=dict(name=tag, body=body, make_latest='false'), method='PATCH')
-        mirror.ensure_release(store.source(tag))
+        if not store.github_only:
+            mirror.ensure_release(store.source(tag))

@@ -1,14 +1,47 @@
-name: 版本发布
+name: Github资源管理
 
 # 由 tag 触发，tag 决定版本性质：
 #   v1.3    （无 F 后缀）= 正式版，PackRMT -Release both，本仓库 Release 为 latest
 #   v1.3F2  （带 F 后缀）= 测试版，同样双架构打包，本仓库 Release 标记 pre-release
-# 两种版本都产出 artifact；随后调用统一 GitCode 工作流发布两站资源。
+# GitHub Release、资源附件及标签由本工作流管理；GitCode 写操作只调用同步工作流。
 
 on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: GitHub 操作（inspect 只查看，不修改）
+        type: choice
+        default: inspect
+        options:
+          - inspect
+          - shared-url
+          - complete-catalogs
+          - presentation
+          - normalize
+          - catalog-names
+          - retire-obsolete
+          - restore-stable
+          - migrate
+          - sponsor-cleanup
+      resource_runner:
+        description: runner 标签；留空时同步/更新用 Ubuntu，历史整理用 macOS
+        type: string
+      asset_name:
+        description: shared-url 必填目标附件名
+        type: string
+      scope:
+        description: shared-url 的资源分类
+        type: choice
+        options: [Common, Patch]
+      url:
+        description: shared-url 必填新文件的公开 GitHub Release 下载地址
+        type: string
+      sha256:
+        description: shared-url 必填新文件 SHA-256（64 位小写十六进制）
+        type: string
 
 permissions:
   contents: write
@@ -19,6 +52,7 @@ concurrency:
 
 jobs:
   pack:
+    if: github.event_name == 'push'
     name: 打包
     runs-on: windows-latest
     timeout-minutes: 20
@@ -208,7 +242,7 @@ jobs:
         shell: pwsh
         run: |
           $md = @()
-          $md += '## RMT 版本发布'
+          $md += '## RMT GitHub 资源发布'
           $md += ''
           $md += '| 项目 | 值 |'
           $md += '| --- | --- |'
@@ -249,12 +283,136 @@ jobs:
           $md | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
 
   upload:
-    name: 发布两站资源
+    name: 发布 GitHub 分层资源
     needs: pack
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    concurrency:
+      group: rmt-resource-publication
+      cancel-in-progress: false
+    runs-on: windows-latest
+    timeout-minutes: 180
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: 校验版本标签仍指向当前提交
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RELEASE_REF: ${{ github.ref }}
+          RELEASE_SHA: ${{ github.sha }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $remoteSha = gh api "repos/$env:REPO/commits/$env:RELEASE_REF" --jq '.sha'
+          if ($LASTEXITCODE -ne 0 -or -not $remoteSha -or $remoteSha.Trim() -ne $env:RELEASE_SHA) {
+            throw '版本标签已删除或改指向，停止发布旧提交的资源。'
+          }
+      - name: 下载本次打包产物
+        uses: actions/download-artifact@v4
+        with:
+          name: rmt-release
+          path: ${{ runner.temp }}/rmt-release
+      - name: 上传 GitHub 资源
+        env:
+          GH_TOKEN: ${{ secrets.RMT_ASSETS_TOKEN }}
+          RMT_RESOURCE_PROVIDER: github
+          RELEASE_SHA: ${{ github.sha }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $out = Join-Path $env:RUNNER_TEMP 'rmt-release'
+          $infoPath = Join-Path $out 'release-info.json'
+          $info = Get-Content -LiteralPath $infoPath -Raw | ConvertFrom-Json
+          if ($info.sha -ne $env:RELEASE_SHA) { throw '打包产物与当前提交不匹配。' }
+          & (Join-Path $env:GITHUB_WORKSPACE '.github/scripts/Upload-RmtAssets.ps1') -InfoPath $infoPath -OutDir $out -Repo 'zclucas/RMTAssets'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: 保存资源发布结果
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: resource-layout-result
+          path: ${{ runner.temp }}/resource-layout-result.json
+
+  sync_release:
+    name: 同步 GitCode
+    needs: upload
     permissions:
       contents: read
       actions: read
     uses: ./.github/workflows/sync-gitcode.yml
     with:
-      operation: publish
-    secrets: inherit
+      operation: mirror-all
+    secrets:
+      GITCODE_RELEASE: ${{ secrets.GITCODE_RELEASE }}
+
+  maintain:
+    if: github.event_name == 'workflow_dispatch'
+    concurrency:
+      group: rmt-resource-publication
+      cancel-in-progress: false
+    name: 资源维护 / ${{ inputs.operation }}
+    runs-on: ${{ inputs.resource_runner || ((inputs.operation == 'inspect' || inputs.operation == 'shared-url' || inputs.operation == 'sponsor-cleanup') && 'ubuntu-latest' || 'macos-latest') }}
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: 执行所选维护操作
+        env:
+          GH_TOKEN: ${{ inputs.operation == 'inspect' && github.token || secrets.RMT_ASSETS_TOKEN }}
+          RMT_RESOURCE_PROVIDER: github
+          RESOURCE_OPERATION: ${{ inputs.operation }}
+          ASSET_NAME: ${{ inputs.asset_name }}
+          SCOPE: ${{ inputs.scope }}
+          SOURCE_URL: ${{ inputs.url }}
+          SOURCE_SHA256: ${{ inputs.sha256 }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $pythonCommand = if ($IsWindows) { 'python' } else { 'python3' }
+          switch ($env:RESOURCE_OPERATION) {
+            'inspect' {
+              gh release list --repo zclucas/RMT --limit 20
+              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+              gh release list --repo zclucas/RMTAssets --limit 30
+            }
+            'sponsor-cleanup' {
+              & $pythonCommand -u .github/scripts/sync_gitcode_assets.py sponsor-cleanup
+            }
+            'shared-url' {
+              if (-not $env:ASSET_NAME -or -not $env:SOURCE_URL -or $env:SOURCE_SHA256 -cnotmatch '^[0-9a-f]{64}$') {
+                throw 'shared-url 必须提供附件名、公开下载地址及 64 位小写 SHA-256。'
+              }
+              & $pythonCommand -u .github/scripts/resource_layout.py shared-url --scope $env:SCOPE --name $env:ASSET_NAME --url $env:SOURCE_URL --sha256 $env:SOURCE_SHA256
+            }
+            default {
+              & $pythonCommand -u .github/scripts/resource_layout.py $env:RESOURCE_OPERATION
+            }
+          }
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: 保存维护结果与重建备份
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: resource-maintenance-result
+          path: |
+            ${{ runner.temp }}/gitcode-sync.json
+            ${{ runner.temp }}/gitcode-sponsor-cleanup.json
+            ${{ runner.temp }}/resource-layout-result.json
+            ${{ runner.temp }}/resource-rebuild-backup.json
+
+
+  sync_maintenance:
+    name: 同步维护结果到 GitCode
+    needs: maintain
+    if: inputs.operation != 'inspect'
+    permissions:
+      contents: read
+      actions: read
+    uses: ./.github/workflows/sync-gitcode.yml
+    with:
+      operation: mirror-all
+    secrets:
+      GITCODE_RELEASE: ${{ secrets.GITCODE_RELEASE }}

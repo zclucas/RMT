@@ -294,6 +294,33 @@ def mirror_asset(tag, asset):
         return dict(tag=tag, **{k: verified[k] for k in ('name', 'size', 'digest')})
 
 
+def mirror_model(tag, asset):
+    """Preserve historical LFS pins before updating the shared model."""
+    if not re.fullmatch(r'sha256:[0-9a-f]{64}', asset.get('digest') or ''):
+        raise ValueError('Unverified model source')
+    expected = dict(version=1, format='lfs', name=MODEL, size=asset['size'],
+                    sha256=asset['digest'][7:], lfs_endpoint=REMOTE + '/info/lfs/objects/batch')
+    descriptor_name = MODEL + '.parts.json'
+    existing = next((a for a in attachments(release(tag)) if a['name'] == descriptor_name), None)
+    if existing:
+        with urlopen(Request(public_url(tag, descriptor_name), headers={'User-Agent': 'RMT-model-sync'}), timeout=90) as response:
+            raw = response.read(1024 * 1024 + 1)
+        if len(raw) <= 1024 * 1024 and json.loads(raw) == expected:
+            return dict(tag=tag, name=MODEL, size=asset['size'], digest=asset['digest'])
+    if tag == 'Common':
+        policy = Path(__file__).resolve().parents[2] / 'Scripts/AssetDownloadPolicy.json'
+        transport = json.loads(policy.read_text(encoding='utf-8-sig'))['model']['transport']
+        result = prepare_model(transport)
+        if result.get('status') != 'passed':
+            raise ValueError('Shared model synchronization failed')
+    else:
+        with tempfile.TemporaryDirectory(prefix='rmt-model-pin-', dir=os.environ.get('RUNNER_TEMP')) as directory:
+            path = Path(directory) / descriptor_name
+            path.write_text(json.dumps(expected, indent=2), encoding='utf-8')
+            upload(tag, path, dict(name=descriptor_name, size=path.stat().st_size, digest=sha(path)))
+    return dict(tag=tag, name=MODEL, size=asset['size'], digest=asset['digest'])
+
+
 def sync(tags=None, asset_name='', workers=4):
     sources = [r for r in pages(gh, '/releases') if not r['draft'] and (not tags or r['tag_name'] in tags)]
     if not sources or (tags and set(tags) != {r['tag_name'] for r in sources}):
@@ -304,16 +331,22 @@ def sync(tags=None, asset_name='', workers=4):
     for source in reversed(sources):
         tag = source['tag_name']
         originals = [a for a in pages(gh, '/releases/' + str(source['id']) + '/assets')
-                     if a.get('state') == 'uploaded' and not re.search(r'\.(?:parts\.json|part\d{4})$', a['name']) and (REPO != 'RMTAssets' or a['name'] != MODEL)
+                     if a.get('state') == 'uploaded' and not re.search(r'\.(?:parts\.json|part\d{4})$', a['name'])
                      and (not asset_name or a['name'] == asset_name)]
         if not originals and asset_name:
             raise ValueError('Selected ordinary original attachment is absent')
         ensure_release(source)
         expected_by_tag[tag] = (source, originals)
         tasks.extend((tag, asset) for asset in originals)
-    with ThreadPoolExecutor(max_workers=workers) as pool:
-        receipts = list(pool.map(lambda task: mirror_asset(*task), tasks))
-    if REPO == 'RMT' and not asset_name:
+    receipts = []
+    # Secure version dependencies first, then shared files, then publish catalogs.
+    phases = ([task for task in tasks if task[0] not in ('Common', 'Patch') and task[1]['name'] not in ('A-Assets.json', 'resources.json')],
+              [task for task in tasks if task[0] in ('Common', 'Patch') and task[1]['name'] not in ('A-Assets.json', 'resources.json')],
+              [task for task in tasks if task[1]['name'] in ('A-Assets.json', 'resources.json')])
+    for phase in phases:
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            receipts.extend(pool.map(lambda task: mirror_model(*task) if REPO == 'RMTAssets' and task[1]['name'] == MODEL else mirror_asset(*task), phase))
+    if not asset_name:
         # Prune only after every source file has passed full public readback.
         for tag, (source, originals) in expected_by_tag.items():
             if not mutable_tag(tag):
@@ -324,22 +357,14 @@ def sync(tags=None, asset_name='', workers=4):
                 raise ValueError('GitHub release changed during synchronization')
             names = {a['name'] for a in originals}
             for stale in attachments(release(tag)):
-                if stale['name'] not in names:
+                if stale['name'] not in names and not (REPO == 'RMTAssets' and stale['name'].startswith(MODEL)):
                     gc('/releases/' + quote(tag, safe='') + '/attach_files/' + str(int(stale['id'])), method='DELETE')
     return receipts
 
 
 
 def retire_sponsor_logo():
-    """Retire only Common/rmt.png after both public ZIPs preserve its bytes."""
-    tag, name = 'Common', 'rmt.png'
-    source = gh('/releases/tags/' + tag)
-    target = release(tag)
-    if source.get('draft') or not target:
-        raise ValueError('Both published Common releases are required')
-    github_assets = pages(gh, '/releases/' + str(source['id']) + '/assets')
-    gitcode_assets = attachments(target)
-
+    """Validate Sponsor.zip before retiring the redundant image on selected providers."""
     def public_bytes(url):
         with urlopen(Request(url, headers={'User-Agent': 'RMT-sponsor-cleanup'}), timeout=90) as response:
             data = response.read(64 * 1024 * 1024 + 1)
@@ -352,6 +377,44 @@ def retire_sponsor_logo():
         if len(found) > 1 or (required and not found):
             raise ValueError('Missing or duplicate sponsor attachment: ' + asset_name)
         return found[0] if found else None
+
+    if os.environ.get('RMT_RESOURCE_PROVIDER') == 'github':
+        tag, name = 'Common', 'rmt.png'
+        source = gh('/releases/tags/' + tag)
+        if source.get('draft'):
+            raise ValueError('Published Common release is required')
+        assets = pages(gh, '/releases/' + str(source['id']) + '/assets')
+        bundle = one(assets, 'Sponsor.zip')
+        if not bundle:
+            raise ValueError('Sponsor.zip is required')
+        payload = public_bytes(bundle['browser_download_url'])
+        if 'sha256:' + hashlib.sha256(payload).hexdigest() != bundle['digest'] or len(payload) != bundle['size']:
+            raise ValueError('Sponsor.zip checksum mismatch')
+        with zipfile.ZipFile(io.BytesIO(payload)) as archive:
+            entries = [e for e in archive.infolist() if e.filename == name]
+            if len(entries) != 1 or entries[0].file_size > 64 * 1024 * 1024:
+                raise ValueError('Invalid Sponsor.zip contents')
+            image = archive.read(entries[0])
+        if not image.startswith(b'\x89PNG\r\n\x1a\n'):
+            raise ValueError('Archived rmt.png is not a PNG')
+        old = one(assets, name)
+        if old:
+            if old['size'] != len(image) or public_bytes(old['browser_download_url']) != image:
+                raise ValueError('Loose sponsor image differs from archive')
+            gh('/releases/assets/' + str(int(old['id'])), method='DELETE')
+        if one(pages(gh, '/releases/' + str(source['id']) + '/assets'), name):
+            raise ValueError('Loose sponsor image remains')
+        if public_bytes(bundle['browser_download_url']) != payload:
+            raise ValueError('Sponsor.zip changed during cleanup')
+        return dict(status='passed', removed=['GitHub/Common/rmt.png'] if old else [])
+
+    tag, name = 'Common', 'rmt.png'
+    source = gh('/releases/tags/' + tag)
+    target = release(tag)
+    if source.get('draft') or not target:
+        raise ValueError('Both published Common releases are required')
+    github_assets = pages(gh, '/releases/' + str(source['id']) + '/assets')
+    gitcode_assets = attachments(target)
 
     github_zip = one(github_assets, 'Sponsor.zip', True)
     gitcode_zip = one(gitcode_assets, 'Sponsor.zip', True)

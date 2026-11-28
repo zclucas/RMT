@@ -1,4 +1,4 @@
-name: GitCode 同步与资源管理
+name: GitCode同步
 on:
   push:
     branches: ['**']
@@ -8,59 +8,27 @@ on:
   # 补偿由 GITHUB_TOKEN 操作或漏发事件造成的镜像遗漏。
   schedule:
     - cron: '17 4 * * *'
-  workflow_run:
-    workflows: [版本发布]
-    types: [completed]
   release:
     types: [published, edited]
   workflow_dispatch:
     inputs:
       operation:
-        description: 操作（mirror 同步代码与发行版；默认仅预览资源整理）
+        description: mirror 同步两仓库；sync 仅资源；默认预览 GitCode 发行顺序
         type: choice
         default: plan-presentation
-        options:
-          - mirror
-          - plan-presentation
-          - sync
-          - shared-url
-          - complete-catalogs
-          - presentation
-          - normalize
-          - catalog-names
-          - retire-obsolete
-          - restore-stable
-          - migrate
-          - sponsor-cleanup
-          - rebuild-presentation
-      resource_runner:
-        description: runner 标签；留空时同步/更新用 Ubuntu，历史整理用 macOS
-        type: string
+        options: [plan-presentation, mirror, sync, rebuild-presentation]
       tag:
-        description: sync 模式的资源标签；留空处理全部发行版
+        description: sync 的资源标签；留空同步全部
         type: string
       asset_name:
-        description: sync 可指定附件；shared-url 必填目标附件名
-        type: string
-      scope:
-        description: shared-url 的资源分类
-        type: choice
-        options: [Common, Patch]
-      url:
-        description: shared-url 必填新文件的公开 GitHub Release 下载地址
-        type: string
-      sha256:
-        description: shared-url 必填新文件 SHA-256（64 位小写十六进制）
+        description: sync 的附件名；留空同步整个标签
         type: string
   workflow_call:
     inputs:
       operation:
-        description: 版本发布内部使用 publish，不提供手动补传
         type: string
         required: true
     secrets:
-      RMT_ASSETS_TOKEN:
-        required: true
       GITCODE_RELEASE:
         required: true
 permissions:
@@ -68,9 +36,9 @@ permissions:
   actions: read
 jobs:
   mirror:
-    if: ${{ inputs.operation != 'publish' && (github.event_name != 'workflow_dispatch' || inputs.operation == 'mirror') && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_repository.full_name == github.repository)) }}
+    if: inputs.operation == 'mirror-all' || (github.event_name != 'workflow_dispatch' && inputs.operation == '') || inputs.operation == 'mirror'
     concurrency:
-      group: gitcode-rmt-mirror
+      group: rmt-resource-publication
       cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 180
@@ -86,126 +54,66 @@ jobs:
         run: python3 -u .github/scripts/mirror_rmt_refs.py
       # 分支变化及定时校准只同步 Git 引用，避免重复上传全部附件。
       - name: 同步所有已发布版本与附件并校验公开下载
-        if: github.event_name == 'workflow_dispatch' || github.event_name == 'release' || github.event_name == 'workflow_run' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/'))
+        if: inputs.operation == 'mirror-all' || github.event_name == 'workflow_dispatch' || github.event_name == 'release' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/'))
         env:
           GH_TOKEN: ${{ github.token }}
           GITCODE_TOKEN: ${{ secrets.GITCODE_RELEASE }}
         run: python3 -u .github/scripts/sync_gitcode_assets.py sync --repo RMT --workers 2
       - uses: actions/upload-artifact@v4
-        if: always() && (github.event_name == 'workflow_dispatch' || github.event_name == 'release' || github.event_name == 'workflow_run' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')))
+        if: always() && (inputs.operation == 'mirror-all' || github.event_name == 'workflow_dispatch' || github.event_name == 'release' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')))
         with:
           name: gitcode-release-result
           path: ${{ runner.temp }}/gitcode-sync.json
 
-  maintain:
-    if: github.event_name == 'workflow_dispatch' && inputs.operation != 'mirror' && inputs.operation != 'publish'
+
+      - name: 同步资源仓库的附件与清单
+        if: inputs.operation == 'mirror-all' || github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITCODE_TOKEN: ${{ secrets.GITCODE_RELEASE }}
+        run: python3 -u .github/scripts/sync_gitcode_assets.py sync --repo RMTAssets --workers 2
+      - name: 保存 GitCode 资源同步结果
+        if: always() && (inputs.operation == 'mirror-all' || github.event_name == 'workflow_dispatch')
+        uses: actions/upload-artifact@v4
+        with:
+          name: gitcode-assets-result
+          path: ${{ runner.temp }}/gitcode-sync.json
+
+  resources:
+    if: github.event_name == 'workflow_dispatch' && inputs.operation != 'mirror' && inputs.operation != 'mirror-all'
     concurrency:
       group: rmt-resource-publication
       cancel-in-progress: false
-    name: 资源维护 / ${{ inputs.operation }}
-    runs-on: ${{ inputs.resource_runner || ((inputs.operation == 'sync' || inputs.operation == 'shared-url' || inputs.operation == 'sponsor-cleanup') && 'ubuntu-latest' || 'macos-latest') }}
+    runs-on: ubuntu-latest
     timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: 执行所选维护操作
+      - name: 执行 GitCode 资源操作
+        shell: pwsh
         env:
-          GH_TOKEN: ${{ inputs.operation == 'sync' && github.token || secrets.RMT_ASSETS_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
           GITCODE_TOKEN: ${{ secrets.GITCODE_RELEASE }}
           RESOURCE_OPERATION: ${{ inputs.operation }}
           RELEASE_TAG: ${{ inputs.tag }}
           ASSET_NAME: ${{ inputs.asset_name }}
-          SCOPE: ${{ inputs.scope }}
-          SOURCE_URL: ${{ inputs.url }}
-          SOURCE_SHA256: ${{ inputs.sha256 }}
-        shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $pythonCommand = if ($IsWindows) { 'python' } else { 'python3' }
-          switch ($env:RESOURCE_OPERATION) {
-            'sync' {
-              if ($env:ASSET_NAME -eq 'Index-Translate-2B.Q4_K_M.gguf') {
-                throw '模型变更请使用 shared-url，以归档旧版本依赖。'
-              }
-              $syncArgs = @('-u', '.github/scripts/sync_gitcode_assets.py', 'sync', '--workers', '2')
-              if ($env:RELEASE_TAG) { $syncArgs += @('--tag', $env:RELEASE_TAG) }
-              if ($env:ASSET_NAME) { $syncArgs += @('--asset-name', $env:ASSET_NAME) }
-              & $pythonCommand @syncArgs
-            }
-            'sponsor-cleanup' {
-              & $pythonCommand -u .github/scripts/sync_gitcode_assets.py sponsor-cleanup
-            }
-            'shared-url' {
-              if (-not $env:ASSET_NAME -or -not $env:SOURCE_URL -or $env:SOURCE_SHA256 -cnotmatch '^[0-9a-f]{64}$') {
-                throw 'shared-url 必须提供附件名、公开下载地址及 64 位小写 SHA-256。'
-              }
-              & $pythonCommand -u .github/scripts/resource_layout.py shared-url --scope $env:SCOPE --name $env:ASSET_NAME --url $env:SOURCE_URL --sha256 $env:SOURCE_SHA256
-            }
-            default {
-              & $pythonCommand -u .github/scripts/resource_layout.py $env:RESOURCE_OPERATION
-            }
+          if ($env:RESOURCE_OPERATION -eq 'sync') {
+            $syncArgs = @('-u', '.github/scripts/sync_gitcode_assets.py', 'sync', '--workers', '2')
+            if ($env:RELEASE_TAG) { $syncArgs += @('--tag', $env:RELEASE_TAG) }
+            if ($env:ASSET_NAME) { $syncArgs += @('--asset-name', $env:ASSET_NAME) }
+            python3 @syncArgs
+          } else {
+            python3 -u .github/scripts/resource_layout.py $env:RESOURCE_OPERATION
           }
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: 保存维护结果与重建备份
+      - uses: actions/upload-artifact@v4
         if: always()
-        uses: actions/upload-artifact@v4
         with:
-          name: resource-maintenance-result
+          name: gitcode-resource-result
           path: |
             ${{ runner.temp }}/gitcode-sync.json
-            ${{ runner.temp }}/gitcode-sponsor-cleanup.json
             ${{ runner.temp }}/resource-layout-result.json
             ${{ runner.temp }}/resource-rebuild-backup.json
-
-  publish:
-    name: 发布两站分层资源
-    if: inputs.operation == 'publish' && github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
-    concurrency:
-      group: rmt-resource-publication
-      cancel-in-progress: false
-    runs-on: windows-latest
-    timeout-minutes: 180
-    defaults:
-      run:
-        shell: pwsh
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-      - name: 校验版本标签仍指向当前提交
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPO: ${{ github.repository }}
-          RELEASE_REF: ${{ github.ref }}
-          RELEASE_SHA: ${{ github.sha }}
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $remoteSha = gh api "repos/$env:REPO/commits/$env:RELEASE_REF" --jq '.sha'
-          if ($LASTEXITCODE -ne 0 -or -not $remoteSha -or $remoteSha.Trim() -ne $env:RELEASE_SHA) {
-            throw '版本标签已删除或改指向，停止发布旧提交的资源。'
-          }
-      - name: 下载本次打包产物
-        uses: actions/download-artifact@v4
-        with:
-          name: rmt-release
-          path: ${{ runner.temp }}/rmt-release
-      - name: 上传两站资源
-        env:
-          GH_TOKEN: ${{ secrets.RMT_ASSETS_TOKEN }}
-          GITCODE_TOKEN: ${{ secrets.GITCODE_RELEASE }}
-          RELEASE_SHA: ${{ github.sha }}
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $out = Join-Path $env:RUNNER_TEMP 'rmt-release'
-          $infoPath = Join-Path $out 'release-info.json'
-          $info = Get-Content -LiteralPath $infoPath -Raw | ConvertFrom-Json
-          if ($info.sha -ne $env:RELEASE_SHA) { throw '打包产物与当前提交不匹配。' }
-          & (Join-Path $env:GITHUB_WORKSPACE '.github/scripts/Upload-RmtAssets.ps1') -InfoPath $infoPath -OutDir $out -Repo 'zclucas/RMTAssets'
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: 保存资源发布结果
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: resource-layout-result
-          path: ${{ runner.temp }}/resource-layout-result.json
