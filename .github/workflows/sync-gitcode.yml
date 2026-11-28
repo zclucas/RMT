@@ -40,6 +40,7 @@ jobs:
     concurrency:
       group: rmt-resource-publication
       cancel-in-progress: false
+      queue: max
     runs-on: ubuntu-latest
     timeout-minutes: 180
     steps:
@@ -84,6 +85,7 @@ jobs:
     concurrency:
       group: rmt-resource-publication
       cancel-in-progress: false
+      queue: max
     runs-on: ubuntu-latest
     timeout-minutes: 180
     steps:

@@ -49,6 +49,7 @@ permissions:
 concurrency:
   group: rmt-release-${{ github.ref }}
   cancel-in-progress: false
+  queue: max
 
 jobs:
   pack:
@@ -289,6 +290,7 @@ jobs:
     concurrency:
       group: rmt-resource-publication
       cancel-in-progress: false
+      queue: max
     runs-on: windows-latest
     timeout-minutes: 180
     defaults:
@@ -352,6 +354,7 @@ jobs:
     concurrency:
       group: rmt-resource-publication
       cancel-in-progress: false
+      queue: max
     name: 资源维护 / ${{ inputs.operation }}
     runs-on: ${{ inputs.resource_runner || ((inputs.operation == 'inspect' || inputs.operation == 'shared-url' || inputs.operation == 'sponsor-cleanup') && 'ubuntu-latest' || 'macos-latest') }}
     timeout-minutes: 180
