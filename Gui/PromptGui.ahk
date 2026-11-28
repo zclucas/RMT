@@ -33,18 +33,8 @@ class PromptGui {
             this.data.RegionName := "框选范围"
             this.data.CountDownName := "倒计时"
         }
-        if (this.data.FlashMode == "主副屏")
-            this.data.FlashMode := "所有屏"
-        if (!this.data.HasProp("AudioPlayback"))
-            this.data.AudioPlayback := "后台播放"
-        if (!this.data.HasProp("PastePosition"))
+        if (!this.data.HasProp("PastePosition")) ; 1.2.2自由贴迁移
             this.data.PastePosition := "鼠标位置"
-        if (!this.data.HasProp("RegionMode"))
-            this.data.RegionMode := "显示"
-        if (!this.data.HasProp("RegionName"))
-            this.data.RegionName := ""
-        if (!this.data.HasProp("CountDownName"))
-            this.data.CountDownName := ""
         this._autoRemark := ReadCommandAutoRemark(this.data, GenerateCommandAutoRemark)
         this.remark := parts.Length > 1 ? parts[2] : ""
         if (serial != "" && !RegExMatch(serial, "\d+$"))
@@ -232,13 +222,7 @@ class PromptGui {
         }
     }
 
-    RegionEnd(data, axis, size) {
-        end := "EndPos" axis
-        if (data.HasProp(end) && data.%end% != "")
-            return data.%end%
-        start := "Pos" axis
-        return IsInteger(data.%start%) && IsInteger(data.%size%) ? data.%start% + data.%size% : ""
-    }
+    RegionEnd(data, axis, size) => data.%"EndPos" axis%
 
     AddField(body, name, label, options := [], kind := "", labelTip := "") {
         this.fields[name] := {label: label, options: options, kind: kind}
@@ -304,7 +288,6 @@ class PromptGui {
     AddCountDownTime(body) {
         data := this.data
         clock := ["14", "30", "00"]
-        this.legacyClock := ""
         if (data.Param2 == "时刻") {
             clock := [data.Hour, data.Min, data.Sec]
             if (data.Param1 != "") {
@@ -312,11 +295,6 @@ class PromptGui {
                 parts := StrSplit(raw, ":", " `t")
                 if (parts.Length >= 2 && parts.Length <= 3 && !RegExMatch(raw, "^\d{4}[-/.]"))
                     clock := [parts[1], parts[2], parts.Length == 3 ? parts[3] : "00"]
-                else {
-                    ; 旧配置也允许整段时刻变量或完整日期时间。
-                    this.legacyClock := raw
-                    clock := [raw, "00", "00"]
-                }
             }
         }
         this.AddCountDownParts(body, "CountDownDuration", "时长", [data.Hour, data.Min, data.Sec], 59)
@@ -338,7 +316,7 @@ class PromptGui {
             for variable in GetGuiVarArr(["hour", "minute", "second"][i])
                 items.Push(variable)
             value := values[i]
-            if (IsInteger(value) && !(prefix == "CountDownClock" && i == 1 && this.legacyClock != ""))
+            if (IsInteger(value))
                 value := Format("{:02}", Integer(value))
             this.AddEditableCombo(row, prefix part, items).Grid_Column(col).SetProp("Text", GetVariableComboText(items, GetLang(value)))
                 .ToolTip(GetLang(["时", "分", "秒"][i]))
@@ -599,8 +577,8 @@ class PromptGui {
         x2 := state.Get("RegionEndX", ""), y2 := state.Get("RegionEndY", "")
         resolve := (value) => value
         try {
-            x := PromptRangeAxis(x1, x2, "", resolve)
-            y := PromptRangeAxis(y1, y2, "", resolve)
+            x := PromptRangeAxis(x1, x2, resolve)
+            y := PromptRangeAxis(y1, y2, resolve)
         } catch ValueError {
             this._areaPreview.Hide()
             return
@@ -615,7 +593,7 @@ class PromptGui {
             if (start == "" || (end == "" && this.RegionEnd(this.data, axis, size) != ""))
                 throw ValueError(GetLang("提示参数不能为空") ": " GetLang("框选范围"))
             if (IsNumber(start) && (end == "" ? IsNumber(data.%size%) : IsNumber(end)))
-                PromptRangeAxis(start, end, data.%size%, (value) => value)
+                PromptRangeAxis(start, end, (value) => value)
             startField := "Pos" axis, endField := "EndPos" axis
             data.%startField% := start
             data.%endField% := end
@@ -666,11 +644,6 @@ class PromptGui {
         parts := []
         for part in ["Hour", "Min", "Sec"]
             parts.Push(GetVarName(Trim(state.Get(prefix part, ""))))
-        if (!duration && this.legacyClock != "" && parts[1] == GetVarName(this.legacyClock)
-            && parts[2] == "00" && parts[3] == "00") {
-            data.Param1 := this.legacyClock
-            return
-        }
         limits := duration ? [8760, 525600, 31536000] : [23, 59, 59]
         for i, value in parts {
             if (value == "")

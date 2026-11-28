@@ -268,8 +268,6 @@ MacroCommandActions() {
         "搜索Pro", SearchOnTrigger,
         "搜索All", SearchOnTrigger,
         "搜索Combo", SearchOnTrigger,
-        "组合搜索", SearchOnTrigger,
-        "搜索Multi", SearchOnTrigger,
         "移动", OnMouseMove,
         "移动Pro", OnMMPro,
         "增量移动", OnDeltaMove,
@@ -2291,9 +2289,9 @@ WindowReadInfo(data, query, preview := "") {
         target := "ahk_id " hwnd
         try {
             switch data.ActionType {
-                case "窗口位置", "位置与宽高":
+                case "位置与宽高":
                     WinGetPos(&x, &y, &w, &h, target)
-                    values := data.ActionType == "窗口位置" ? [x, y] : [x, y, w, h]
+                    values := [x, y, w, h]
                 case "标题类名句柄":
                     values := [WinGetTitle(target), WinGetClass(target), hwnd]
                 case "进程信息":
@@ -2306,9 +2304,6 @@ WindowReadInfo(data, query, preview := "") {
                     exStyle := WinGetExStyle(target)
                     values := [1, WinActive(target) ? 1 : 0, mm == -1 ? 1 : 0, mm == 1 ? 1 : 0, (exStyle & 0x8) ? 1 : 0,
                         alpha == "" ? 100 : Round(alpha * 100 / 255), (exStyle & 0x20) ? 1 : 0]
-                case "透明度与鼠标穿透状态":
-                    alpha := WinGetTransparent(target)
-                    values := [alpha == "" ? 100 : Round(alpha * 100 / 255), (WinGetExStyle(target) & 0x20) ? 1 : 0]
             }
         } catch as e {
             if (IsObject(preview))
@@ -2359,18 +2354,6 @@ OnWindowManage(tableItem, cmd, index) {
     hwnds := WindowMatchedHandles(winTitle, matchMode)
     if (!hwnds.Length)
         return
-
-    ; 查询返回第一个匹配窗口的完整宽高，与工具监视的尺寸一致。
-    if (Data.ActionType == "获取窗口宽高") {
-        try {
-            WinGetPos(, , &width, &height, "ahk_id " hwnds[1])
-            widthVar := GetVarName(Data.WidthVarName)
-            heightVar := GetVarName(Data.HeightVarName)
-            if (widthVar != "" && heightVar != "")
-                MySetGlobalVariable([widthVar, heightVar], [width, height], false)
-        }
-        return
-    }
 
     if (Data.ActionType == "激活窗口") {
         ; 逐个激活时从后向前，最后让原本最靠前的匹配窗口获得焦点。
@@ -2489,7 +2472,7 @@ ApplyKeyCheckResult(Data, isJoy := false) {
         else
             digitalKeys.Push(key)
     }
-    checkType := isJoy ? CmdEnumJoyCheck(Data.CheckType, analogKeys.Length > 0) : CmdEnumZh(Data.CheckType, CmdEnumKeyCheckNames())
+    checkType := isJoy ? CurrentJoyCheck(Data.CheckType) : CmdEnumZh(Data.CheckType, CmdEnumKeyCheckNames())
     stateType := CmdEnumZh(Data.StateType, CmdEnumStateNames())
 
     if (analogKeys.Length > 0) {
@@ -2596,7 +2579,7 @@ IsJoyAxisCompare(name, stored, cmpType) {
     if (ahkAxis == "")
         return false
     isTrig := (name == "LT" || name == "RT")
-    compare := CmdEnumJoyCheck(cmpType, true)
+    compare := CurrentJoyCheck(cmpType)
     axis := StrLower(name)
     matches := MatchXInputJoyState((state) => JoyAxisMatches(
         isTrig ? Round(state.%axis% * 100 / 255) : state.%axis%, stored, compare), &hasXInput)

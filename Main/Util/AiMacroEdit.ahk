@@ -7,7 +7,7 @@ class AiMacroEdit {
 
     static Tools() {
         return [
-            AiAssist._ToolDef("preview_macro_step_edit", "预览指定步骤的参数修改。changes 使用 read_macro_step 里的字段名，只传要改的字段。", '[{"name":"tab","type":"integer","desc":"页签序号","req":true},{"name":"index","type":"integer","desc":"宏序号"},{"name":"item_id","type":"string","desc":"宏 ID","req":true},{"name":"command_index","type":"integer","desc":"步骤序号","req":true},{"name":"phase","type":"string","desc":"body、pre 或 post"},{"name":"expected_command","type":"string","desc":"步骤原文","req":true},{"name":"target_index","type":"integer","desc":"搜索目标序号，多目标时修改目标参数必填"},{"name":"row_index","type":"integer","desc":"变量行或等待条件行，从 1 开始"},{"name":"changes","type":"object","desc":"搜索：Similar、SearchText、SearchColor、SearchImagePath、StartPosX/Y、EndPosX/Y、SearchCount、SearchInterval。变量：VariableArr、CopyVariableArr、MinVariableArr、MaxVariableArr、OperaTypeArr，值写单行标量。等待：TimeoutMs、Interval、ResultSaveName、Param1、Param2、DurationMs、RandomMaxMs、ConditionValue。","req":true}]'),
+            AiAssist._ToolDef("preview_macro_step_edit", "预览指定步骤的参数修改。changes 使用 read_macro_step 里的字段名，只传要改的字段。", '[{"name":"tab","type":"integer","desc":"页签序号","req":true},{"name":"index","type":"integer","desc":"宏序号"},{"name":"item_id","type":"string","desc":"宏 ID","req":true},{"name":"command_index","type":"integer","desc":"步骤序号","req":true},{"name":"phase","type":"string","desc":"body、pre 或 post"},{"name":"expected_command","type":"string","desc":"步骤原文","req":true},{"name":"target_index","type":"integer","desc":"搜索目标序号，多目标时修改目标参数必填"},{"name":"row_index","type":"integer","desc":"变量行或等待条件行，从 1 开始"},{"name":"changes","type":"object","desc":"搜索：Similar、SearchText、SearchColor、SearchImagePath、StartPosX/Y、EndPosX/Y、SearchCount、SearchInterval。变量：VariableArr、CopyVariableArr、MinVariableArr、MaxVariableArr、OperaTypeArr，值写单行标量。等待：TimeoutMs、Interval、TimeoutStatusVar、Param1、Param2、DurationMs、RandomMaxMs、ConditionValue。","req":true}]'),
             AiAssist._ToolDef("apply_macro_step_edit", "显示预览差异，用户确认后应用该预览。", '[{"name":"preview_id","type":"integer","desc":"preview_macro_step_edit 返回的编号","req":true}]'),
             AiAssist._ToolDef("undo_macro_step_edit", "确认后撤销当前配置中本次启动以来最近一次结构化参数修改。", "[]")
         ]
@@ -38,7 +38,7 @@ class AiMacroEdit {
     }
 
     static IsSearch(kind) {
-        return InStr("|搜索|搜索Pro|搜索All|搜索Combo|组合搜索|搜索Multi|", "|" kind "|", true) > 0
+        return InStr("|搜索|搜索Pro|搜索All|搜索Combo|", "|" kind "|", true) > 0
     }
 
     static RequireWrite() {
@@ -153,11 +153,9 @@ class AiMacroEdit {
         switch field {
             case "TimeoutMs", "Interval":
                 AiMacroEdit.Set(data, field, AiMacroEdit.Int(value, field = "Interval" ? 1 : 0, 4294967295, field), diff)
-            case "ResultSaveName":
+            case "TimeoutStatusVar":
                 name := value == "" ? "" : AiMacroEdit.VarName(value, field)
                 AiMacroEdit.Set(data, field, name, diff)
-                if (data.Has("TimeoutStatusVar"))
-                    AiMacroEdit.Set(data, "TimeoutStatusVar", name, diff)
             case "DurationMs", "RandomMaxMs":
                 time := data.Get("TimeConfig", "")
                 unit := Type(time) == "Map" ? TimeNormWaitType(time.Get("Param2", "")) : ""

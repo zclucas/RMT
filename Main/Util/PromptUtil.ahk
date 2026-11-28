@@ -29,6 +29,8 @@ class PromptData {
         this.PosY := 200
         this.Width := 200
         this.Height := 100
+        this.EndPosX := 400
+        this.EndPosY := 300
         this.Color := PromptData.RegionColor
         this.Thickness := PromptData.RegionThickness
         this.FlashDuration := 300
@@ -60,11 +62,8 @@ PromptInt(value, min, max) {
     return Integer(value)
 }
 
-; 旧版区域以起点和长度保存，新版可使用起点和终点。
-PromptRangeAxis(start, end, length, resolve) {
+PromptRangeAxis(start, end, resolve) {
     start := PromptInt(resolve(start), -32768, 65534)
-    if (end == "")
-        return [PromptInt(start, -32768, 32767), PromptInt(resolve(length), 1, 32767)]
     end := PromptInt(resolve(end), -32768, 65534)
     return [PromptInt(Min(start, end), -32768, 32767), PromptInt(Abs(end - start), 1, 32767)]
 }
@@ -91,7 +90,7 @@ OnPrompt(tableItem, cmd, index) {
             MyCountDownClose("")
             return
         }
-        data.CountDownName := data.HasProp("CountDownName") ? Trim(replace(data.CountDownName)) : ""
+        data.CountDownName := Trim(replace(data.CountDownName))
         if (data.CountDownMode == "关闭" && data.CountDownName != "") {
             MyCountDownClose("", data.CountDownName)
             return
@@ -101,8 +100,7 @@ OnPrompt(tableItem, cmd, index) {
         if (data.CountDownMode == "显示") {
             if (CountDownKind(data) == "时长") {
                 for name, limit in Map("Hour", 8760, "Min", 525600, "Sec", 31536000) {
-                    if (data.HasProp(name))
-                        data.%name% := PromptInt(resolve(data.%name%), 0, limit)
+                    data.%name% := PromptInt(resolve(data.%name%), 0, limit)
                 }
             }
             TimeExecCountDown(tableItem, index, data)
@@ -111,8 +109,8 @@ OnPrompt(tableItem, cmd, index) {
         return
     }
     if (data.Type == "区域高亮") {
-        data.RegionName := data.HasProp("RegionName") ? Trim(replace(data.RegionName)) : ""
-        if (data.HasProp("RegionMode") && data.RegionMode == "关闭") {
+        data.RegionName := Trim(replace(data.RegionName))
+        if (data.RegionMode == "关闭") {
             request := {Type: data.Type, RegionMode: data.RegionMode, RegionName: data.RegionName}
             if (MyShowPrompt(JSON.stringify(request, 0)) == false)
                 throw Error(GetLang("提示请求发送失败"))
@@ -130,7 +128,7 @@ OnPrompt(tableItem, cmd, index) {
                 voice.Speak(data.Text, 16) ; 按纯文本朗读
             case "自定义音频":
                 path := replace(data.AudioPath)
-                if (data.HasProp("AudioPlayback") && data.AudioPlayback == "使用播放器")
+                if (data.AudioPlayback == "使用播放器")
                     PromptOpenAudioPlayer(path)
                 else if (data.AudioWait == "等待结束")
                     PromptPlayAudio(path, true, tableItem, index)
@@ -148,6 +146,7 @@ OnPrompt(tableItem, cmd, index) {
     }
     switch data.Type {
         case "自由贴":
+            ; 1.2.2自由贴迁移保留工具的默认定位行为。
             if (data.HasProp("PastePosition") && (data.PasteMode == "文本" || data.PasteMode == "图片")) {
                 if (data.PastePosition == "固定位置") {
                     data.PosX := PromptInt(resolve(data.PosX), -32768, 32767)
@@ -163,8 +162,8 @@ OnPrompt(tableItem, cmd, index) {
         case "临时提示":
             data.Duration := PromptInt(resolve(data.Duration), 1, 600000)
         case "区域高亮":
-            x := PromptRangeAxis(data.PosX, data.HasProp("EndPosX") ? data.EndPosX : "", data.Width, resolve)
-            y := PromptRangeAxis(data.PosY, data.HasProp("EndPosY") ? data.EndPosY : "", data.Height, resolve)
+            x := PromptRangeAxis(data.PosX, data.EndPosX, resolve)
+            y := PromptRangeAxis(data.PosY, data.EndPosY, resolve)
             data.PosX := x[1], data.Width := x[2]
             data.PosY := y[1], data.Height := y[2]
             data.Duration := PromptInt(resolve(data.Duration), 1, 600000)

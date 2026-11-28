@@ -34,7 +34,7 @@
 
 // ABI 版本：宿主可用 Translate_ApiVersion() 校验 DLL 是否与本头文件匹配。
 // 历史：1 = 初版（Load / Run / Cancel）；2 = Run 支持逐次超时与结构化术语表。
-#define TRANSLATE_API_VERSION 2
+#define TRANSLATE_API_VERSION 3
 
 #if defined(_WIN32)
 #  if defined(TRANSLATE_BUILD)
@@ -48,15 +48,13 @@
 #  define TRANSLATE_CALL
 #endif
 
-// 加载/推理参数。首字段 structSize 做向前兼容：宿主填 sizeof(TranslateOptions)，
-// DLL 按这个值判断宿主头文件版本，新字段只在 structSize 覆盖到时才读。
+// 加载/推理参数。structSize须等于当前sizeof(TranslateOptions)。
 typedef struct TranslateOptions {
     int32_t structSize;     // sizeof(TranslateOptions)
     int32_t nCtx;           // 上下文长度，0 = 2048。翻译是单向短文本，不需要长上下文
     int32_t nThreads;       // 计算线程数，0 = 由 DLL 按 CPU 核数决定（只对 CPU 计算生效）
     int32_t maxTokens;      // 单次输出 token 上限，0 = 512
     int32_t nBatch;         // 批大小，0 = 512
-    int32_t timeoutMs;      // 兼容字段；v2 的单次超时由 Translate_Run 传入
     int32_t nGpuLayers;     // GPU 卸载层数：-1 = 自动（有 Vulkan/GPGPU 后端就全卸载，没有落 CPU）；
                             // 0 = 仅 CPU（不碰显存）；>0 = 卸载指定层数。
                             // 换了取值要重新 Load 才生效，登录后不可切换。
@@ -116,7 +114,7 @@ TRANSLATE_API void TRANSLATE_CALL Translate_Unload(void);
 // text     源文本（UTF-16）
 // target   目标语言：语言码（zh / en / ja / ko / ru / fr / de / es …）或语言名
 //          （“简体中文” / “English”），会原样写进 prompt，不做映射表
-// legacyGlossary 旧版术语表原文，保持兼容；新条目使用 glossaryItems，不解析分隔符
+// 术语表使用结构化 glossaryItems，不解析分隔符
 // glossaryItems / glossaryCount 结构化术语对照；字符串内容原样写入 prompt
 // timeoutMs 单次调用的时间上限，超时按「已生成部分」返回并置 truncated
 // out/outChars  译文出参，宿主提供缓冲，按 wchar_t 计数（含 NUL）
@@ -126,7 +124,6 @@ TRANSLATE_API void TRANSLATE_CALL Translate_Unload(void);
 // 译文不做任何加工：不去引号、不补句号。要去掉模型可能带出的思考块与解释，
 // 由 DLL 内部处理（prompt 约束 + 后处理剥离），宿主拿到的是干净译文。
 TRANSLATE_API int TRANSLATE_CALL Translate_Run(const wchar_t* text, const wchar_t* target,
-                                               const wchar_t* legacyGlossary,
                                                const TranslateGlossaryItem* glossaryItems,
                                                int32_t glossaryCount,
                                                int32_t timeoutMs,

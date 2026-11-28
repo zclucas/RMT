@@ -32,7 +32,7 @@ class SearchAllGui extends SearchProGui {
         for name in MySoftData.GlobalArrMap
             names.Push(name)
         this._SetCombo("AllSaveNameCon", names, this.Data.AllSaveName)
-        savedOrder := this.Data.AllSort == "左右优先" ? "上下左右" : this.Data.AllSort
+        savedOrder := this.Data.AllSort
         sortIndex := -1
         for index, order in this.SortOrders {
             if (order == savedOrder) {

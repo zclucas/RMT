@@ -7,7 +7,7 @@
 ; §15.1 多目标重构：左侧目标列表（ListBox + AddXamlItem 动态注入目标卡片，单选高亮），
 ;   每个目标独立配置 搜索类型/窗口信息/坐标/图片/颜色/文本/相似度；
 ;   右侧整体设置（搜索次数/间隔/满足个数/鼠标动作/结果保存/目标点保存/找到/未找到指令）。
-; §19 合并决策：移除「屏幕规格」行（ConfigDLCon/ConfigArr 不再在 GUI 管理，旧配置字段保留无害）。
+; §19 合并决策：移除「屏幕规格」行（ConfigDLCon/ConfigArr 不再在 GUI 管理，单目标分辨率配置不用于组合搜索）。
 ; 屏幕级功能（预览框/取色器/截图/鼠标跟踪/F1-F3热键）沿用原生全局函数，作用于当前选中目标。
 ; =====================================================================
 
@@ -27,7 +27,7 @@ class SearchComboGui {
         this.LastIsWin := ""
         this.MacroGui := ""
         this.CurTarget := 1           ; 当前选中目标（工具行/预览/框选/取色作用于它）
-        this.TargetList := []          ; 目标数组（= Data.SearchTargetArr 或旧配置构造）
+        this.TargetList := []          ; 目标数组（Data.SearchTargetArr）
         this.ImageProcessGui := ""
         this._textBuilder := ""
 
@@ -1330,31 +1330,6 @@ class SearchComboGui {
                 EndPosY: GetBuiltinVarName(this.ui.Query(tn "EndPosY"))
             }
             data.SearchTargetArr.Push(t)
-            if (n == 1) {
-                ; 顶层字段同步第一个目标（兼容旧读法/旧配置回退）
-                data.SearchType := t.SearchType
-                data.WinInfo := t.WinInfo
-                data.SearchColor := t.SearchColor
-                data.SearchText := t.SearchText
-                data.SearchImagePath := t.SearchImagePath
-                data.Similar := t.Similar
-                data.OCRType := t.OCRType
-                data.OcrEngine := t.OcrEngine
-                data.SearchImageType := t.SearchImageType
-                data.ColorMatch := t.ColorMatch
-                data.Adaptive := t.Adaptive
-                data.MultiPointData := t.MultiPointData
-                data.MultiPointSeedData := t.MultiPointSeedData
-                data.SuperMultiPointSeedData := t.SuperMultiPointSeedData
-                data.SuperMultiPointIgnoreData := t.SuperMultiPointIgnoreData
-                data.MultiPointTolerance := t.MultiPointTolerance
-                data.SuperMultiPointTolerance := t.SuperMultiPointTolerance
-                data.MultiPointMode := t.MultiPointMode
-                data.StartPosX := t.StartPosX
-                data.StartPosY := t.StartPosY
-                data.EndPosX := t.EndPosX
-                data.EndPosY := t.EndPosY
-            }
         }
         data.SatisfyCount := this.ui.Query("SatisfyCountCon") == GetLang("所有") ? -1 : this.ui.Query("SatisfyCountCon")
         data.SearchCount := this.ui.Query("SearchCountCon") == GetLang("无限") ? -1 : this.ui.Query("SearchCountCon")
@@ -1568,8 +1543,8 @@ class SearchComboGui {
 
         this._RebuildTargetList()
 
-        ; 整体设置（SatisfyCount 为新字段，旧配置缺失时回退 -1=所有）
-        satVal := ObjHasOwnProp(this.Data, "SatisfyCount") ? this.Data.SatisfyCount : -1
+        ; 整体设置：-1表示所有目标。
+        satVal := this.Data.SatisfyCount
         this._SetCombo("SatisfyCountCon", [GetLang("所有")], satVal == -1 ? GetLang("所有") : satVal)
         this._SetCombo("SearchCountCon", [GetLang("无限")], this.Data.SearchCount == -1 ? GetLang("无限") : this.Data.SearchCount)
         this.ui.Update("SearchIntervalCon", "Text", this.Data.SearchInterval)

@@ -1,7 +1,7 @@
 #Requires AutoHotkey v2.0
 
 class ProcessManageGui extends CommentGui {
-    ; 配置兼容旧键，界面与输出指令通过 GetLang 显示为“进程”。
+    ; 规范存储键为进程管理，界面显示为“进程”。
     static CmdKey := "进程管理"
     _autoRemark := ""
     static Outputs := ["ResultVar", "NameVar", "PidVar", "PathVar", "ResultArray", "ExistVar", ProcessInfo.Metrics*]
@@ -44,20 +44,20 @@ class ProcessManageGui extends CommentGui {
         pick := this._Choice(row, "选取方式：", "PickMatch", ProcessManage.MatchPicks)
         pick.Name("ProcessPickRow")
         this._Output(row, "ExistVar", "是否存在：", true, GetLang("存在：1，不存在：0。"))
-        this._ShowFor(row, [CmdEnumIndex("进程信息", ProcessManage.Actions)])
+        this._ShowFor(row, [CurrentCommandChoiceIndex("进程信息", ProcessManage.Actions)])
         row := this._Pair(body)
         this._Output(row, "PidVar", "PID：")
         this._Output(row, "PathVar", "程序路径：", true)
-        this._ShowFor(row, [CmdEnumIndex("进程信息", ProcessManage.Actions)])
+        this._ShowFor(row, [CurrentCommandChoiceIndex("进程信息", ProcessManage.Actions)])
         for fields in ProcessManageGui.MetricRows {
             row := this._Pair(body)
             for i, field in fields
                 this._Output(row, field[1], field[2], i == 2, GetLang(field[3]))
-            this._ShowFor(row, [CmdEnumIndex("进程信息", ProcessManage.Actions)])
+            this._ShowFor(row, [CurrentCommandChoiceIndex("进程信息", ProcessManage.Actions)])
         }
         row := this._Pair(body)
         this._Output(row, "ResultArray", "结果数组：", false, GetLang("所有匹配的PID"))
-        this._ShowFor(row, [CmdEnumIndex("列出进程", ProcessManage.Actions)])
+        this._ShowFor(row, [CurrentCommandChoiceIndex("列出进程", ProcessManage.Actions)])
         CmdEditorForm.Footer(body)
 
         template := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", height)
@@ -106,7 +106,7 @@ class ProcessManageGui extends CommentGui {
                 item.Name("ProcessPidMatchOption")
                 style := item.Add("ComboBoxItem.Style").Add("Style").TargetType("ComboBoxItem")
                 trigger := style.Add("Style.Triggers").Add("DataTrigger")
-                    .Binding("{Binding SelectedIndex, ElementName=Action}").Value(CmdEnumIndex("列出进程", ProcessManage.Actions))
+                    .Binding("{Binding SelectedIndex, ElementName=Action}").Value(CurrentCommandChoiceIndex("列出进程", ProcessManage.Actions))
                 trigger.Add("Setter").Property("Visibility").Value("Collapsed")
             }
         }
@@ -126,12 +126,12 @@ class ProcessManageGui extends CommentGui {
         triggers := style.Add("Style.Triggers")
         trigger := triggers.Add("MultiDataTrigger")
         conditions := trigger.Add("MultiDataTrigger.Conditions")
-        conditions.Add("Condition").Binding("{Binding SelectedIndex, ElementName=MatchBy}").Value(CmdEnumIndex("PID", ProcessManage.MatchModes))
+        conditions.Add("Condition").Binding("{Binding SelectedIndex, ElementName=MatchBy}").Value(CurrentCommandChoiceIndex("PID", ProcessManage.MatchModes))
         conditions.Add("Condition").Binding("{Binding Text, ElementName=Target}").Value("")
         trigger.Add("Setter").Property("Visibility").Value("Visible")
         trigger := triggers.Add("MultiDataTrigger")
         conditions := trigger.Add("MultiDataTrigger.Conditions")
-        conditions.Add("Condition").Binding("{Binding SelectedIndex, ElementName=MatchBy}").Value(CmdEnumIndex("完整路径匹配", ProcessManage.MatchModes))
+        conditions.Add("Condition").Binding("{Binding SelectedIndex, ElementName=MatchBy}").Value(CurrentCommandChoiceIndex("完整路径匹配", ProcessManage.MatchModes))
         conditions.Add("Condition").Binding("{Binding Text, ElementName=Target}").Value("")
         trigger.Add("Setter").Property("Visibility").Value("Visible")
         trigger.Add("Setter").Property("Text").Value(GetLang("请输入程序完整路径"))
@@ -177,9 +177,9 @@ class ProcessManageGui extends CommentGui {
             this._matchMode := "进程名"
             this._targets[this._matchMode] := ""
         }
-        this._ComboPush("Action", "SelectedIndex", CmdEnumIndex(action, ProcessManage.Actions))
-        this._ComboPush("MatchBy", "SelectedIndex", CmdEnumIndex(this._matchMode, ProcessManage.MatchModes))
-        this._ComboPush("PickMatch", "SelectedIndex", CmdEnumIndex(this.Data.HasProp("PickMatch") ? this.Data.PickMatch : "首个", ProcessManage.MatchPicks))
+        this._ComboPush("Action", "SelectedIndex", CurrentCommandChoiceIndex(action, ProcessManage.Actions))
+        this._ComboPush("MatchBy", "SelectedIndex", CurrentCommandChoiceIndex(this._matchMode, ProcessManage.MatchModes))
+        this._ComboPush("PickMatch", "SelectedIndex", CurrentCommandChoiceIndex(this.Data.PickMatch, ProcessManage.MatchPicks))
         this._FillTargets()
         this._ComboPush("Remark", "Text", parts.Length >= 2 ? parts[2] : "")
         vars := GetGuiVarArr()
@@ -187,7 +187,7 @@ class ProcessManageGui extends CommentGui {
         for field in ProcessManageGui.Outputs {
             for name in (field == "ResultArray" ? arrays : vars)
                 this._ComboPush(field, "AddItem", name)
-            value := parts.Length && this.Data.HasProp(field) ? this.Data.%field% : ""
+            value := parts.Length ? this.Data.%field% : ""
             if (value == "")
                 value := ProcessManageGui.OutputDefaults.Get(field, "")
             this._ComboPush(field, "Text", value)
@@ -302,9 +302,9 @@ class ProcessManageGui extends CommentGui {
         if (!this.Hwnd())
             return
         state := this.ui.Query("Action", "MatchBy")
-        if (CmdEnumZh(state["Action"], ProcessManage.Actions) == "列出进程"
-            && CmdEnumZh(state["MatchBy"], ProcessManage.MatchModes) == "PID") {
-            this.ui.Update("MatchBy", "SelectedIndex", CmdEnumIndex("进程名", ProcessManage.MatchModes))
+        if (CurrentCommandChoice(state["Action"], ProcessManage.Actions) == "列出进程"
+            && CurrentCommandChoice(state["MatchBy"], ProcessManage.MatchModes) == "PID") {
+            this.ui.Update("MatchBy", "SelectedIndex", CurrentCommandChoiceIndex("进程名", ProcessManage.MatchModes))
             this._OnMatchByChanged()
         }
     }
@@ -315,7 +315,7 @@ class ProcessManageGui extends CommentGui {
         state := this.ui.Query("MatchBy", "Target", "ProcessWindowBinding")
         if (state["MatchBy"] == "")
             return
-        mode := CmdEnumZh(state["MatchBy"], ProcessManage.MatchModes)
+        mode := CurrentCommandChoice(state["MatchBy"], ProcessManage.MatchModes)
         if (mode == this._matchMode)
             return
         this._StopWindowPick()
@@ -439,7 +439,7 @@ class ProcessManageGui extends CommentGui {
             for field in fields {
                 if (field == "CountVar") {
                     ; 已配置的匹配数量变量继续写入。
-                    data.CountVar := this.Data.HasProp("CountVar") ? this.Data.CountVar : ""
+                    data.CountVar := this.Data.CountVar
                     continue
                 }
                 name := Trim(state[field])
@@ -460,10 +460,10 @@ class ProcessManageGui extends CommentGui {
     _ReadOperation(state) {
         data := ProcessManageData()
         data.SerialStr := this.SerialStr
-        data.Action := CmdEnumZh(state["Action"], ProcessManage.Actions)
-        data.MatchBy := CmdEnumZh(state["MatchBy"], ProcessManage.MatchModes)
+        data.Action := CurrentCommandChoice(state["Action"], ProcessManage.Actions)
+        data.MatchBy := CurrentCommandChoice(state["MatchBy"], ProcessManage.MatchModes)
         data.Target := Trim(state[data.MatchBy == "窗口绑定" ? "ProcessWindowBinding" : "Target"])
-        data.PickMatch := CmdEnumZh(state["PickMatch"], ProcessManage.MatchPicks)
+        data.PickMatch := CurrentCommandChoice(state["PickMatch"], ProcessManage.MatchPicks)
         return data
     }
 

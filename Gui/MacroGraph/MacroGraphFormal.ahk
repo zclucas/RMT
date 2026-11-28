@@ -1138,7 +1138,6 @@ class MacroGraphFormalMixin {
         atKey := GetLangKey(at)
         isMove := atKey == "移动窗口" || atKey == "相对移动" || atKey == "位置和宽高"
         isSize := atKey == "调整宽高" || atKey == "位置和宽高"
-        isGetSize := atKey == "获取窗口宽高"
         isTitle := atKey == "修改标题"
         isTrans := atKey == "修改透明度"
         this._AddComboRow(body, "WmActRow_" id, GetLang("操作："), "WmActCmb_" id, actions, this._IndexInLangArr(actions, GetLang(WindowActionGroup(atKey))), true, true, lw, cw)
@@ -1152,8 +1151,6 @@ class MacroGraphFormalMixin {
         this._AddEditableComboRow(body, "WmYRow_" id, GetLang(atKey == "相对移动" ? "偏移Y：" : "坐标Y："), "WmY_" id, atKey == "相对移动" ? varList : GetGuiVarArr("y"), GetLang(d.HasOwnProp("wmPosY") ? d.wmPosY : 0), isMove, lw, cw, "WmYLabel_" id)
         this._AddEditableComboRow(body, "WmWRow_" id, GetLang("宽度："), "WmW_" id, varList, d.HasOwnProp("wmWidth") ? d.wmWidth : 0, isSize, lw, cw)
         this._AddEditableComboRow(body, "WmHRow_" id, GetLang("高度："), "WmH_" id, varList, d.HasOwnProp("wmHeight") ? d.wmHeight : 0, isSize, lw, cw)
-        this._AddEditableComboRow(body, "WmWidthVarRow_" id, GetLang("宽度变量："), "WmWidthVar_" id, varList, d.HasOwnProp("wmWidthVarName") ? d.wmWidthVarName : "WinWidth", isGetSize, lw, cw)
-        this._AddEditableComboRow(body, "WmHeightVarRow_" id, GetLang("高度变量："), "WmHeightVar_" id, varList, d.HasOwnProp("wmHeightVarName") ? d.wmHeightVarName : "WinHeight", isGetSize, lw, cw)
         body.Add("TextBlock").Name("WmHint_" id).Text(GetLang(WindowEditorHint(atKey))).TextWrapping("Wrap").Margin("0,6,0,4").Opacity(0.75).FontSize(this._MGFontSize(11))
         fields := WindowInfoFields(atKey)
         Loop 7 {
@@ -1759,7 +1756,7 @@ class MacroGraphFormalMixin {
             this._BindCtrl("WmWinEdit_" id, "Click", this._OnFormalWmWinEdit.Bind(this, id), runtime)
             Loop 7
                 this._FormalTrackEditCombo(id, "WmResult" A_Index, h, runtime)
-            for nm in ["WmX", "WmY", "WmW", "WmH", "WmWidthVar", "WmHeightVar", "WmTitle", "WmTrans"]
+            for nm in ["WmX", "WmY", "WmW", "WmH", "WmTitle", "WmTrans"]
                 this._FormalTrackEditCombo(id, nm, h, runtime)
         } else if (t == GetLang("按键检测") || t == GetLang("手柄检测")) {
             h := this._OnFormalKeyCheck.Bind(this, id)

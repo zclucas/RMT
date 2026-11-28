@@ -31,9 +31,7 @@ class TranslateGui {
         this.SerialStr := ""
         this.Data := ""
         this._title := ""
-        this._glossary := []   ; 结构化术语和未迁移旧条目
-        this._legacyGlossary := ""
-        this._legacyGlossaryLines := []
+        this._glossary := []   ; 结构化术语
         this._glossSeq := 0
         this._glossBound := Map()  ; 已登记过 Click 回调的标签按钮 id（OnEvent 是 Push 会叠）
     }
@@ -196,39 +194,22 @@ class TranslateGui {
                 this._ComboPush(name, "AddItem", varName)
         }
         for name in TranslateGui.TextFields
-            this._ComboPush(name, "Text", String(this.Data.HasOwnProp(name) ? this.Data.%name% : ""))
-        ; 旧格式原文保留到用户明确删除；新条目从结构化字段读取。
+            this._ComboPush(name, "Text", String(this.Data.%name%))
         this._glossary := []
         this._glossSeq := 0
         this._glossBound := Map()
-        this._legacyGlossary := String(this.Data.HasOwnProp("Glossary") ? this.Data.Glossary : "")
-        this._legacyGlossaryLines := []
-        if (this._legacyGlossary != "") {
-            for line in StrSplit(this._legacyGlossary, "`n") {
-                line := RTrim(line, "`r")
-                if (line == "")
-                    continue
-                this._legacyGlossaryLines.Push(line)
-                this._glossSeq++
-                this._glossary.Push({id: this._glossSeq, legacy: true, legacyIndex: this._legacyGlossaryLines.Length, text: line})
-            }
-        }
-        if (this.Data.HasOwnProp("GlossaryItems") && this.Data.GlossaryItems is Array) {
-            for item in this.Data.GlossaryItems {
-                if (!IsObject(item) || !item.HasOwnProp("source") || !item.HasOwnProp("target"))
-                    continue
-                this._glossSeq++
-                this._glossary.Push({id: this._glossSeq, legacy: false, source: String(item.source), target: String(item.target)})
-            }
+        for item in this.Data.GlossaryItems {
+            this._glossSeq++
+            this._glossary.Push({id: this._glossSeq, source: String(item.source), target: String(item.target)})
         }
         for name, values in TranslateGui.Choices {
-            value := CmdEnumZh(this.Data.%name%, values)
-            this._ComboPush(name, "SelectedIndex", CmdEnumIndex(value, values))
+            value := CurrentCommandChoice(this.Data.%name%, values)
+            this._ComboPush(name, "SelectedIndex", CurrentCommandChoiceIndex(value, values))
         }
         ; Init 阶段批量更新尚未提交，Query 取不到刚设的下拉值，按存储值直接算初始显隐
-        source := CmdEnumZh(this.Data.Source, TranslateCommand.Sources)
+        source := CurrentCommandChoice(this.Data.Source, TranslateCommand.Sources)
         this._ComboPush("TargetCustomRow", "Visibility",
-            CmdEnumZh(this.Data.Target, TranslateCommand.Targets) == "自定义" ? "Visible" : "Collapsed")
+            CurrentCommandChoice(this.Data.Target, TranslateCommand.Targets) == "自定义" ? "Visible" : "Collapsed")
         this._ComboPush("TextRow", "Visibility", source == "固定文本" ? "Visible" : "Collapsed")
         this._ComboPush("TextVarRow", "Visibility", source == "变量" ? "Visible" : "Collapsed")
     }
@@ -245,11 +226,9 @@ class TranslateGui {
             data.Text := Trim(this.ui.Query("TextVar"))
         else if (data.Source == "剪切板")
             data.Text := ""
-        data.Glossary := this._legacyGlossary
         data.GlossaryItems := []
         for item in this._glossary
-            if (!item.legacy)
-                data.GlossaryItems.Push({source: item.source, target: item.target})
+            data.GlossaryItems.Push({source: item.source, target: item.target})
         data.ResultVar := GetVarName(Trim(data.ResultVar))
         data.ErrorVar := GetVarName(Trim(data.ErrorVar))
         return data
@@ -315,9 +294,9 @@ class TranslateGui {
             target := TranslateCommand.ResolveTarget(data)
             promptTarget := TranslateCommand.TargetPrompt.Has(target) ? TranslateCommand.TargetPrompt[target] : target
             if (TranslateCommand.IsLocal(data.Engine))
-                result := TranslateCommand.ExecuteLocal(text, promptTarget, data.Glossary, data.GlossaryItems, data, () => false, &timedOut, &elapsedMs)
+                result := TranslateCommand.ExecuteLocal(text, promptTarget, data.GlossaryItems, data, () => false, &timedOut, &elapsedMs)
             else
-                result := TranslateCommand.ExecuteRemote(text, promptTarget, data.Glossary, data.GlossaryItems, data, () => false, &timedOut, &elapsedMs)
+                result := TranslateCommand.ExecuteRemote(text, promptTarget, data.GlossaryItems, data, () => false, &timedOut, &elapsedMs)
         } catch as e {
             message := e.Message
             if (SubStr(message, 1, StrLen(TranslateCommand.MissingModelPrefix)) == TranslateCommand.MissingModelPrefix) {
@@ -388,7 +367,7 @@ class TranslateGui {
             return
         updates := [{ControlName: "GlossaryTags", PropertyName: "ClearItems", Value: ""}]
         for item in this._glossary {
-            text := item.legacy ? item.text : item.source " → " item.target
+            text := item.source " → " item.target
             updates.Push({ControlName: "GlossaryTags", PropertyName: "AddXamlItem", Value: this._GlossChipXaml(item.id, text)})
         }
         this.ui.BatchUpdate(updates)
@@ -417,17 +396,17 @@ class TranslateGui {
             return
         }
         for item in this._glossary {
-            if (!item.legacy && item.source == src && item.target == dst) {
+            if (item.source == src && item.target == dst) {
                 RmtDialog.Info(GetLang("这条术语对照已经在列表里。"), GetLang("翻译"), this.Hwnd())
                 return
             }
-            if (!item.legacy && item.source == src) {
+            if (item.source == src) {
                 RmtDialog.Info(GetLang("原文已存在，请先删除旧术语对照。"), GetLang("翻译"), this.Hwnd())
                 return
             }
         }
         this._glossSeq++
-        this._glossary.Push({id: this._glossSeq, legacy: false, source: src, target: dst})
+        this._glossary.Push({id: this._glossSeq, source: src, target: dst})
         this._RebuildGlossaryChips()
         this.ui.BatchUpdate([
             {ControlName: "GlossarySrc", PropertyName: "Text", Value: ""},
@@ -440,15 +419,6 @@ class TranslateGui {
             return
         for idx, item in this._glossary {
             if (item.id == id) {
-                if (item.legacy) {
-                    this._legacyGlossaryLines.RemoveAt(item.legacyIndex)
-                    this._legacyGlossary := ""
-                    for lineIndex, line in this._legacyGlossaryLines
-                        this._legacyGlossary .= (lineIndex == 1 ? "" : "`n") line
-                    for other in this._glossary
-                        if (other.legacy && other.legacyIndex > item.legacyIndex)
-                            other.legacyIndex -= 1
-                }
                 this._glossary.RemoveAt(idx)
                 break
             }

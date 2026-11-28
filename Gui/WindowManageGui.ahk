@@ -32,7 +32,6 @@ class WindowManageGui {
         ; 显隐联动行容器名（OnActionChange 用，对应原生 RelateArrCon 控件组）
         this.PosRelateArrCon := ["PosRelateRow"]
         this.SizeRelateArrCon := ["SizeRelateRow"]
-        this.ResultRelateArrCon := ["ResultRelateRow"]
         this.TitleRelateArrCon := ["TitleRelateRow"]
         this.TransparencyRelateArrCon := ["TransparencyRelateRow"]
     }
@@ -156,15 +155,6 @@ class WindowManageGui {
                 .IsEditable("True").VerticalAlignment("Center")
         }
 
-        resultRow := extra.Add("Grid").Name("ResultRelateRow").Visibility("Collapsed")
-        resultRow.Rows("36")
-        resultRow.Cols(fieldCols*)
-        resultRow.Add("TextBlock").Grid_Column(0).Text(GetLang("宽度变量：")).VerticalAlignment("Center")
-        resultRow.Add("ComboBox").Grid_Column(1).Name("WidthVarNameCon").Height(26).MinHeight(26).IsEditable("True").VerticalAlignment("Center")
-
-        resultRow.Add("TextBlock").Grid_Column(3).Text(GetLang("高度变量：")).VerticalAlignment("Center")
-        resultRow.Add("ComboBox").Grid_Column(4).Name("HeightVarNameCon").Height(26).MinHeight(26).IsEditable("True").VerticalAlignment("Center")
-
         sizeRow := extra.Add("Grid").Name("SizeRelateRow").Visibility("Collapsed")
         sizeRow.Rows("36")
         sizeRow.Cols(pairCols*)
@@ -272,8 +262,6 @@ class WindowManageGui {
         this._ComboPush("PosYCon", "Text", GetLang(this.Data.PosY))
         this._SetCombo("WidthCon", DLVariableArr, this.Data.Width)
         this._SetCombo("HeightCon", DLVariableArr, this.Data.Height)
-        this._SetCombo("WidthVarNameCon", DLVariableArr, this.Data.WidthVarName)
-        this._SetCombo("HeightVarNameCon", DLVariableArr, this.Data.HeightVarName)
         this._SetCombo("NewTitleCon", GetGuiVarReferences("text"), TranslateBuiltinVarReferences(this.Data.NewTitle, true))
         this._SetCombo("TransparencyCon", DLVariableArr, this.Data.Transparency)
         ; 透明度：原生在变量项之后追加 0%~100% 列表
@@ -363,7 +351,6 @@ class WindowManageGui {
             }
         }
         isShowSize := actionKey == "调整宽高" || actionKey == "位置和宽高"
-        isShowResult := actionKey == "获取窗口宽高"
         isShowTitle := actionKey == "修改标题"
         isShowTransparency := actionKey == "修改透明度"
 
@@ -392,7 +379,6 @@ class WindowManageGui {
         }
         this.SetConArrState(this.PosRelateArrCon, false, isShowPos)
         this.SetConArrState(this.SizeRelateArrCon, false, isShowSize)
-        this.SetConArrState(this.ResultRelateArrCon, false, isShowResult)
         this.SetConArrState(this.TitleRelateArrCon, false, isShowTitle)
         this.SetConArrState(this.TransparencyRelateArrCon, false, isShowTransparency)
     }
@@ -473,11 +459,6 @@ class WindowManageGui {
             return false
         }
 
-        if (actionType == GetLang("获取窗口宽高")
-            && (Trim(this.ui.Query("WidthVarNameCon")) == "" || Trim(this.ui.Query("HeightVarNameCon")) == "")) {
-            RmtDialog.Info(GetLang("请输入变量名！"), "", "Owner" this.Hwnd())
-            return false
-        }
         fields := WindowInfoFields(GetLangKey(actionType))
         hasResult := false
         usedNames := Map()
@@ -540,14 +521,6 @@ class WindowManageGui {
         this.Data.PosY := GetVarName(this.ui.Query("PosYCon"))
         this.Data.Width := this.ui.Query("WidthCon")
         this.Data.Height := this.ui.Query("HeightCon")
-        this.Data.WidthVarName := GetVarName(this.ui.Query("WidthVarNameCon"))
-        this.Data.HeightVarName := GetVarName(this.ui.Query("HeightVarNameCon"))
-        if (this.Data.ActionType == "获取窗口宽高") {
-            if (this.Data.WidthVarName != "")
-                MySoftData.GlobalVariMap[this.Data.WidthVarName] := true
-            if (this.Data.HeightVarName != "")
-                MySoftData.GlobalVariMap[this.Data.HeightVarName] := true
-        }
         this.Data.NewTitle := TranslateBuiltinVarReferences(this.ui.Query("NewTitleCon"))
         this.Data.Transparency := StrReplace(this.ui.Query("TransparencyCon"), "%")
         FormatCommandAutoRemark(this.Data, this.ui.Query("RemarkCon"), this._autoRemark, GenerateCommandAutoRemark, true)

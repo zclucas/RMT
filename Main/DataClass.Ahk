@@ -417,7 +417,7 @@ class SoftData {
         this.ArrayMap := Map()          ;真正的全局数组
         this.GlobalVariMap := Map()     ;UI下拉显示变量
         this.VariableMap := ShmVariableMap("RMT_Shared_Variables")       ;真正的全局变量（跨进程纯共享内存）
-        this.TimeVarMap := Map()        ;记录时间变量（包含获取时间变量指令生成的变量）
+        this.TimeVarMap := Map()        ;记录时间变量
         this.HandleVarMap := Map()      ;窗口信息指令生成的句柄变量
         this.ControlVarMap := Map()     ;检测控件指令生成的控件变量
         this.DataFileMap := Map()       ;配置命令对应的文件路径
@@ -1120,6 +1120,16 @@ class SearchData {
 
 }
 
+class SearchComboData extends SearchData {
+    __New() {
+        super.__New()
+        target := {}
+        for name, value in SearchData().OwnProps()
+            target.%name% := value
+        this.SearchTargetArr := [target]
+    }
+}
+
 class SearchAllData extends SearchData {
     __New() {
         super.__New()
@@ -1423,7 +1433,7 @@ class TimingData {
 class TimeData {
     __New() {
         this.SerialStr := ""
-        ; SubMode 中文：等待 / 区间判断 / 倒计时（旧数字 1~5、获取时间* 由 TimeNormSubMode 兼容）
+        ; SubMode：等待 / 区间判断
         this.SubMode := "等待"
         this.Param1 := ""  ; 等待:目标时间/时长; 区间判断:开始时间
         this.Param2 := ""  ; 等待:时刻/时长/时间戳; 区间判断:结束时间
@@ -1445,28 +1455,23 @@ class TimeData {
 }
 
 class WaitData {
-    __New(legacy := false) {
+    __New() {
         this.ConditionOperandsVersion := 1
         this.SerialStr := ""
         ; 等待变量值 等待按键按下 等待按键松开 等待屏幕变化 等待鼠标移动 等待鼠标停止移动 等待剪切板变化
         ; 等待进程存在 等待进程关闭 等待窗口存在 等待窗口激活 等待窗口屏幕变化 等待窗口大小变化
-        ; 等待窗口关闭 等待窗口最小化 等待文件存在 等待文件删除 等待文件变化 等待日期
+        ; 等待窗口关闭 等待窗口最小化 等待文件存在 等待文件删除 等待文件变化 等待时间 等待时间区间
         this.WaitType := "等待时间"
-        this.Conditions := []       ; {Variable, Operator, Value}，空数组兼容旧等值判断
+        this.Conditions := []       ; {Variable, Operator, Value}
         this.ConditionLogic := "且"
         this.KeyDevice := "键盘"
         this.KeyOptions := {KeyArr: [], CheckType: "同时按下", StateType: "物理状态"}
         this.TimeConfig := {SubMode: "等待", Param1: "", Param2: "毫秒", Param4: "等待", Param5: "时刻", CheckInterval: 500, Timeout: 0}
         this.ConfirmConfig := WaitConfirmData.DefaultOptions()
         this.Interval := 500        ; 检测间隔（毫秒）
-        this.TimeoutMs := legacy ? 0 : TimeoutPolicy.DefaultMs
-        if (!legacy) {
-            this.TimeoutAction := TimeoutPolicy.DefaultAction
-            this.TimeoutStatusVar := TimeoutPolicy.DefaultStatusVar
-        }
-        this.ResultSaveName := ""
-        this.WaitCompletedValue := 0
-        this.WaitTimedOutValue := 1
+        this.TimeoutMs := TimeoutPolicy.DefaultMs
+        this.TimeoutAction := TimeoutPolicy.DefaultAction
+        this.TimeoutStatusVar := TimeoutPolicy.DefaultStatusVar
         this.ProcessTargetType := "进程名"
         this.Param1 := ""           ; 主参数：变量名/按键名/进程名/窗口信息/文件路径/日期值
         this.Param2 := ""           ; 次参数：期望值 / 日期单位（分钟|小时|天|具体时间|时间变量）
@@ -1571,7 +1576,6 @@ class HttpRequestData {
         this.TimeoutMs := TimeoutPolicy.DefaultMs
         this.TimeoutAction := TimeoutPolicy.DefaultAction
         this.TimeoutStatusVar := TimeoutPolicy.DefaultStatusVar
-        this.Retries := 0
         this.StatusVar := "HTTP状态码"
         this.ResponseVar := "HTTP响应体"
         this.ErrorVar := "HTTP错误信息"
@@ -1776,8 +1780,6 @@ class WindowManageData {
         this.PosY := 0                      ;移动窗口Y坐标（移动窗口时使用）
         this.Width := 0                     ;窗口宽度（调整宽高时使用）
         this.Height := 0                    ;窗口高度（调整宽高时使用）
-        this.WidthVarName := "WinWidth"         ;获取窗口宽高的宽度变量
-        this.HeightVarName := "WinHeight"        ;获取窗口宽高的高度变量
         this.NewTitle := ""                 ;新标题（修改标题时使用）
         this.Transparency := "80%"           ;透明度值 0-100（修改透明度时使用，80表示80%不透明度）
     }

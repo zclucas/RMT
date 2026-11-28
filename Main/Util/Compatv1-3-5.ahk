@@ -164,6 +164,8 @@ Compat13_JoyCheckData(prefix, data) {
     }
     data.KeyArr := keys
     Compat13_FillDefaults(data, KeyCheckData())
+    data.CheckType := CmdEnumJoyCheck(data.CheckType, false)
+    data.StateType := CmdEnumZh(data.StateType, CmdEnumStateNames())
     CmdEnumNorm("手柄检测", data)
     return data
 }
@@ -174,7 +176,10 @@ Compat13_WaitData(prefix, old) {
     inputType := InputField(old, "Type")
     if (inputType != "继续" && inputType != "继续&取消")
         return ""
-    data := WaitData(true)
+    data := WaitData()
+    data.TimeoutMs := 0
+    data.TimeoutAction := ""
+    data.TimeoutStatusVar := ""
     data.WaitType := "等待确定"
     data.TimeoutMs := InputField(old, "TimeoutMs", 0)
     for field, value in data.ConfirmConfig.OwnProps()

@@ -56,7 +56,7 @@ class MacroGraphDataMixin {
         isCombo := this._IsSearchComboName(srcSerial)
         isPro := this._IsSearchProName(srcSerial)
         newSerial := this._IsSearchAllName(srcSerial) ? AllocateCommandSerial("搜索All") : AllocateCommandSerial(isCombo ? "搜索Combo" : (isPro ? "搜索Pro" : "搜索"))
-        newData := this._IsSearchAllName(srcSerial) ? SearchAllData() : SearchData()
+        newData := this._IsSearchAllName(srcSerial) ? SearchAllData() : isCombo ? SearchComboData() : SearchData()
         newData.SerialStr := newSerial
         try {
             src := GetMacroCMDData(srcSerial)
@@ -581,8 +581,6 @@ class MacroGraphDataMixin {
             d.wmPosY := data.PosY
             d.wmWidth := data.Width
             d.wmHeight := data.Height
-            d.wmWidthVarName := data.WidthVarName
-            d.wmHeightVarName := data.HeightVarName
             d.wmNewTitle := data.NewTitle
             d.wmTransparency := data.Transparency
         } else if (cmdKey == "按键检测" || cmdKey == "手柄检测") {

@@ -279,7 +279,7 @@ class YoloGui {
     Init(cmd) {
         parts := cmd == "" ? [] : StrSplit(cmd, "_")
         this.SerialStr := parts.Length ? parts[1] : AllocateCommandSerial(this.CmdKey)
-        this.Data := Yolo.Normalize(GetMacroCMDData(this.SerialStr))
+        this.Data := GetMacroCMDData(this.SerialStr)
         this._ComboPush("Remark", "Text", parts.Length >= 2 ? parts[2] : "")
 
         this.RefreshModels(this.Data.ModelName)
@@ -300,7 +300,7 @@ class YoloGui {
             this._ComboPush(field, "Text", String(this.Data.%field%))
 
         this._ApplyTask(Yolo.TaskOf(this.Data.ModelName),
-            CmdEnumZh(this.Data.ActionType, Yolo.Actions), this.Data.ModelName)
+            CurrentCommandChoice(this.Data.ActionType, Yolo.Actions), this.Data.ModelName)
         ; 首帧就按任务收好行，落点交给模板里的 CenterScreen 一次算准。
         this._HideRowsInXaml()
     }
@@ -309,7 +309,7 @@ class YoloGui {
         this._ComboPush(name, "ClearItems", "")
         for item in names
             this._ComboPush(name, "AddItem", GetLang(item))
-        selected := CmdEnumZh(current, names)
+        selected := CurrentCommandChoice(current, names)
         this._ComboPush(name, "Text", GetLang(selected))
     }
 

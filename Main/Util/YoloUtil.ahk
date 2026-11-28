@@ -128,7 +128,7 @@ class Yolo {
     static ApiVersion := 2
     ; 内核实际编入的执行后端。当前发布的内核是 CPU 版，只有 CPU 可用；
     ; 其它设备要在编译内核时带上对应 EP（CUDA / DirectML / TensorRT / CoreML），
-    ; 否则加载直接返回 -2。旧配置里存了别的设备名，执行时会被归到 CPU。
+    ; 否则加载直接返回 -2。
     static Devices := ["CPU"]
     static Actions := ["无动作", "左键单击", "左键双击", "右键单击"]
     static Targets := ["最高置信度", "最左", "最上", "面积最大"]
@@ -142,12 +142,6 @@ class Yolo {
         "classify", "图像分类",
         "semantic", "语义分割",
         "depth", "深度估计")
-
-    ; 与 DLL 无关的字段：旧配置反序列化后缺字段，用它补齐默认值。
-    static Fields := ["ModelName", "Device", "Region", "ConfLevel", "Iou", "MaxDet", "Classes",
-        "TargetMode", "ActionType", "OffsetX", "OffsetY", "KeypointConf", "AnchorKpt",
-        "MinMaskRatio", "MinRatio", "TopK", "SampleX", "SampleY",
-        "CountVar", "ClassVar", "ConfVar", "RatioVar", "DepthVar", "ResultVar", "ErrorVar"]
 
     static _handles := Map()   ; "路径|设备|iou" → 内核句柄
     static _infos := Map()     ; "路径|设备" → 模型信息对象
@@ -338,7 +332,6 @@ class Yolo {
         if (reason != "")
             throw Error(reason)
 
-        data := this.Normalize(data)
         modelName := Trim(resolve(data.ModelName))
         if (modelName == "")
             throw Error(GetLang("请先在模型库里选择模型。"))
@@ -348,7 +341,7 @@ class Yolo {
         if !FileExist(path)
             throw Error(Format(GetLang("模型文件不存在：{}"), path))
 
-        device := CmdEnumZh(data.Device, this.Devices)
+        device := CurrentCommandChoice(data.Device, this.Devices)
         iou := this.ParseIou(resolve(data.Iou))
         info := this.Info(path, device, iou)
         task := this._Prop(info, "task", "")
@@ -495,7 +488,7 @@ class Yolo {
                 if (items.Length) {
                     out.name := this._Prop(items[1], "name", "")
                     out.ratio := this.ToText(this._Prop(items[1], "ratio", ""))
-                    if (CmdEnumZh(data.ActionType, this.Actions) != "无动作")
+                    if (CurrentCommandChoice(data.ActionType, this.Actions) != "无动作")
                         this.ClickTarget(items[1], data, resolve)
                 }
                 out.result := JSON.stringify(raw, 0)
@@ -503,7 +496,7 @@ class Yolo {
                 items := this.PrepareItems(raw, data, resolve, region, false)
                 out.count := items.Length
                 out.result := JSON.stringify(raw, 0)
-                if (items.Length && CmdEnumZh(data.ActionType, this.Actions) != "无动作")
+                if (items.Length && CurrentCommandChoice(data.ActionType, this.Actions) != "无动作")
                     this.ClickTarget(items[1], data, resolve)
         }
         return out
@@ -533,7 +526,7 @@ class Yolo {
         if (byRatio) {
             items := this._SortBy(items, "ratio", true)
         } else {
-            switch CmdEnumZh(data.TargetMode, this.Targets) {
+            switch CurrentCommandChoice(data.TargetMode, this.Targets) {
                 case "最左": items := this._SortBy(items, "cx", false)
                 case "最上": items := this._SortBy(items, "cy", false)
                 case "面积最大": items := this._SortBy(items, "_area", true)
@@ -651,7 +644,7 @@ class Yolo {
         offsetX := this._IntOr(resolve(data.OffsetX), 0)
         offsetY := this._IntOr(resolve(data.OffsetY), 0)
         MouseMove(Round(x) + offsetX, Round(y) + offsetY, 0)
-        switch CmdEnumZh(data.ActionType, this.Actions) {
+        switch CurrentCommandChoice(data.ActionType, this.Actions) {
             case "左键单击": Click
             case "左键双击": Click 2
             case "右键单击": Click "Right"
@@ -753,17 +746,6 @@ class Yolo {
 
     ; ---------- 杂项 ----------
 
-    ; 旧配置里没有任务专属字段，补齐后再用，避免读属性时抛错。
-    static Normalize(data) {
-        if (!IsObject(data))
-            return YoloData()
-        template := YoloData()
-        for name in this.Fields
-            if (!data.HasProp(name))
-                data.%name% := template.%name%
-        return data
-    }
-
     static _Prop(obj, name, default := "") {
         if (!IsObject(obj))
             return default
@@ -789,7 +771,7 @@ class Yolo {
 }
 
 OnYolo(tableItem, cmd, index) {
-    data := Yolo.Normalize(GetMacroCMDData(StrSplit(cmd, "_")[1]))
+    data := GetMacroCMDData(StrSplit(cmd, "_")[1])
     cancelled := () => tableItem.Items[index].Killed
     if (cancelled())
         return
@@ -804,7 +786,6 @@ OnYolo(tableItem, cmd, index) {
 }
 
 RegisterYoloVars(data) {
-    data := Yolo.Normalize(data)
     for name in [data.CountVar, data.ClassVar, data.ConfVar, data.RatioVar, data.DepthVar,
         data.ResultVar, data.ErrorVar]
         if (name != "")

@@ -130,8 +130,6 @@ class HttpRequestGui extends CommentGui {
         this.Data := GetMacroCMDData(this.SerialStr)
         this._ComboPush("Remark", "Text", parts.Length >= 2 ? parts[2] : "")
         action := TimeoutPolicy.Get(this.Data)
-        if (action == "")
-            action := TimeoutPolicy.LegacyRetryAction(this.Data.Retries)
         CommandTimeoutFields.Init(this.ui, this.Data.TimeoutMs, action,
             InputField(this.Data, "TimeoutStatusVar", TimeoutPolicy.DefaultStatusVar))
         for varName in GetGuiVarArr() {
@@ -160,8 +158,6 @@ class HttpRequestGui extends CommentGui {
         data.Method := this.ui.Query("Method")
         data.BodyType := this.ui.Query("BodyType")
         CommandTimeoutFields.Read(this.ui, data)
-        if (data.TimeoutAction == "")
-            data.Retries := this.Data.Retries
         for name in HttpRequestGui.ResultFields
             data.%name% := GetVarName(Trim(data.%name%))
         return data
@@ -202,8 +198,6 @@ class HttpRequestGui extends CommentGui {
 
     SaveData() {
         this.Data := this._ReadData()
-        if (IsInteger(this.Data.Retries))
-            this.Data.Retries := Integer(this.Data.Retries)
         HttpRequestRegisterResults(this.Data)
         SaveMacroCMDData(this.Data)
     }

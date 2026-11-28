@@ -108,10 +108,7 @@ SetGlobalData(macroStr, visitMap) {
             case "网络请求":
                 HttpRequestRegisterResults(Data)
             case "等待":
-                if (Data.HasOwnProp("TimeoutStatusVar"))
-                    TimeoutPolicy.RegisterStatus(Data)
-                else if (Data.HasOwnProp("ResultSaveName") && Data.ResultSaveName != "")
-                    VariableMap[Data.ResultSaveName] := true
+                TimeoutPolicy.RegisterStatus(Data)
             case "文件读写", "Excel":
                 SetFileIOGlobalData(Data)
             case "运行", "运行Pro":
@@ -133,7 +130,7 @@ SetGlobalData(macroStr, visitMap) {
                     SetGlobalData(value, visitMap)
                 }
                 SetGlobalData(Data.DefaultMacro, visitMap)
-            case "搜索", "搜索Pro", "搜索All", "搜索Combo", "组合搜索", "搜索Multi":
+            case "搜索", "搜索Pro", "搜索All", "搜索Combo":
                 if (baseCmd == "搜索All")
                     MySoftData.GlobalArrMap[Data.AllSaveName] := true
                 if (Data.ResultToggle)
@@ -144,18 +141,6 @@ SetGlobalData(macroStr, visitMap) {
                 }
                 SetGlobalData(Data.TrueMacro, visitMap)
                 SetGlobalData(Data.FalseMacro, visitMap)
-            case "时间":
-                subMode := TimeNormSubMode(Data)
-                if (subMode == "获取时间变量" || subMode == "获取时间字符串") {
-                    if (Data.Param1 != "") {
-                        VariableMap[Data.Param1] := true
-                        if (subMode == "获取时间变量")
-                            MySoftData.TimeVarMap[Data.Param1] := true
-                    }
-                } else if (subMode == "时间计算") {
-                    if (Data.Param4 != "")
-                        VariableMap[Data.Param4] := true
-                }
         }
     }
 }
@@ -307,7 +292,7 @@ RegisterVariableIconTypes(cmd, data) {
     outputs := Map()
     number := Chr(0xE8EF), text := Chr(0xE8D2), coord := Chr(0xE962), clock := Chr(0xE823)
     switch cmd {
-        case "搜索", "搜索Pro", "搜索All", "搜索Combo", "组合搜索", "搜索Multi":
+        case "搜索", "搜索Pro", "搜索All", "搜索Combo":
             if (data.ResultToggle) {
                 yes := VariableValueIcon(data.TrueValue), no := VariableValueIcon(data.FalseValue)
                 VariableIconOutput(outputs, data.ResultSaveName, yes == no ? yes : "")
@@ -337,12 +322,6 @@ RegisterVariableIconTypes(cmd, data) {
                 }
                 VariableIconOutput(outputs, name, glyph)
             }
-        case "时间":
-            mode := TimeNormSubMode(data)
-            if (mode == "获取时间变量" || mode == "获取时间字符串")
-                VariableIconOutput(outputs, data.Param1, clock)
-            else if (mode == "时间计算")
-                VariableIconOutput(outputs, data.Param4, clock)
         case "窗口信息", "窗口操作", "窗口管理":
             for i, label in WindowInfoFields(data.ActionType) {
                 field := "ResultVar" i

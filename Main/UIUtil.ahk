@@ -435,8 +435,6 @@ CmdEditorTitleIcon(title) {
             ["搜索Pro", "Images\Soft\SearchPro.png"],
             ["搜索All", "Images\Soft\SearchAll.png"],
             ["搜索Combo", "Images\Soft\SearchCombo.png"],
-            ["组合搜索", "Images\Soft\SearchCombo.png"],
-            ["搜索Multi", "Images\Soft\SearchCombo.png"],
             ["如果Pro", "Images\Soft\IfPro.png"],
             ["变量提取", "Images\Soft\Extract.png"],
             ["提取文本", "Images\Soft\Extract.png"],

@@ -16,7 +16,7 @@
 
 class TranslateEngine {
     ; 与 TranslateDll.h 的 TRANSLATE_API_VERSION 对应
-    static ContractVersion := 2
+    static ContractVersion := 3
     ; 默认模型文件名（Plugins\Translate\models 下）
     static DefaultModel := "Index-Translate-2B.Q4_K_M.gguf"
     ; 输出缓冲（wchar_t 计）。译文按字符截断，8192 字足够一屏文案；超出会在 stats 里标 truncated
@@ -96,7 +96,7 @@ class TranslateEngine {
     IsDllReady() => this.hDll != 0
 
     ; 本机是否有可用的 GPU 后端（Vulkan）。不需要先 Load 模型——DLL 内部会按自身目录
-    ; 把后端 DLL 加载起来再枚举设备；旧 DLL 没有这个导出，按「没有」处理。
+    ; 加载后端后枚举设备；组件缺失或无效时报告不可用。
     HasGpu() {
         if (!this.IsDllReady() && !this._TryLoadDll())
             return false
@@ -106,7 +106,7 @@ class TranslateEngine {
             return false
     }
 
-    ; DLL 的 ABI 版本；更旧的 DLL 没有这个导出，返回 -1
+    ; DLL 的 ABI 版本；组件缺失或无效时返回 -1
     ApiVersion() {
         if (!this.IsDllReady())
             return -1
@@ -147,7 +147,7 @@ class TranslateEngine {
     }
 
     ; 加载模型。opt 可省：
-    ;   nCtx（默认 2048）nThreads（0=自动）maxTokens（默认 512）；timeoutMs 仅保留兼容
+    ;   nCtx（默认 2048）nThreads（0=自动）maxTokens（默认 512）
     ; 返回 "" 表示成功，否则是错误文本。
     Load(modelName := "", opt := "") {
         ; 2B 模型的常驻内存放不进 32 位地址空间，32 位宿主没有这个插件，别报成「组件缺失」
@@ -166,17 +166,15 @@ class TranslateEngine {
         if (!IsObject(opt))
             opt := Map()
         if (this._opt == 0)
-            this._opt := Buffer(28, 0)
-        NumPut("Int", 28, this._opt, 0)
+            this._opt := Buffer(24, 0)
+        NumPut("Int", 24, this._opt, 0)
         NumPut("Int", opt.Has("nCtx") ? Integer(opt["nCtx"]) : 2048, this._opt, 4)
         NumPut("Int", opt.Has("nThreads") ? Integer(opt["nThreads"]) : 0, this._opt, 8)
         NumPut("Int", opt.Has("maxTokens") ? Integer(opt["maxTokens"]) : 512, this._opt, 12)
         NumPut("Int", opt.Has("nBatch") ? Integer(opt["nBatch"]) : 512, this._opt, 16)
-        NumPut("Int", opt.Has("timeoutMs") ? Integer(opt["timeoutMs"]) : 30000, this._opt, 20)
-        ; nGpuLayers 偏移 24：-1 = 自动（有 Vulkan GPU 全卸载，没有落 CPU）；0 = 仅 CPU。
-        ; Buffer 零填充是 0，会被 DLL 当旧宿主的零字段归一成 -1，这里显式写省歧义。
+        ; nGpuLayers 偏移 20：-1 = 自动（有 Vulkan GPU 全卸载，没有落 CPU）；0 = 仅 CPU。
         layers := opt.Has("nGpuLayers") ? Integer(opt["nGpuLayers"]) : -1
-        NumPut("Int", layers, this._opt, 24)
+        NumPut("Int", layers, this._opt, 20)
 
         ok := 0
         try
@@ -207,7 +205,7 @@ class TranslateEngine {
     ;   text    译文（ok=1）
     ;   error   错误文本（ok=0）
     ;   promptTokens / outputTokens / elapsedMs / truncated
-    Translate(text, target, legacyGlossary := "", glossaryItems := [], timeoutMs := 30000) {
+    Translate(text, target, glossaryItems := [], timeoutMs := 30000) {
         if (!this.IsLoaded()) {
             err := this.Load()
             if (err != "")
@@ -240,7 +238,7 @@ class TranslateEngine {
 
         r := 0
         try
-            r := DllCall(this.dllPath "\Translate_Run", "WStr", text, "WStr", target, "WStr", legacyGlossary,
+            r := DllCall(this.dllPath "\Translate_Run", "WStr", text, "WStr", target,
                 "Ptr", itemBuffer, "Int", IsObject(glossaryItems) ? glossaryItems.Length : 0, "Int", Integer(timeoutMs),
                 "Ptr", this._out, "Int", TranslateEngine.OutChars, "Ptr", this._stats, "CDecl Int")
         catch as e {

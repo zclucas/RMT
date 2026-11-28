@@ -1,6 +1,22 @@
 #Requires AutoHotkey v2.0
 #Include ..\Shared\RuntimeChoice.ahk
 
+; 1.2.2 之后新增指令使用当前选项，不接受预览版编号或未知值回退。
+CurrentCommandChoice(value, names) {
+    value := GetConfigKey(value, names)
+    for name in names
+        if (Type(value) == "String" && value == name)
+            return name
+    throw ValueError(GetLang("不支持的指令选项") "：" value)
+}
+
+CurrentCommandChoiceIndex(value, names) {
+    value := CurrentCommandChoice(value, names)
+    for index, name in names
+        if (value == name)
+            return index - 1
+}
+
 ; 指令枚举存中文。names 为存储顺序，base 为旧数字起点（1 或 0）。
 ; 已是中文（或当前语言译文）时原样收成中文键；旧数字按顺序映射。
 
@@ -88,16 +104,11 @@ CmdEnumVariableNames() => ["赋值", "随机数值", "系统", "时间", "删除
 CmdEnumWaitNames() => ["等待变量值", "等待按键按下", "等待按键松开", "等待屏幕变化", "等待鼠标移动",
     "等待鼠标停止移动", "等待剪切板变化", "等待进程存在", "等待进程关闭", "等待窗口存在",
     "等待窗口激活", "等待窗口屏幕变化", "等待窗口大小变化", "等待窗口关闭", "等待窗口最小化",
-    "等待文件存在", "等待文件删除", "等待文件变化", "等待日期", "等待时间", "等待时间区间", "等待确定", "等待窗口移动"]
+    "等待文件存在", "等待文件删除", "等待文件变化", "等待时间", "等待时间区间", "等待确定", "等待窗口移动"]
 
-; 时间等待与区间判断纳入等待指令；旧日期枚举保留，兼容已保存的宏。
-CmdEnumWaitEditorNames() {
-    names := []
-    for name in CmdEnumWaitNames()
-        if (name != "等待日期")
-            names.Push(name)
-    return names
-}
+CurrentCommandChoiceWait(value) => CurrentCommandChoice(value, CmdEnumWaitNames())
+
+CmdEnumWaitEditorNames() => CmdEnumWaitNames()
 
 CmdEnumWaitEditorLabels() {
     labels := []
@@ -172,7 +183,6 @@ CmdEnumMoveMode(value) {
 
 CanonicalMoveCommandName(key) {
     switch key, false {
-        case "调整窗口": return "窗口操作"
         case "移动", "鼠标移动", "滑鼠移動", "移動", "Mouse Move", "Move": return "移动"
         case "移动Pro", "鼠标移动Pro", "滑鼠移動Pro", "移動Pro", "Mouse Move Pro", "Move Pro", "Move+": return "移动Pro"
     }
@@ -191,7 +201,7 @@ CmdEnumRef(value) => CmdEnumZh(value, CmdEnumRefNames(), 0)
 CmdEnumKeyAct(value) => CmdEnumZh(value, CmdEnumKeyActNames())
 CmdEnumRunOption(value) => CmdEnumZh(value, CmdEnumRunOptionNames(), 0)
 CmdEnumNameType(value) => CmdEnumZh(value, CmdEnumNameTypeNames(), 0)
-CmdEnumWait(value) => CmdEnumZh(value, CmdEnumWaitNames())
+CmdEnumWait(value) => CurrentCommandChoiceWait(value)
 CmdEnumSearch(value) => CmdEnumZh(value, CmdEnumSearchNames())
 CmdEnumMouseAct(value) {
     key := GetLangKey(String(value))
@@ -210,6 +220,13 @@ CmdEnumTimingType(value) {
 CmdEnumTimingUnit(value) => CmdEnumZh(value, CmdEnumTimingUnitNames())
 CmdEnumTimingDuration(value) => CmdEnumZh(value, CmdEnumTimingDurationNames())
 
+CurrentJoyCheck(value) {
+    names := CmdEnumKeyCheckNames()
+    names.Push(CmdEnumJoyAnalogNames()*)
+    return CurrentCommandChoice(value, names)
+}
+
+; 仅用于1.2.2按键检测迁移为手柄检测时读取旧编号。
 CmdEnumJoyCheck(value, analog) {
     if (!IsNumber(value)) {
         names := CmdEnumKeyCheckNames()
@@ -259,12 +276,18 @@ CmdEnumNorm(cmd, Data) {
                 Data.Category := RmtCommandCategoryKey(Data.Category)
             if (Data.HasProp("CmdStr"))
                 Data.CmdStr := RmtCommandActionKey(Data.CmdStr)
-        case "搜索", "搜索Pro", "搜索All", "搜索Combo", "组合搜索", "搜索Multi":
+        case "搜索", "搜索Pro":
             CmdEnumNormSearchObj(Data)
             if (Data.HasProp("SearchTargetArr") && IsObject(Data.SearchTargetArr)) {
                 for t in Data.SearchTargetArr
                     CmdEnumNormSearchObj(t)
             }
+        case "搜索All", "搜索Combo":
+            Data.SearchType := CurrentCommandChoice(Data.SearchType, CmdEnumSearchNames())
+            Data.MouseActionType := CurrentCommandChoice(Data.MouseActionType, CmdEnumMouseActNames())
+            if (cmd == "搜索Combo")
+                for target in Data.SearchTargetArr
+                    target.SearchType := CurrentCommandChoice(target.SearchType, CmdEnumSearchNames())
         case "移动Pro", "鼠标移动Pro":
             CmdEnumSet(Data, "MouseMoveMode", CmdEnumMoveModeNames(), 0)
             ; 相对模式旧编号 4 是「拖拽」；绝对模式的 4 才是「A到B拖拽」
@@ -277,7 +300,7 @@ CmdEnumNorm(cmd, Data) {
             if (Data.HasProp("MoveMode"))
                 Data.MoveMode := CmdEnumMoveMode(Data.MoveMode)
         case "等待":
-            CmdEnumSet(Data, "WaitType", CmdEnumWaitNames())
+            Data.WaitType := CurrentCommandChoiceWait(Data.WaitType)
         case "如果":
             CmdEnumSet(Data, "LogicalType", CmdEnumLogicNames())
             if (Data.HasProp("CompareTypeArr"))
@@ -323,9 +346,8 @@ CmdEnumNorm(cmd, Data) {
             CmdEnumSet(Data, "CheckType", CmdEnumKeyCheckNames())
             CmdEnumSet(Data, "StateType", CmdEnumStateNames())
         case "手柄检测":
-            if (Data.HasProp("CheckType"))
-                Data.CheckType := CmdEnumJoyCheck(Data.CheckType, CmdEnumJoyAnalog(Data))
-            CmdEnumSet(Data, "StateType", CmdEnumStateNames())
+            Data.CheckType := CurrentJoyCheck(Data.CheckType)
+            Data.StateType := CurrentCommandChoice(Data.StateType, CmdEnumStateNames())
         case "运行", "运行Pro":
             CmdEnumSet(Data, "Mode", CmdEnumRunModeNames())
             CmdEnumSet(Data, "Option", CmdEnumRunOptionNames(), 0)
@@ -350,7 +372,9 @@ CmdEnumNorm(cmd, Data) {
             if (Data.HasProp("CallType") && !IsNumber(Data.CallType))
                 callTypes.Push("循环-跳过本轮", "循环-跳出", "分支-跳出")
             CmdEnumSetNum(Data, "CallType", callTypes)
-        case "窗口管理", "窗口信息", "窗口操作":
+        case "窗口信息":
+            Data.ActionType := CurrentCommandChoice(Data.ActionType, ["位置与宽高", "标题类名句柄", "进程信息", "窗口状态", "匹配窗口列表"])
+        case "窗口管理", "窗口操作":
             ; 保留旧数字顺序，新类型只在界面插入，避免旧配置操作错位。
             CmdEnumSetNum(Data, "ActionType", ["激活窗口", "最大化窗口", "最小化窗口", "还原窗口", "关闭窗口", "移动窗口", "调整宽高", "置顶窗口", "取消置顶", "修改标题", "修改透明度", "开启鼠标穿透", "关闭鼠标穿透"])
             static windowActions := Map(
@@ -358,31 +382,13 @@ CmdEnumNorm(cmd, Data) {
                 "Restore Window", "还原窗口", "Close Window", "关闭窗口", "Move Window", "移动窗口",
                 "Resize Window", "调整宽高", "Set Topmost", "置顶窗口", "Unset Topmost", "取消置顶",
                 "Set Title", "修改标题", "Set Transparency", "修改透明度", "Enable Click-Through", "开启鼠标穿透",
-                "Disable Click-Through", "关闭鼠标穿透", "Get Window Dimensions", "获取窗口宽高", "Window Position", "窗口位置",
+                "Disable Click-Through", "关闭鼠标穿透",
                 "调整大小", "调整宽高")
             if (!Data.HasProp("ActionType"))
                 return
-            actions := ["窗口位置", "获取窗口宽高", "位置与宽高", "标题类名句柄", "进程信息", "窗口状态", "透明度与鼠标穿透状态",
+            actions := ["位置与宽高", "标题类名句柄", "进程信息", "窗口状态",
                 "匹配窗口列表", "相对移动", "窗口居中", "位置和宽高", "切换置顶", "切换鼠标穿透"]
             Data.ActionType := GetConfigKey(windowActions.Get(Data.ActionType, Data.ActionType), actions)
-            if (!Data.HasProp("WidthVarName"))
-                Data.WidthVarName := "WinWidth"
-            if (!Data.HasProp("HeightVarName"))
-                Data.HeightVarName := "WinHeight"
-            WindowNormalizeInfo(Data)
-        case "YOLO检测":
-            CmdEnumSet(Data, "Device", ["CPU", "CUDA", "DirectML", "TensorRT", "CoreML"])
-            CmdEnumSet(Data, "TargetMode", ["最高置信度", "最左", "最上", "面积最大"])
-            CmdEnumSet(Data, "ActionType", ["无动作", "左键单击", "左键双击", "右键单击"])
-        case "翻译":
-            CmdEnumSet(Data, "Source", ["变量", "剪切板", "固定文本"])
-            ; 名单要与 TranslateCommand.Targets 一致：漏掉「自定义」会被归一成简体中文
-            CmdEnumSet(Data, "Target", ["简体中文", "繁体中文", "英语", "日语", "韩语", "俄语", "法语", "德语", "西班牙语", "自定义"])
-            CmdEnumSet(Data, "Engine", ["Index-Translate 2B", "Index-Translate 9B", "AI 通道"])
-            ; 旧配置没有设备字段，补默认值，编辑器与执行都按「自动」
-            if (!Data.HasProp("Device"))
-                Data.Device := "自动"
-            CmdEnumSet(Data, "Device", ["自动", "GPU", "CPU"])
         case "文件读写", "Excel":
             if (Data.HasProp("OperType")) {
                 types := Map("1", "读取Excel", "2", "写入Excel", "3", "读取文件", "4", "写入文件")
@@ -399,15 +405,13 @@ CmdEnumNorm(cmd, Data) {
     }
 }
 
-; 查询字段顺序同时用于编辑器和执行结果，旧宽高变量保持独立兼容。
+; 查询字段顺序同时用于编辑器和执行结果。
 WindowInfoFields(action) {
     switch action {
-        case "窗口位置": return ["坐标X", "坐标Y"]
         case "位置与宽高": return ["坐标X", "坐标Y", "宽度", "高度"]
         case "标题类名句柄": return ["标题", "类名", "句柄"]
         case "进程信息": return ["进程名", "进程ID", "程序路径"]
         case "窗口状态": return ["存在", "激活", "最小化", "最大化", "置顶", "透明度", "鼠标穿透"]
-        case "透明度与鼠标穿透状态": return ["透明度", "鼠标穿透"]
         case "匹配窗口列表": return ["句柄数组"]
     }
     return []
@@ -498,38 +502,8 @@ WindowActionFromMode(group, mode) {
     return actions[1]
 }
 
-; 旧查询映射到合并后的类型，只保留原先配置的输出变量，避免新增查询覆盖其它变量。
-WindowNormalizeInfo(data) {
-    if (data.ActionType == "窗口状态") {
-        if (!data.HasProp("ResultVar6"))
-            data.ResultVar6 := ""
-        if (!data.HasProp("ResultVar7"))
-            data.ResultVar7 := ""
-    }
-    WindowEnsureResults(data)
-    switch data.ActionType {
-        case "窗口位置":
-            data.ActionType := "位置与宽高"
-            data.ResultVar3 := "", data.ResultVar4 := ""
-        case "获取窗口宽高":
-            data.ActionType := "位置与宽高"
-            data.ResultVar1 := "", data.ResultVar2 := ""
-            data.ResultVar3 := data.WidthVarName
-            data.ResultVar4 := data.HeightVarName
-        case "透明度与鼠标穿透状态":
-            data.ActionType := "窗口状态"
-            data.ResultVar6 := data.ResultVar1
-            data.ResultVar7 := data.ResultVar2
-            Loop 5 {
-                prop := "ResultVar" A_Index
-                data.%prop% := ""
-            }
-    }
-}
-
 WindowEditorHint(action) {
     switch action {
-        case "窗口位置": return "窗口左上角的屏幕坐标。留空则跳过。"
         case "位置与宽高": return "坐标取窗口左上角，宽高包含标题栏和边框。结果留空则跳过。"
         case "窗口状态": return "结果保存到变量，留空则跳过。状态为 0/1；透明度为 0–100，100 表示完全不透明。"
         case "匹配窗口列表": return "填写数组名，按匹配方式保存窗口句柄；没有匹配时返回空数组。"
@@ -570,9 +544,7 @@ WindowResultDefaultName(action, index) {
         case "标题类名句柄": names := ["WinTitle", "WinClass", "WinHwnd"]
         case "进程信息": names := ["ProcName", "ProcId", "ProcPath"]
         case "窗口状态": names := ["WinExists", "WinActive", "WinMin", "WinMax", "WinTop", "WinAlpha", "WinPass"]
-        case "透明度与鼠标穿透状态": names := ["WinAlpha", "WinPass"]
         case "匹配窗口列表": names := ["WinList"]
-        case "获取窗口宽高": names := ["WinWidth", "WinHeight"]
         default: names := ["WinX", "WinY", "WinWidth", "WinHeight"]
     }
     return index >= 1 && index <= names.Length ? names[index] : "Result" index
@@ -586,7 +558,7 @@ WindowNextResultName(value, oldAction, newAction, index) {
 }
 
 WindowInfoFieldTip(action, index) {
-    if (action == "窗口位置" || action == "位置与宽高") {
+    if (action == "位置与宽高") {
         switch index {
             case 1: return "窗口左上角的屏幕 X 坐标。留空则跳过。"
             case 2: return "窗口左上角的屏幕 Y 坐标。留空则跳过。"

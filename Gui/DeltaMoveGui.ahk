@@ -195,8 +195,8 @@ class DeltaMoveGui {
             this.Data := GetMacroCMDData(cmdArr[1])
             dX := this.Data.DeltaX
             dY := this.Data.DeltaY
-            cnt := ObjHasOwnProp(this.Data, "Count") ? this.Data.Count : 1
-            iv := ObjHasOwnProp(this.Data, "Interval") ? this.Data.Interval : 0
+            cnt := this.Data.Count
+            iv := this.Data.Interval
         } else {
             dX := cmdArr.Length >= 2 ? cmdArr[2] : 0
             dY := cmdArr.Length >= 3 ? cmdArr[3] : 0

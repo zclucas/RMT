@@ -43,17 +43,6 @@ class TimeoutPolicy {
 
     static Stops(action) => action != "" && action != "忽略"
 
-    static LegacyRetryAction(count) {
-        if (!IsInteger(count))
-            return ""
-        switch Integer(count) {
-            case 0: return "忽略"
-            case 1: return "重试1次"
-            case 2: return "重试2次"
-        }
-        return ""
-    }
-
     static CanRetry(action, attempt) {
         limit := this.RetryLimits.Get(action, 0)
         return limit == -1 || attempt <= limit

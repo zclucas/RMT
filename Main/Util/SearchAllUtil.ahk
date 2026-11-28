@@ -18,12 +18,6 @@ SearchAllExecute(tableItem, Data, index) {
                 return ""
             if (Data.ResultToggle)
                 MySetGlobalVariable([Data.ResultSaveName], [Data.TrueValue], false)
-            ; 兼容旧配置中的单点坐标变量。
-            if (Data.CoordToogle) {
-                last := coordinates[coordinates.Length]
-                MySetGlobalVariable([Data.CoordXName], [last[1]], false)
-                MySetGlobalVariable([Data.CoordYName], [last[2]], false)
-            }
             if (Data.TrueMacro != "" && !TryInterceptDebugBranch("Search", "TrueMacro", "", -1))
                 RunMacroBodyOnce(tableItem, Data.TrueMacro, index)
             return true
@@ -134,9 +128,10 @@ SearchAllTextPoints(result, pattern, x1, y1) {
 
 ; Bottom-up merge sort avoids quadratic work for large color result sets.
 SearchAllSort(points, order) {
-    if (points.Length < 2 || order == "不排序")
+    order := CurrentCommandChoice(order, ["上下左右", "上下右左", "下上左右", "下上右左"])
+    if (points.Length < 2)
         return points
-    axis := order == "上下优先" || order == "从左到右" ? 1 : 2
+    axis := 2
     other := 3 - axis
     primaryDirection := order == "下上左右" || order == "下上右左" ? -1 : 1
     secondaryDirection := order == "上下右左" || order == "下上右左" ? -1 : 1

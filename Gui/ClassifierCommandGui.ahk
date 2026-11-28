@@ -1551,9 +1551,9 @@ class AiDecisionGui extends ClassifierCommandGui {
 
     Init(cmd) {
         super.Init(cmd)
-        this._ComboPush("WinInfo", "Text", InputField(this.Data, "WinInfo", "{宏设置窗口绑定}"))
+        this._ComboPush("WinInfo", "Text", this.Data.WinInfo)
         for field in ["Region", "WindowRegion"] {
-            value := InputField(this.Data, field, "")
+            value := this.Data.%field%
             this._SetRange(this.ui, field, value == "" ? [0, 0, A_ScreenWidth, A_ScreenHeight] : StrSplit(value, ","))
         }
         CommandTimeoutFields.Init(this.ui, this.Data.TimeoutMs, TimeoutPolicy.Get(this.Data), TimeoutPolicy.StatusVar(this.Data))

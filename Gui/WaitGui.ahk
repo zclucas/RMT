@@ -195,15 +195,6 @@ class WaitGui {
                 row.Grid_Column(2)
         }
 
-        ; 日期面板：仅用于读取旧字段，新编辑统一使用时间面板
-        dp := pStack.Add("StackPanel").Name("DatePanel").Orientation("Horizontal").Visibility("Collapsed")
-        dp.Add("TextBlock").Name("DateValLabel").Text(GetLang("数值：")).VerticalAlignment("Center")
-        dp.Add("ComboBox").Name("DateValCon").Width(180).Height(24).MinHeight(24).Margin("4,0,0,0").IsEditable("True")
-        dp.Add("TextBlock").Text(GetLang("单位：")).VerticalAlignment("Center").Margin("12,0,0,0")
-        dunit := dp.Add("ComboBox").Name("DateUnitCon").Width(110).Height(24).MinHeight(24).Margin("4,0,0,0")
-        for t in GetLangArr(["分钟", "小时", "天", "具体时间", "时间变量"])
-            dunit.Add("ComboBoxItem").Content(t)
-
         CommandTimeoutFields.Add(body, true, , , CmdEditorForm.LabelWidth())
         CmdEditorForm.Footer(body)
 
@@ -227,7 +218,6 @@ class WaitGui {
         this.ui.OnEvent("BtnAddVar", "Click", ObjBindMethod(this, "OnAddCondition"))
         this.ui.Track("KeyCon")
         this.ui.OnEvent("KeyCon", "TextChanged", ObjBindMethod(this, "OnKeyTextChange"))
-        this.ui.OnEvent("DateUnitCon", "SelectionChanged", ObjBindMethod(this, "OnDateUnitChange"))
         this.ui.OnEvent("BtnWinEdit", "Click", ObjBindMethod(this, "OnClickWinEdit"))
         this.ui.OnEvent("BtnFileBrowse", "Click", ObjBindMethod(this, "OnClickFileBrowse"))
         this.ui.OnEvent("BtnPickKey", "Click", ObjBindMethod(this, "OnClickPickKey", false))
@@ -248,7 +238,6 @@ class WaitGui {
             return
         XamlWin.OnLoadTheme(this.ui)
         this.OnTypeChange()
-        this._SyncDateUnit()
         this._RebuildConditions(this._initialConditions)
     }
 
@@ -335,7 +324,7 @@ class WaitGui {
                 return "WinPanel"
             case "等待文件存在", "等待文件删除", "等待文件变化":
                 return "FilePanel"
-            case "等待时间", "等待时间区间", "等待日期":
+            case "等待时间", "等待时间区间":
                 return "TimePanel"
             case "等待确定":
                 return "ConfirmPanel"
@@ -350,19 +339,19 @@ class WaitGui {
         sourceKey := GetLangKey(RegExReplace(this.SerialStr, "\d+"))
         if (sourceKey == "时间") {
             old := this.Data
-            this.Data := WaitData(true)
+            this.Data := WaitData()
             this.Data.WaitType := TimeNormSubMode(old) == "区间判断" ? "等待时间区间" : "等待时间"
             this.Data.TimeConfig := JSON.parse(JSON.stringify(old), , false)
-            this.Data.Interval := old.HasOwnProp("CheckInterval") ? old.CheckInterval : this.Data.Interval
-            if (this.Data.WaitType == "等待时间" && old.HasOwnProp("Timeout"))
+            this.Data.Interval := old.CheckInterval
+            if (this.Data.WaitType == "等待时间")
                 this.Data.TimeoutMs := old.Timeout
             if (this.Data.WaitType == "等待时间区间")
-                this.Data.TimeConfig.Param4 := TimeNormMismatch(old.HasProp("Param4") ? old.Param4 : "跳过")
+                this.Data.TimeConfig.Param4 := TimeNormMismatch(old.Param4)
             this.SerialStr := AllocateCommandSerial("等待")
             this.Data.SerialStr := this.SerialStr
         } else if (sourceKey == "等待确定") {
             old := this.Data
-            this.Data := WaitData(true)
+            this.Data := WaitData()
             this.Data.WaitType := "等待确定"
             this.Data.TimeoutMs := InputField(old, "TimeoutMs", 0)
             this.Data.ConfirmConfig.Type := InputField(old, "Type", "继续")
@@ -375,20 +364,12 @@ class WaitGui {
             this.SerialStr := AllocateCommandSerial("等待")
             this.Data.SerialStr := this.SerialStr
         }
-        WaitEnsureData(this.Data)
-        if (CmdEnumWait(this.Data.WaitType) == "等待日期") {
-            this.Data.WaitType := "等待时间"
-            unit := WaitNormDateUnit(this.Data.Param2)
-            this.Data.TimeConfig.Param1 := this.Data.Param1
-            this.Data.TimeConfig.Param2 := unit == "具体时间" ? "时刻" : (unit == "时间变量" ? "时间戳" : unit)
-        }
-
         this._autoRemark := ReadCommandAutoRemark(this.Data, this._GenerateRemark.Bind(this))
         batch := []
         batch.Push({ControlName: "RemarkCon", PropertyName: "Text", Value: cmdArr.Length >= 2 ? cmdArr[2] : ""})
         confirm := this.Data.ConfirmConfig
         this._confirmMode := InputField(confirm, "Type", "继续")
-        this._SelectType(CmdEnumWait(this.Data.WaitType))
+        this._SelectType(CurrentCommandChoiceWait(this.Data.WaitType))
         batch.Push({ControlName: "ConfirmPrompt", PropertyName: "Text", Value: InputField(confirm, "Prompt", "")})
         for option in WaitGui.ConfirmOptions {
             selected := InputField(confirm, option[1], option[3][1])
@@ -396,21 +377,15 @@ class WaitGui {
         }
         action := TimeoutPolicy.Get(this.Data)
         confirmTimeoutAction := InputField(confirm, "TimeoutAction")
-        legacyConfirm := WaitTypeNum(this.Data) == "等待确定"
-            && (confirmTimeoutAction == "自动暂停" || confirmTimeoutAction == "自动终止")
-        if (action == "" && !legacyConfirm)
-            action := "忽略"
-        statusVar := InputField(this.Data, "TimeoutStatusVar",
-            this.Data.ResultSaveName != "" ? this.Data.ResultSaveName : TimeoutPolicy.DefaultStatusVar)
-        CommandTimeoutFields.Init(this.ui, this.Data.TimeoutMs, action, statusVar, true)
-        keyWait := this._PanelOf(CmdEnumWait(this.Data.WaitType)) == "KeyPanel"
+        CommandTimeoutFields.Init(this.ui, this.Data.TimeoutMs, action, this.Data.TimeoutStatusVar, true)
+        keyWait := this._PanelOf(CurrentCommandChoiceWait(this.Data.WaitType)) == "KeyPanel"
         this._pickedKeyText := keyWait ? this.Data.Param1 : ""
         this._pickedKeys := keyWait ? this.Data.KeyOptions.KeyArr : []
         this._keyDevice := keyWait ? this.Data.KeyDevice : "键盘"
         this._keyModes := []
         this._keyModeLabels := []
         batch.Push({ControlName: "KeyCon", PropertyName: "Text", Value: this._pickedKeyText})
-        procWait := this._PanelOf(CmdEnumWait(this.Data.WaitType)) == "ProcPanel"
+        procWait := this._PanelOf(CurrentCommandChoiceWait(this.Data.WaitType)) == "ProcPanel"
         processMode := procWait ? this.Data.ProcessTargetType : "进程名"
         name := procWait && processMode == "进程名" && this.Data.Param1 != "" ? this.Data.Param1 : "notepad.exe"
         pid := procWait && processMode == "PID" ? this.Data.Param1 : ""
@@ -418,37 +393,22 @@ class WaitGui {
         this._QueueCombo(batch, "ProcPidCon", GetGuiVarArr(), pid)
         batch.Push({ControlName: "ProcTargetTypeCon", PropertyName: "SelectedIndex",
             Value: CmdEnumIndex(processMode, WaitGui.ProcessTargetTypes)})
-        winWait := this._PanelOf(CmdEnumWait(this.Data.WaitType)) == "WinPanel"
+        winWait := this._PanelOf(CurrentCommandChoiceWait(this.Data.WaitType)) == "WinPanel"
         batch.Push({ControlName: "WinInfoCon", PropertyName: "Text", Value: this.Data.Param1 == "" && !winWait ? "{宏设置窗口绑定}" : this.Data.Param1})
         batch.Push({ControlName: "FilePathCon", PropertyName: "Text", Value: this.Data.Param1})
-        batch.Push({ControlName: "DateValCon", PropertyName: "Text", Value: this.Data.Param1})
         this.ui.BatchUpdate(batch)
         ; 坐标与下拉数据
         this._SetCombo("StartPosX", GetGuiVarArr("x"), GetLang(this.Data.StartPosX))
         this._SetCombo("StartPosY", GetGuiVarArr("y"), GetLang(this.Data.StartPosY))
         this._SetCombo("EndPosX", GetGuiVarArr("x"), GetLang(this.Data.EndPosX))
         this._SetCombo("EndPosY", GetGuiVarArr("y"), GetLang(this.Data.EndPosY))
-        ; 日期单位（Param2 存中文键）
-        unitKey := GetLangKey(this.Data.Param2)
-        unitIdx := 0
-        for k, key in ["分钟", "小时", "天", "具体时间", "时间变量"] {
-            if (key == unitKey) {
-                unitIdx := k - 1
-                break
-            }
-        }
-        if (IsObject(this.ui))
-            this.ui.Update("DateUnitCon", "SelectedIndex", String(unitIdx))
         this._initialConditions := cmd == "" ? [{Variable: "10", Operator: "等于", Value: "5"}] : this.Data.Conditions
-        if (!this._initialConditions.Length) {
-            varWait := CmdEnumWait(this.Data.WaitType) == "等待变量值"
-            this._initialConditions := [{Variable: varWait ? this.Data.Param1 : "", Operator: "等于", Value: varWait ? this.Data.Param2 : ""}]
-        }
+        if (!this._initialConditions.Length)
+            this._initialConditions := [{Variable: "", Operator: "等于", Value: ""}]
         this._Choose("VarLogicCon", this.Data.ConditionLogic, CmdEnumLogicNames())
         cfg := this.Data.TimeConfig
-        range := CmdEnumWait(this.Data.WaitType) == "等待时间区间"
-        legacyUnit := GetLangKey(cfg.Param2)
-        kind := range ? TimeNormWindowType(cfg.Param5) : ((legacyUnit == "分钟" || legacyUnit == "小时" || legacyUnit == "天") ? legacyUnit : TimeNormWaitType(cfg.Param2 == "" ? "时长" : cfg.Param2))
+        range := CurrentCommandChoiceWait(this.Data.WaitType) == "等待时间区间"
+        kind := range ? TimeNormWindowType(cfg.Param5) : TimeNormWaitType(cfg.Param2 == "" ? "时长" : cfg.Param2)
         this._FillTimeKinds(range, kind)
         this._timeValues := Map()
         this._timeValueKey := ""
@@ -475,7 +435,7 @@ class WaitGui {
         t := this._TypeValue()
         show := this._PanelOf(t)
         batch := []
-        for name in ["VarPanel", "KeyPanel", "RangePanel", "ProcPanel", "WinPanel", "FilePanel", "DatePanel", "HintPanel", "TimePanel", "ConfirmPanel"]
+        for name in ["VarPanel", "KeyPanel", "RangePanel", "ProcPanel", "WinPanel", "FilePanel", "HintPanel", "TimePanel", "ConfirmPanel"]
             batch.Push({ControlName: name, PropertyName: "Visibility", Value: name == show ? "Visible" : "Collapsed"})
         batch.Push({ControlName: "VarLogicRow", PropertyName: "Visibility", Value: show == "VarPanel" ? "Visible" : "Collapsed"})
         confirmation := t == "等待确定"
@@ -508,10 +468,6 @@ class WaitGui {
         }
     }
 
-    OnDateUnitChange(state := "", ctrl := "", event := "") {
-        this._SyncDateUnit()
-    }
-
     _ProcessTargetType() {
         return CmdEnumFromIndex(this.ui.Query("ProcTargetTypeCon>SelectedIndex"), WaitGui.ProcessTargetTypes)
     }
@@ -524,23 +480,6 @@ class WaitGui {
             {ControlName: "ProcCon", PropertyName: "Visibility", Value: byPid ? "Collapsed" : "Visible"},
             {ControlName: "ProcPidCon", PropertyName: "Visibility", Value: byPid ? "Visible" : "Collapsed"}
         ])
-    }
-
-    _SyncDateUnit() {
-        if (!IsObject(this.ui))
-            return
-        unit := WaitNormDateUnit(GetLangKey(this.ui.Query("DateUnitCon")))
-        label := "数值："
-        items := []
-        if (unit == "具体时间")
-            label := "日期时间："
-        else if (unit == "时间变量") {
-            label := "时间变量："
-            items := GetGuiVarArr("timeVars", "timestamp", "dateText", "clockText")
-        }
-        cur := this.ui.Query("DateValCon")
-        this.ui.Update("DateValLabel", "Text", GetLang(label))
-        this._SetCombo("DateValCon", items, GetLang(cur))
     }
 
     OnClickWinEdit(state := "", ctrl := "", event := "") {
@@ -716,7 +655,7 @@ class WaitGui {
     OnClickSureBtn(state, ctrl, event) {
         if (!this.CheckIfValid())
             return
-        CommandStr := this.SaveWaitData(true)
+        CommandStr := this.SaveWaitData()
         action := this.SureBtnAction
         this._CloseWindow()
         if (action != "")
@@ -769,13 +708,7 @@ class WaitGui {
             case "等待时间", "等待时间区间":
                 if (!this._ValidateTime())
                     return false
-            case "等待日期":
-                if (this.ui.Query("DateValCon") == "") {
-                    RmtDialog.Info(GetLang("请输入日期值"))
-                    return false
-                }
-                if (!this._DateOk())
-                    return false
+
         }
         data := {}
         CommandTimeoutFields.Read(this.ui, data, true)
@@ -789,7 +722,6 @@ class WaitGui {
     SaveWaitData(commitRemark := false) {
         this.Data.WaitType := this._TypeValue()
         CommandTimeoutFields.Read(this.ui, this.Data, true)
-        this.Data.ResultSaveName := this.Data.TimeoutStatusVar
         t := this.Data.WaitType
         switch t {
             case "等待确定":
@@ -856,9 +788,7 @@ class WaitGui {
                         cfg.RandomMaxMs := this.ui.Query("TimeEndCon")
                     cfg.Param2 := kind
                 }
-            case "等待日期":
-                this.Data.Param1 := GetBuiltinVarName(this.ui.Query("DateValCon"))
-                this.Data.Param2 := GetLangKey(this.ui.Query("DateUnitCon"))
+
         }
         CommandStr := FormatCommandAutoRemark(this.Data, this.ui.Query("RemarkCon"), this._autoRemark
             , this._GenerateRemark.Bind(this), commitRemark)
@@ -886,26 +816,6 @@ class WaitGui {
         return true
     }
 
-    _DateOk() {
-        unit := WaitNormDateUnit(GetLangKey(this.ui.Query("DateUnitCon")))
-        val := Trim(this.ui.Query("DateValCon"))
-        if (unit == "分钟" || unit == "小时" || unit == "天") {
-            if (IsNumber(val) && Number(val) < 0) {
-                RmtDialog.Info(GetLang("日期值无法识别"))
-                return false
-            }
-            if (!IsNumber(val) && !InStr(val, "{") && (val == "" || InStr(val, " "))) {
-                RmtDialog.Info(GetLang("日期值无法识别"))
-                return false
-            }
-            return true
-        }
-        if (unit == "具体时间" && !InStr(val, "{") && WaitParseDateTime(val) == "") {
-            RmtDialog.Info(GetLang("日期值无法识别"))
-            return false
-        }
-        return true
-    }
     static CompareKeys := ["大于", "大于等于", "等于", "不等于", "小于等于", "小于", "包含", "变量存在", "变量不存在"]
 
     _Choice(parent, name, keys) {
@@ -963,8 +873,6 @@ class WaitGui {
 
     _FillTimeKinds(range, selected) {
         keys := range ? ["时刻", "时间戳"] : ["毫秒", "毫秒-随机", "时间戳", "时长", "时刻"]
-        if (!range && (selected == "分钟" || selected == "小时" || selected == "天"))
-            keys.Push(selected)
         if (this.HasProp("_timeRange") && this._timeRange == range)
             return
         this._timeRange := range

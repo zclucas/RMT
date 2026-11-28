@@ -218,7 +218,7 @@ class MacroGraphEventsMixin {
                 this._BindCtrl("SCoordY_" id, "SelectionChanged", this._OnSearchProField.Bind(this, id, "CoordYName"), runtime)
             }
         }
-        else if (d.type == GetLang("搜索Combo") || d.type == GetLang("搜索Multi")) {
+        else if (d.type == GetLang("搜索Combo")) {
             this._TrackCtrl("SSat_" id, runtime)
             this._TrackCtrl("SCount_" id, runtime)
             this._TrackCtrl("SActCmb_" id, runtime)

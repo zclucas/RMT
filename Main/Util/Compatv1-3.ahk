@@ -506,10 +506,6 @@ Compat13_RewriteWindowBindings(data, *) {
     for field in ["WinInfo", "WinInfoArr", "BindWindow", "FrontInfo", "Front", "FrontStr", "TargetTitle", "SearchValue",
         "winInfo", "targetTitle", "frontStr", "ssWinInfo", "wmSearchValue"]
         changed := Compat13_RewriteBuiltinField(data, field, NormalizeWindowBinding) || changed
-    if (data.HasOwnProp("WaitType") && InStr(CmdEnumWait(data.WaitType), "等待窗口") == 1)
-        changed := Compat13_RewriteBuiltinField(data, "Param1", NormalizeWindowBinding) || changed
-    if (data.HasOwnProp("MatchBy") && data.MatchBy == "窗口绑定")
-        changed := Compat13_RewriteBuiltinField(data, "Target", NormalizeWindowBinding) || changed
     for _, value in data.OwnProps() {
         if (value is Array) {
             for item in value {
@@ -618,25 +614,6 @@ Compat13_RewriteBuiltinData(data, rewriteMacro) {
         changed := Compat13_RewriteBuiltinField(data, field, Compat13_BuiltinName) || changed
     for field in templates
         changed := Compat13_RewriteBuiltinField(data, field, Compat13_RewriteBuiltinTemplate) || changed
-    if (data.HasOwnProp("WaitType")) {
-        if (CmdEnumWait(data.WaitType) == "等待变量值") {
-            for field in ["Param1", "Param2"]
-                changed := Compat13_RewriteBuiltinField(data, field, Compat13_BuiltinName) || changed
-            if (data.HasOwnProp("Conditions") && data.Conditions is Array) {
-                for condition in data.Conditions {
-                    changed := Compat13_RewriteBuiltinField(condition, "Variable", Compat13_BuiltinName) || changed
-                    changed := Compat13_RewriteBuiltinField(condition, "Value", Compat13_BuiltinName) || changed
-                    changed := Compat13_RewriteBuiltinField(condition, "Value", Compat13_RewriteBuiltinTemplate) || changed
-                }
-            }
-        }
-        if (data.HasOwnProp("TimeConfig") && IsObject(data.TimeConfig)) {
-            for field in ["Param1", "Param2", "RandomMaxMs"] {
-                changed := Compat13_RewriteBuiltinField(data.TimeConfig, field, Compat13_BuiltinName) || changed
-                changed := Compat13_RewriteBuiltinField(data.TimeConfig, field, Compat13_RewriteBuiltinTemplate) || changed
-            }
-        }
-    }
     ; 分辨率配置、组合搜索目标等嵌套对象同样按字段用途迁移。
     for _, value in data.OwnProps() {
         if (value is Array) {

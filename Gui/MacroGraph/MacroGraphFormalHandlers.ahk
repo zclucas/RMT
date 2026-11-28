@@ -1131,16 +1131,6 @@ class MacroGraphFormalHandlersMixin {
             data.Width := state["WmW_" id]
         if (state.Has("WmH_" id) && state["WmH_" id] != "")
             data.Height := state["WmH_" id]
-        if (state.Has("WmWidthVar_" id)) {
-            data.WidthVarName := GetVarName(state["WmWidthVar_" id])
-            if (data.WidthVarName != "")
-                MySoftData.GlobalVariMap[data.WidthVarName] := true
-        }
-        if (state.Has("WmHeightVar_" id)) {
-            data.HeightVarName := GetVarName(state["WmHeightVar_" id])
-            if (data.HeightVarName != "")
-                MySoftData.GlobalVariMap[data.HeightVarName] := true
-        }
         if (state.Has("WmTitle_" id) && state["WmTitle_" id] != "")
             data.NewTitle := TranslateBuiltinVarReferences(state["WmTitle_" id])
         if (state.Has("WmTrans_" id) && state["WmTrans_" id] != "")
@@ -1941,8 +1931,6 @@ class MacroGraphFormalHandlersMixin {
         this._FormalSetVis(id, "WmYRow_" id, (at == "移动窗口" || at == "相对移动" || at == "位置和宽高"))
         this._FormalSetVis(id, "WmWRow_" id, (at == "调整宽高" || at == "位置和宽高"))
         this._FormalSetVis(id, "WmHRow_" id, (at == "调整宽高" || at == "位置和宽高"))
-        this._FormalSetVis(id, "WmWidthVarRow_" id, at == "获取窗口宽高")
-        this._FormalSetVis(id, "WmHeightVarRow_" id, at == "获取窗口宽高")
         this._FormalSetVis(id, "WmTitleRow_" id, at == "修改标题")
         this._FormalSetVis(id, "WmTransRow_" id, at == "修改透明度")
     }
@@ -1961,7 +1949,6 @@ class MacroGraphFormalHandlersMixin {
         this.ui.Update("WmCloseProcess_" id, "IsChecked", d.HasOwnProp("wmCloseProcess") && d.wmCloseProcess ? "True" : "False")
         for nm, val in Map("WmX", d.HasOwnProp("wmPosX") ? d.wmPosX : 0, "WmY", d.HasOwnProp("wmPosY") ? d.wmPosY : 0,
             "WmW", d.HasOwnProp("wmWidth") ? d.wmWidth : 0, "WmH", d.HasOwnProp("wmHeight") ? d.wmHeight : 0,
-            "WmWidthVar", d.HasOwnProp("wmWidthVarName") ? d.wmWidthVarName : "WinWidth", "WmHeightVar", d.HasOwnProp("wmHeightVarName") ? d.wmHeightVarName : "WinHeight",
             "WmTitle", d.HasOwnProp("wmNewTitle") ? d.wmNewTitle : "", "WmTrans", d.HasOwnProp("wmTransparency") ? d.wmTransparency : "80") {
             this._SetVariableComboItems(nm "_" id, nm == "WmTitle" ? GetGuiVarReferences("text") : varList,
                 nm == "WmTitle" ? TranslateBuiltinVarReferences(val, true) : GetLang(val))

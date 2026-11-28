@@ -96,7 +96,7 @@ class MacroGraphHandlersMixin {
         else if (type == GetLang("后台按键"))
             keys := ["BgkTime_" id, "BgkCount_" id, "BgkInter_" id]
         else if ((type == GetLang("窗口管理") || type == GetLang("窗口信息") || type == GetLang("窗口操作")))
-            keys := ["WmX_" id, "WmY_" id, "WmW_" id, "WmH_" id, "WmTrans_" id, "WmWidthVar_" id, "WmHeightVar_" id, "WmTitle_" id, "WmResult1_" id, "WmResult2_" id, "WmResult3_" id, "WmResult4_" id, "WmResult5_" id, "WmResult6_" id, "WmResult7_" id]
+            keys := ["WmX_" id, "WmY_" id, "WmW_" id, "WmH_" id, "WmTrans_" id, "WmTitle_" id, "WmResult1_" id, "WmResult2_" id, "WmResult3_" id, "WmResult4_" id, "WmResult5_" id, "WmResult6_" id, "WmResult7_" id]
         else if (type == GetLang("按键检测") || type == GetLang("手柄检测"))
             keys := ["KcVar_" id]
         else if (type == GetLang("抓图"))
@@ -320,7 +320,7 @@ class MacroGraphHandlersMixin {
         if (name == "")
             return false
         n := RegExReplace(name, "\d+$", "")
-        return n == GetLang("搜索Combo") || n == GetLang("组合搜索") || n == GetLang("搜索Multi") || n == "搜索Combo" || n == "组合搜索" || n == "搜索Multi"
+        return n == GetLang("搜索Combo") || n == "搜索Combo"
     }
 
     _IsSearchFamilyName(name) {
@@ -1605,7 +1605,7 @@ class MacroGraphHandlersMixin {
             this._FlushDeltaMoveInline(id, d, state)
         else if (IsMoveProCmd(d.type))
             this._FlushMMProInline(id, state)
-        else if (d.type == GetLang("搜索All") || d.type == GetLang("搜索") || d.type == GetLang("搜索Pro") || d.type == GetLang("搜索Combo") || d.type == GetLang("搜索Multi"))
+        else if (d.type == GetLang("搜索All") || d.type == GetLang("搜索") || d.type == GetLang("搜索Pro") || d.type == GetLang("搜索Combo"))
             this._FlushSearchInline(id, state)
         else if (d.type == GetLang("输入"))
             this._FlushInputInline(id, state)
