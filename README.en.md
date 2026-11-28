@@ -8,7 +8,8 @@
 <p align="center">
   <a href="DISCLAIMER.md">📜 Disclaimer</a> | 
   <a href="LICENSE">🧾 License</a> |
-  <a href="README.md">🌐 中文版</a>
+  <a href="README.md">🌐 中文版</a> |
+  <a href="README.tr.md">🌐 Türkçe</a>
 </p>
 
 <p align="center">
