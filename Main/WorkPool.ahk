@@ -1230,7 +1230,7 @@ class WorkPool {
                         ; 输出→指令窗口：强制显示，不经 CMDTip 门控
                         CmdTipForceShow(args[1])
                     case "RC":
-                        ExcuteRMTCMDAction(args[1])
+                        ExcuteRMTCMDAction(args[1], args.Length >= 2 ? args[2] : "", args.Length >= 3 ? args[3] : "")
                     case "PS":
                         tableItem := GetTableByID(args[1])
                         if (tableItem)

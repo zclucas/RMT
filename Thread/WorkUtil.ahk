@@ -600,8 +600,8 @@ WorkDelGlobalVariable(names) {
         MsgSendHandler("CmdTipForce", cmdStr)
     }
 
-    WorkExcuteRMTCMDAction(cmdStr) {
-        MsgSendHandler("RMT指令", cmdStr)
+    WorkExcuteRMTCMDAction(cmdStr, sourceTableID := "", sourceItemID := "") {
+        MsgSendHandler("RMT指令", cmdStr, sourceTableID, sourceItemID)
     }
 
     WorkMsgBoxContent(content) {

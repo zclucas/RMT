@@ -170,6 +170,8 @@ RunMacroHook(tableItem, item, phase, force := false) {
 
     hookTable := AcquireMacroHookTable()
     hookItem := hookTable.Items[1]
+    ; 钩子使用临时表执行，控制指令仍属于发起它的真实宏。
+    hookTable._rmtCommandSource := {tableID: tableItem.ID, itemID: item.ID}
     who := ProcessTag()
     try {
         hookItem.Killed := false
@@ -207,6 +209,7 @@ RunMacroHook(tableItem, item, phase, force := false) {
             , tableItem.ID, item.ID, phase, e.Message, e.Line))
         try RMTErrorShow("钩子执行异常(" phase "): " e.Message, RMT_LV_ERROR, who)
     } finally {
+        hookTable.DeleteProp("_rmtCommandSource")
         hookTable.HookBusy := false
     }
     return true
@@ -1767,7 +1770,9 @@ OnRMTCMD(tableItem, cmd, index) {
     }
     if (ApplyRmtInputControl(cmdStr))
         return
-    MyExcuteRMTCMDAction(cmd)
+    source := tableItem.HasProp("_rmtCommandSource")
+        ? tableItem._rmtCommandSource : {tableID: tableItem.ID, itemID: tableItem.Items[index].ID}
+    MyExcuteRMTCMDAction(cmd, source.tableID, source.itemID)
 }
 
 OnInterval(tableItem, cmd, index) {

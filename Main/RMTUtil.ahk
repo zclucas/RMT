@@ -1146,7 +1146,7 @@ ToolTipTimer() {
     }
 }
 
-ExcuteRMTCMDAction(Cmd) {
+ExcuteRMTCMDAction(Cmd, sourceTableID := "", sourceItemID := "") {
     ; 新格式: RMT指令⫶类别⫶指令 → paramArr[1]=RMT指令, paramArr[2]=类别, paramArr[3]=指令
     paramArr := StrSplit(Cmd, InStr(Cmd, "⫶") ? "⫶" : "_")
     if (paramArr.Length < 3 || ApplyRmtInputControl(paramArr[3]))
@@ -1204,6 +1204,10 @@ ExcuteRMTCMDAction(Cmd) {
             OnSuspendHotkey()
         case "暂停所有宏":
             SetPauseState(true)
+        case "暂停其他宏":
+            ; 必须携带调用者身份；缺少上下文时不能退化成暂停所有宏。
+            if (sourceTableID != "" && sourceItemID != "")
+                SetPauseState(true, sourceTableID, sourceItemID)
         case "恢复所有宏":
             SetPauseState(false)
         case "终止所有宏":

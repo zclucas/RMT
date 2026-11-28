@@ -35,7 +35,7 @@ class RMTCMDGui {
             },
             {
                 name: "宏控制",
-                cmds: ["显示菜单", "关闭菜单", "打开界面窗口", "关闭界面窗口", "禁用模块", "取消禁用模块", "暂停所有宏", "恢复所有宏", "终止所有宏"]
+                cmds: ["显示菜单", "关闭菜单", "打开界面窗口", "关闭界面窗口", "禁用模块", "取消禁用模块", "暂停其他宏", "恢复所有宏", "终止所有宏"]
             },
             {
                 name: "调试",
@@ -226,7 +226,7 @@ class RMTCMDGui {
             "显示菜单", 0xE700, "关闭菜单", 0xE700,
             "打开界面窗口", 0xE737, "关闭界面窗口", 0xE737,
             "禁用模块", 0xE8A9, "取消禁用模块", 0xE8A9,
-            "暂停所有宏", 0xE769, "恢复所有宏", 0xE768, "终止所有宏", 0xE71A,
+            "暂停所有宏", 0xE769, "暂停其他宏", 0xE769, "恢复所有宏", 0xE768, "终止所有宏", 0xE71A,
             "开启变量监视", 0xE890, "关闭变量监视", 0xE890,
             "开启指令显示", 0xE756, "关闭指令显示", 0xE756,
             "关闭软件", 0xE7E8, "休眠", 0xE708, "重载", 0xE72C)
@@ -246,6 +246,8 @@ class RMTCMDGui {
     }
 
     _CommandCategory(command) {
+        if (command == "暂停所有宏")
+            return "宏控制" ; 仅回显旧配置，不进入新增指令列表。
         for category in this.CategoryDefs
             for key in category.cmds
                 if (key == command)
@@ -262,6 +264,10 @@ class RMTCMDGui {
                 commands.Push(command)
                 labels.Push(GetLang(command))
             }
+        }
+        if (preferredCommand == "暂停所有宏" && (categoryKey == "全部" || categoryKey == "宏控制")) {
+            commands.Push(preferredCommand)
+            labels.Push(GetLang(preferredCommand))
         }
         selectedCommand := commands[1]
         for command in commands

@@ -488,7 +488,8 @@ class MacroGraphFormalHandlersMixin {
         categories := this._RmtCategories()
         catTxt := this._ComboText("RmtCatCmb_" id, unset, categories)
         cat := RmtCommandCategoryKey(catTxt)
-        ops := this._RmtCategoryOps(catTxt != "" ? catTxt : GetLang("全部"))
+        d := this._FormalDFromId(id)
+        ops := this._RmtCategoryOps(catTxt != "" ? catTxt : GetLang("全部"), d.HasOwnProp("rmtOp") ? d.rmtOp : "")
         opTxt := this._ComboText("RmtOpCmb_" id, unset, ops)
         op := RmtCommandActionKey(opTxt)
         return { cat: cat, op: op }
@@ -500,21 +501,27 @@ class MacroGraphFormalHandlersMixin {
     }
 
     ; RMT 类别对应的指令列表（与 RMTCMDGui.CategoriesMap 保持一致）
-    _RmtCategoryOps(category) {
+    _RmtCategoryOps(category, currentOp := "") {
         category := GetLang(RmtCommandCategoryKey(category))
         allOps := GetLangArr(["截图", "截图提取文本", "启用鼠标", "启用键盘", "启用键鼠",
             "禁用鼠标", "禁用键盘", "禁用键鼠", "启用鼠标加速", "禁用鼠标加速", "显示菜单", "关闭菜单",
-            "暂停所有宏", "恢复所有宏", "终止所有宏", "开启变量监视", "关闭变量监视", "开启指令显示",
+            "暂停其他宏", "恢复所有宏", "终止所有宏", "开启变量监视", "关闭变量监视", "开启指令显示",
             "关闭指令显示", "关闭软件", "休眠", "重载"])
+        ; 旧节点保留原指令，新增节点不再提供“暂停所有宏”。
+        legacyPause := RmtCommandActionKey(currentOp) == "暂停所有宏"
+        if (legacyPause)
+            allOps.Push(GetLang("暂停所有宏"))
         if (category == GetLang("全部") || category == "")
             return allOps
         categoryOps := Map(
             GetLang("图文"), GetLangArr(["截图", "截图提取文本"]),
             GetLang("输入控制"), GetLangArr(["启用鼠标", "启用键盘", "启用键鼠", "禁用鼠标", "禁用键盘", "禁用键鼠", "启用鼠标加速", "禁用鼠标加速"]),
-            GetLang("宏控制"), GetLangArr(["显示菜单", "关闭菜单", "暂停所有宏", "恢复所有宏", "终止所有宏"]),
+            GetLang("宏控制"), GetLangArr(["显示菜单", "关闭菜单", "暂停其他宏", "恢复所有宏", "终止所有宏"]),
             GetLang("调试"), GetLangArr(["开启变量监视", "关闭变量监视", "开启指令显示", "关闭指令显示"]),
             GetLang("软件自身"), GetLangArr(["关闭软件", "休眠", "重载"])
         )
+        if (legacyPause && category == GetLang("宏控制"))
+            categoryOps[category].Push(GetLang("暂停所有宏"))
         return categoryOps.Has(category) ? categoryOps[category] : allOps
     }
 
@@ -565,7 +572,7 @@ class MacroGraphFormalHandlersMixin {
         cat := live.cat, op := live.op
         if (cat == "" || op == "")
             return
-        ops := this._RmtCategoryOps(cat)
+        ops := this._RmtCategoryOps(cat, op)
         if (this._RmtOpIdx(ops, op) < 0)
             return
         this._RefreshRmtOptions(id, cat, op)
@@ -2452,10 +2459,10 @@ class MacroGraphFormalHandlersMixin {
         categories := this._RmtCategories()
         currentCategory := d.HasOwnProp("rmtCategory") ? d.rmtCategory : GetLang("全部")
         currentOp := d.HasOwnProp("rmtOp") ? d.rmtOp : GetLang("截图")
-        ops := this._RmtCategoryOps(currentCategory)
+        ops := this._RmtCategoryOps(currentCategory, currentOp)
         if (!this._ArrayContains(ops, GetLang(currentOp)) && !this._ArrayContains(ops, currentOp)) {
             currentCategory := GetLang("全部")
-            ops := this._RmtCategoryOps(currentCategory)
+            ops := this._RmtCategoryOps(currentCategory, currentOp)
         }
         catIdx := this._IndexInLangArr(categories, GetLang(currentCategory))
         if (catIdx < 0)

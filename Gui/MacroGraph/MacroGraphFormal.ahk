@@ -71,7 +71,7 @@ class MacroGraphFormalMixin {
     _RmtOpList() {
         return GetLangArr(["截图", "截图提取文本", "启用鼠标", "启用键盘", "启用键鼠",
             "禁用鼠标", "禁用键盘", "禁用键鼠", "显示菜单", "关闭菜单",
-            "暂停所有宏", "恢复所有宏", "终止所有宏", "开启变量监视", "关闭变量监视", "开启指令显示",
+            "暂停其他宏", "恢复所有宏", "终止所有宏", "开启变量监视", "关闭变量监视", "开启指令显示",
             "关闭指令显示", "关闭软件", "休眠", "重载"])
     }
 
@@ -1055,7 +1055,7 @@ class MacroGraphFormalMixin {
         currentOp := GetLang(d.HasOwnProp("rmtOp") ? RmtCommandActionKey(d.rmtOp) : "截图")
         currentCategory := GetLang(d.HasOwnProp("rmtCategory") ? RmtCommandCategoryKey(d.rmtCategory) : "全部")
         ; 根据类别获取指令列表，如果当前指令不在列表中则使用全部
-        ops := this._RmtCategoryOps(currentCategory)
+        ops := this._RmtCategoryOps(currentCategory, currentOp)
         if (!this._ArrayContains(ops, currentOp)) {
             ops := this._RmtCategoryOps(GetLang("全部"))
             currentCategory := GetLang("全部")
