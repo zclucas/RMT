@@ -418,7 +418,15 @@ class SoftData {
         this.GlobalArrMap := Map()      ;UI下拉显示数组
         this.ArrayMap := Map()          ;真正的全局数组
         this.GlobalVariMap := Map()     ;UI下拉显示变量
-        this.VariableMap := ShmVariableMap("RMT_Shared_Variables")       ;真正的全局变量（跨进程纯共享内存）
+        ; 共享内存组件缺失或初始化失败时退回本进程 Map：主界面仍能起来，
+        ; 全局变量在补齐 Plugins\ShmVar\ShmVar.dll 并重启前不与 Worker 共享。
+        try {
+            this.VariableMap := ShmVariableMap("RMT_Shared_Variables")
+        } catch as e {
+            this.VariableMap := Map()
+            try RMTLogSys(RMT_LV_ERROR, "Startup", "ShmVariableMap | " e.Message "。全局变量仅在本进程有效，主界面继续启动")
+            try FlushRMTLogAsync()
+        }
         this.TimeVarMap := Map()        ;记录时间变量
         this.HandleVarMap := Map()      ;窗口信息指令生成的句柄变量
         this.ControlVarMap := Map()     ;检测控件指令生成的控件变量

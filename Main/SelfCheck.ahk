@@ -556,6 +556,9 @@ SelfCheckMissingFiles() {
         {path: "Plugins\YOLO\" arch "\RMT_YOLO.dll", entry: "RMT_YOLO.dll", bundle: "Yolo.zip"},
         {path: "Plugins\YOLO\" arch "\onnxruntime.dll", entry: "onnxruntime.dll", bundle: "Yolo.zip"},
         {path: "Plugins\YOLO\" arch "\onnxruntime_providers_shared.dll", entry: "onnxruntime_providers_shared.dll", bundle: "Yolo.zip"},
+        ; 共享变量组件：缺了主界面仍能启动，变量只留在本进程，不与 Worker 共享。
+        ; 发行包会带上；旧包用文件校验从 RMT.zip 补齐后重启即可恢复。
+        {path: "Plugins\ShmVar\ShmVar.dll", entry: "ShmVar.dll", bundle: "RMT.zip"},
     ]
     ; 源码运行时，RmtUpdate 可直接用 AutoHotkey 启动 Update.ahk。
     if (A_IsCompiled || RmtAssetMissing(A_ScriptDir "\Thread\Update.ahk"))
