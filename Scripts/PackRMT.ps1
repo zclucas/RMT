@@ -1,4 +1,4 @@
-﻿# RMT 自动打包脚本
+# RMT 自动打包脚本
 # 使用 Ahk2Exe.exe 编译主程序、Worker 和更新程序
 # 此脚本需要编码格式为UTF-8 BOM 或者 UTF-16才能正常运行
 # 若运行直接闪退，请在powershell执行：Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
@@ -1061,6 +1061,11 @@ function Copy-RuntimePlugins {
             Name = "SupportQr/zxing.dll"
             Src  = "Plugins\SupportQr\zxing.dll"
             Dst  = "Plugins\SupportQr\zxing.dll"
+        },
+        @{
+            Name = "ShmVar/ShmVar.dll"
+            Src  = "Plugins\ShmVar\bin\$Arch\ShmVar.dll"
+            Dst  = "Plugins\ShmVar\ShmVar.dll"
         }
     )
     foreach ($item in $bundles) {
@@ -1226,6 +1231,7 @@ function New-RMTAssets {
             @{ Dest = "Browser-LICENSE.txt"; Src = "Plugins\Browser\LICENSE.txt" },
             @{ Dest = "RMT.dll"; Src = "Plugins\RMT\RMT.dll" },
             @{ Dest = "RMT.ExcelHelper.exe"; Src = "Plugins\RMT\RMT.ExcelHelper.exe" },
+            @{ Dest = "ShmVar.dll"; Src = "Plugins\ShmVar\bin\$Arch\ShmVar.dll" },
             @{ Dest = "Work.exe"; Src = "Release$Arch\Thread\Work.exe" },
             # 使用整包中的成品，确保文件校验下载到的更新程序与发行版一致。
             @{ Dest = "Update.exe"; Src = (Join-Path $PackageDir "Thread\Update.exe") },
