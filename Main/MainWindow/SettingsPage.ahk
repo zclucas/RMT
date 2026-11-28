@@ -33,10 +33,10 @@
             "EditIntervalFloat", "E917", "EditCoordXFloat", "E7EA", "EditCoordYFloat", "E7EB",
             "StartTipAudioCon", "E8D6", "EndTipAudioCon", "E8D6", "StopTipAudioCon", "E8D6",
             "ShowBorderCon", "E9A6", "HoldMutiCon", "E8EE", "AutoLoosenCon", "E92F",
-            "BackgroundTogCon", "EF1F", "BackgroundWinCon", "E78B", "KeyboardTogCon", "E765",
+            "BackgroundTogCon", "EF1F", "BackgroundWinCon", "E7C4", "KeyboardTogCon", "E765",
             "MouseTogCon", "E962", "MouseTrailModeCon", "E7C9", "MouseTrailSpeedCon", "EC4A",
-            "WheelFixedPosCon", "E707", "WheelShowTooltipCon", "E8F2", "WheelSelectModeCon", "E7C9",
-            "WheelScaleCon", "E71E", "CountDownStyleCon", "E916", "CountDownPadCon", "E8E9",
+            "WheelFixedPosCon", "E718", "WheelShowTooltipCon", "E8F2", "WheelSelectModeCon", "E7C9",
+            "WheelScaleCon", "E71E", "CountDownStyleCon", "E916", "CountDownPadCon", "EC34",
             "UIPanelColsCon", "F0E2", "UIPanelShowOnActiveCon", "E890", "UIPanelCustomFoldCon", "E8B7",
             "BtnEditUIPanelCustom", "EF60", "ThemePresetCon", "E790", "ThemeUiScaleCon", "E71E",
             "AiProviderCon", "E753", "AiBaseUrlCon", "E774", "AiApiKeyCon", "E72E",
@@ -346,7 +346,7 @@
             card(GetLang("通用"), "&#xE7C8;", tog(GetLang("录制显示边框"), "ShowBorderCon", MainSoftData.RecordShowBorder, GetLang("录制时显示范围边框"))
                 . tog(GetLang("长按多次录制"), "HoldMutiCon", MainSoftData.RecordHoldMuti, GetLang("按住时连续录制"))
                 . tog(GetLang("结束自动添加按键松开"), "AutoLoosenCon", MainSoftData.RecordAutoLoosen, GetLang("录制结束后补充松开指令")), "0", "", "recCommon")
-            . card(GetLang("背景录制"), "&#xE771;", tog(GetLang("开启背景录制"), "BackgroundTogCon", MainSoftData.RecordBackground, GetLang("录制时将正常操作转换为后台指令"))
+            . card(GetLang("背景录制"), "&#xEF1F;", tog(GetLang("开启背景录制"), "BackgroundTogCon", MainSoftData.RecordBackground, GetLang("录制时将正常操作转换为后台指令"))
                 . row(GetLang("绑定窗口"), '<Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="58"/></Grid.ColumnDefinitions><TextBox Name="BackgroundWinCon" Text="' (SubStr(this._XmlEsc(String(MainSoftData.RecordBackgroundWin)), 1, 1) == "{" ? "{}" : "") this._XmlEsc(String(MainSoftData.RecordBackgroundWin)) '" Padding="5,0"/><Button Grid.Column="1" Name="BtnBgWinEdit" Content="' GetLang("编辑") '" Margin="6,0,0,0" Padding="4,0"/></Grid>', GetLang("目标窗口标识（如标题/类名/进程/句柄）")), "0,10,0,0", "", "recBg")
             . card(GetLang("键盘"), "&#xE765;", tog(GetLang("键盘录制"), "KeyboardTogCon", MainSoftData.RecordKeyboard, GetLang("记录键盘操作")), "0,10,0,0", "", "recKey")
             , card(GetLang("鼠标"), "&#xE962;", tog(GetLang("鼠标录制"), "MouseTogCon", MainSoftData.RecordMouse, GetLang("记录鼠标操作"))
@@ -384,7 +384,7 @@
                 hv := MainSoftData.HasProp(hd.f) ? String(MainSoftData.%hd.f%) : ""
                 hdisp := hv == "" ? GetLang("无") : FormatHotkeyDisplay(hv)
                 icon := hd.HasOwnProp("path")
-                    ? '<Path Data="' hd.path '" Stretch="Uniform" Stroke="{DynamicResource TextMain}" StrokeThickness="1.5" StrokeLineJoin="Round"/>'
+                    ? '<Path Data="' hd.path '" Width="14" Height="14" HorizontalAlignment="Center" VerticalAlignment="Center" Stretch="Uniform" Stroke="{DynamicResource TextMain}" StrokeThickness="1.5" StrokeLineJoin="Round"/>'
                     : '<TextBlock Text="' hd.glyph '" FontFamily="' iconFont '" FontSize="14" FontWeight="Normal" Foreground="{DynamicResource TextMain}" HorizontalAlignment="Center" VerticalAlignment="Center"/>'
                 hb .= row(GetLang(hd.l), '<Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="40"/></Grid.ColumnDefinitions><TextBox Name="Val_' hd.f '" Text="' this._XmlEsc(hdisp) '" IsReadOnly="True"/><Button Grid.Column="1" Name="BtnEdit_' hd.f '" Content="&#xE70F;" FontFamily="' iconFont '" ToolTip="' GetLang("录入快捷键") '" Margin="8,0,0,0" Padding="0"/></Grid>', , , , icon)
             }
@@ -479,7 +479,7 @@
         paletteBody := '<UniformGrid Columns="3">'
         for slot, cd in AppThemeUtil.ColorDefs {
             col := tcMap.Has(cd.Key) ? tcMap[cd.Key] : "#FF000000"
-            paletteBody .= '<Grid Margin="0,4,16,4"><Grid.ColumnDefinitions><ColumnDefinition Width="' labelWidth '"/><ColumnDefinition Width="*"/><ColumnDefinition Width="35"/></Grid.ColumnDefinitions><TextBlock Text="' this._XmlEsc(GetLang("颜色") " " slot) '" VerticalAlignment="Center" FontSize="13"/><TextBox Grid.Column="1" Name="PaletteText_' slot '" Text="' this._XmlEsc(col) '" IsReadOnly="True" Padding="7,0"/><Border Grid.Column="2" Name="PalettePreview_' slot '" Width="28" Height="28" CornerRadius="6" HorizontalAlignment="Right" Background="' this._XmlEsc(col) '" BorderBrush="{DynamicResource InputStroke}" BorderThickness="1" Cursor="Arrow"/></Grid>'
+            paletteBody .= '<Grid Margin="0,4,16,4"><Grid.ColumnDefinitions><ColumnDefinition Width="' (labelWidth + 24) '"/><ColumnDefinition Width="*"/><ColumnDefinition Width="35"/></Grid.ColumnDefinitions><Grid VerticalAlignment="Center"><Grid.ColumnDefinitions><ColumnDefinition Width="24"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><Grid Width="16" Height="16" HorizontalAlignment="Left" VerticalAlignment="Center" IsHitTestVisible="False"><TextBlock Text="&#xE790;" FontFamily="' iconFont '" FontSize="14" FontWeight="Normal" Foreground="{DynamicResource TextMain}" HorizontalAlignment="Center" VerticalAlignment="Center"/></Grid><TextBlock Grid.Column="1" Text="' this._XmlEsc(GetLang("颜色") " " slot) '" VerticalAlignment="Center" FontSize="13" FontWeight="Normal" Foreground="{DynamicResource TextMain}"/></Grid><TextBox Grid.Column="1" Name="PaletteText_' slot '" Text="' this._XmlEsc(col) '" IsReadOnly="True" Padding="7,0"/><Border Grid.Column="2" Name="PalettePreview_' slot '" Width="28" Height="28" CornerRadius="6" HorizontalAlignment="Right" Background="' this._XmlEsc(col) '" BorderBrush="{DynamicResource InputStroke}" BorderThickness="1" Cursor="Arrow"/></Grid>'
         }
         paletteBody .= '</UniformGrid>'
         themePage := page("appearance"
