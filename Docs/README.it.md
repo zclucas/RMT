@@ -57,7 +57,7 @@ Basato su **AutoHotkey v2**, RMT ti consente di creare, eseguire e condividere f
 ## ☕ Sostieni il progetto
 
 **RMT (RuoMengTu)** è un progetto completamente gratuito e open source.<br>
-Se lo trovi utile, sei il benvenuto a offrirmi un caffè! ☕
+Se lo trovi utile, sei il benvenuto a offrirci un caffè! ☕
 
 | WeChat | Alipay |
 |---------|---------|
@@ -69,8 +69,8 @@ Se lo trovi utile, sei il benvenuto a offrirmi un caffè! ☕
 
 Sostieni RMT con un abbonamento mensile Stripe. Fai clic su un codice QR per aprire la pagina di abbonamento corrispondente.
 
-> 💡 Il tuo supporto mi incoraggia a continuare a migliorare e mantenere il progetto!<br>
-> Se non puoi donare, puoi comunque supportare dando al progetto una **⭐ Stella** o **condividendolo** con altri!
+> 💡 Il tuo supporto ci incoraggia a continuare a migliorare e mantenere il progetto!<br>
+> Se non puoi donare, puoi comunque supportarci dando al progetto una **⭐ Stella** o **condividendolo** con altri!
 
 ---
 

@@ -57,7 +57,7 @@ Built on **AutoHotkey v2**, RMT lets you create, run, and share automated workfl
 ## ☕ Support the Project
 
 **RMT (RuoMengTu)** is a completely free and open-source project.<br>
-If you find it helpful, you’re welcome to buy me a coffee! ☕
+If you find it helpful, you’re welcome to buy us a coffee! ☕
 
 | WeChat | Alipay |
 |---------|---------|
@@ -69,8 +69,8 @@ If you find it helpful, you’re welcome to buy me a coffee! ☕
 
 Support RMT with a monthly Stripe subscription. Click a QR code to open the corresponding subscription page.
 
-> 💡 Your support encourages me to keep improving and maintaining the project!<br>
-> If you can’t donate, you can still support by giving the project a **⭐ Star** or **sharing it** with others!
+> 💡 Your support encourages us to keep improving and maintaining the project!<br>
+> If you can’t donate, you can still support us by giving the project a **⭐ Star** or **sharing it** with others!
 
 ---
 

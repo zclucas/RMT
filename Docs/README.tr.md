@@ -57,7 +57,7 @@ Arayüz aşağıdaki dilleri destekler. Arayüz dilini Ayarlar bölümünden de�
 ## ☕ Projeyi Destekleyin
 
 **RMT (RuoMengTu)** tamamen ücretsiz ve açık kaynaklı bir projedir.<br>
-Faydalı bulursanız bana bir kahve ısmarlayabilirsiniz! ☕
+Faydalı bulursanız bize bir kahve ısmarlayabilirsiniz! ☕
 
 | WeChat | Alipay |
 |---------|---------|
@@ -69,8 +69,8 @@ Faydalı bulursanız bana bir kahve ısmarlayabilirsiniz! ☕
 
 Aylık Stripe aboneliğiyle RMT’yi destekleyebilirsiniz. İlgili abonelik sayfasını açmak için bir QR koduna tıklayın.
 
-> 💡 Desteğiniz, projeyi geliştirmeye ve sürdürmeye devam etmem için beni motive ediyor!<br>
-> Bağış yapamıyorsanız bile projeye **⭐ Star** vererek veya başkalarıyla **paylaşarak** destek olabilirsiniz!
+> 💡 Desteğiniz, projeyi geliştirmeye ve sürdürmeye devam etmemiz için bizi motive ediyor!<br>
+> Bağış yapamıyorsanız bile projeye **⭐ Star** vererek veya başkalarıyla **paylaşarak** bizi destekleyebilirsiniz!
 
 ---
 
