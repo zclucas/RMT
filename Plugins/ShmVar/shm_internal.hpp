@@ -14,17 +14,14 @@
 namespace shm {
 
 constexpr uint32_t SHM_MAGIC = 0x564D4853; // 'SHMV' in little endian
-constexpr uint32_t SHM_VERSION = 1;
 constexpr uint32_t HASH_BUCKET_COUNT = 4096; // 4096 hash buckets
 constexpr uint32_t OFFSET_NIL = 0xFFFFFFFF;
-constexpr uint64_t MAX_SHM_SIZE = 0xFFFFFFFFULL; // 4GB max due to 32-bit relative offsets
 
 #pragma pack(push, 8)
 
 // Header located at base of Shared Memory mapping
 struct ShmHeader {
     uint32_t magic;           // SHM_MAGIC
-    uint32_t version;         // SHM_VERSION
     uint64_t totalSize;       // Total size of mapping in bytes
     uint32_t arenaOffset;     // Relative offset where Buddy Allocator arena begins
     uint32_t arenaSize;       // Size in bytes of Buddy Allocator arena
