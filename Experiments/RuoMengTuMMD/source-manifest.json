@@ -1,0 +1,41 @@
+{
+  "candidate": "2026-11-28 A",
+  "selectedMethod": "reference-authored quad garments and volumetric hair, fitted clean avatar base",
+  "referenceCharacter": "RuoMengTu, existing project mascot",
+  "base": {
+    "url": "https://raw.githubusercontent.com/pixiv/ChatVRM/b542aa00e19dccf9fc48ba340cf7eee011d2329a/public/AvatarSample_B.vrm",
+    "sha256": "ffbd8c92a9e67c0a948f69c7a2eec91e5c282c9ae70e9184309fc164d74cbc27"
+  },
+  "baseMeta": {
+    "name": "AvatarSample_B",
+    "version": "1.1",
+    "authors": [
+      "VRoid Project"
+    ],
+    "copyrightInformation": "pixiv Inc.",
+    "contactInformation": "https://www.pixiv.net/support.php?mode=select_vroid",
+    "thumbnailImage": 29,
+    "licenseUrl": "https://vrm.dev/licenses/1.0/",
+    "avatarPermission": "everyone",
+    "allowExcessivelyViolentUsage": true,
+    "allowExcessivelySexualUsage": true,
+    "commercialUsage": "corporation",
+    "allowPoliticalOrReligiousUsage": true,
+    "allowAntisocialOrHateUsage": false,
+    "creditNotation": "unnecessary",
+    "allowRedistribution": true,
+    "modification": "allowModificationRedistribution",
+    "otherLicenseUrl": "https://vroid.pixiv.help/hc/ja/articles/4402394424089-AvatarSample-A-B-C"
+  },
+  "conditionsUrl": "https://vroid.pixiv.help/hc/en-us/articles/4402394424089-VRoidPreset-A-Z",
+  "iris": {
+    "tool": "built-in image_gen",
+    "kind": "edited licensed iris atlas using the existing RuoMengTu artwork as color reference",
+    "file": "Art/iris-brown.png",
+    "prompt": "Art/iris.prompt.txt",
+    "sha256": "e90a54a1d0986d91504f10d3c38551efbcab12a7a02ddcaafd74572db29be445"
+  },
+  "testedAuthoringRuntime": "Blender bpy 4.2, Python 3.11",
+  "motionClips": 0,
+  "runtimeIntegration": false
+}

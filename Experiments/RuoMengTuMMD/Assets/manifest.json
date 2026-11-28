@@ -1,0 +1,88 @@
+{
+  "candidate": "2026-11-28-A",
+  "sourceManifest": "../source-manifest.json",
+  "gltf": {
+    "bones": 125,
+    "vertices": 55814,
+    "morphTargets": 61,
+    "animations": 0,
+    "imagesEmbedded": true,
+    "meshes": 2
+  },
+  "pmx": {
+    "bones": 130,
+    "vertices": 55770,
+    "triangles": 102245,
+    "effectiveMorphs": 58,
+    "textures": 10,
+    "ikControllers": 4,
+    "physicsBodies": 0
+  },
+  "files": [
+    {
+      "file": "PMX/RuoMengTu.pmx",
+      "bytes": 4517606,
+      "sha256": "62ce20a544c5efe05de9f8ab13514fbae841a60dcf72d349523eb4367783f6fa"
+    },
+    {
+      "file": "PMX/textures/texture-00.png",
+      "bytes": 269850,
+      "sha256": "5955cb662c932246fb715c4f71d3962eba828a32c9319bf1f63644d048f4b559"
+    },
+    {
+      "file": "PMX/textures/texture-01.png",
+      "bytes": 14193,
+      "sha256": "c9d2204ffdb7d6319457cb8d01edd9d58812d2f6b2f43581a1cac5098a3674b4"
+    },
+    {
+      "file": "PMX/textures/texture-02.png",
+      "bytes": 506681,
+      "sha256": "905c28cb7096daf9f45bb129dd2a16231b2b5035d3cc5cab24a1af1f701b57b4"
+    },
+    {
+      "file": "PMX/textures/texture-03.png",
+      "bytes": 36607,
+      "sha256": "cf1ac0256450901062abd1937348e3b5d20915511c853b85364da5aa092c7620"
+    },
+    {
+      "file": "PMX/textures/texture-04.png",
+      "bytes": 74219,
+      "sha256": "88bd2241c4f8bb9eb40b5904adf737ca0ad46bc8089675652010b9cf9f49b869"
+    },
+    {
+      "file": "PMX/textures/texture-05.png",
+      "bytes": 272415,
+      "sha256": "8dad76304bbf27b3acc106e782b7dfdb2e4feec45ac1fd3dde8e3a0269b50362"
+    },
+    {
+      "file": "PMX/textures/texture-06.png",
+      "bytes": 15101,
+      "sha256": "e6403734a8be59ee3cbf24a3e8cce2e7624ebce0e11a2cd41165b0f278d4296d"
+    },
+    {
+      "file": "PMX/textures/texture-07.png",
+      "bytes": 4828,
+      "sha256": "c174c2a46f5de02279858f48ea8dc7ed26dd72bb7b26fedd1ae09fe2e53b34d2"
+    },
+    {
+      "file": "PMX/textures/texture-08.png",
+      "bytes": 110685,
+      "sha256": "6aafcd2eb7a89ac7c711336374bda80e246da0ed2bc054410ca5d79bb6307f26"
+    },
+    {
+      "file": "PMX/textures/toon-flat.png",
+      "bytes": 255,
+      "sha256": "7450bee813f71f86a158a18321eac61e0bc9e1dfe039e4b5da71281d20bf3441"
+    },
+    {
+      "file": "RuoMengTu.blend",
+      "bytes": 4014242,
+      "sha256": "ca4eb285c49c5ff69b4732c3843a5fc9b5d346a02ce5052d223816e6bbce585a"
+    },
+    {
+      "file": "RuoMengTu.glb",
+      "bytes": 7683444,
+      "sha256": "f13cc4ce69960f9dd14eea735904375a3896b8037b2578794db87e78a4fda900"
+    }
+  ]
+}

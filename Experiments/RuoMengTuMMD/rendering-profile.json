@@ -1,0 +1,23 @@
+{
+  "purpose": "Optional flat anime material preset for an isolated MMD viewer",
+  "camera": "orthographic",
+  "physics": false,
+  "motion": null,
+  "transparentMaterials": {
+    "forceDepthWrite": false
+  },
+  "flatMaterialNameContains": [
+    "Skin", "Iris", "EyeWhite", "Eyeline", "Brows", "IvoryHair", "IvoryFur", "InnerEars", "HairContour", "WhiteSneakers"
+  ],
+  "flatMaterialSettings": {
+    "disableLighting": true,
+    "emissiveColor": "copy diffuseColor; preserve diffuseTexture and alpha",
+    "ambientColor": [0, 0, 0],
+    "specularColor": [0, 0, 0]
+  },
+  "clothing": {
+    "specularColor": [0, 0, 0],
+    "outlineWidth": 0.0025
+  },
+  "notes": "Metadata only. No application reads this file yet. GLB already uses KHR_materials_unlit for the flat materials."
+}
