@@ -65,7 +65,7 @@ jobs:
       - name: 检出代码
         uses: actions/checkout@v4
 
-      - name: 准备 Node（打包帮助文档 Web/JS/SingleHtml.js 需要）
+      - name: 准备 Node（打包帮助文档 Docs/Web/JS/SingleHtml.js 需要）
         uses: actions/setup-node@v4
         with:
           node-version: "20"
@@ -102,7 +102,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $changelog = Get-Content -LiteralPath (Join-Path $env:GITHUB_WORKSPACE 'Web/更新日志.md') -Raw -Encoding UTF8
+          $changelog = Get-Content -LiteralPath (Join-Path $env:GITHUB_WORKSPACE 'Docs/Web/更新日志.md') -Raw -Encoding UTF8
           $version = [regex]::Escape($env:RMT_TAG_VERSION)
           $sections = [regex]::Matches($changelog, "(?ms)^##[ \t]+RMT[ \t]*v$version[ \t]*更新内容[ \t]*\r?\n(?<body>.*?)(?=^##[ \t]+|\z)")
           if ($sections.Count -ne 1 -or [string]::IsNullOrWhiteSpace($sections[0].Groups['body'].Value)) {

@@ -6,15 +6,29 @@
 </p>
 
 <p align="center">
-  <a href="DISCLAIMER.md">📜 免责声明</a> | 
-  <a href="LICENSE">🧾 开源许可证</a> |
-  <a href="README.en.md">🌐 English</a> |
-  <a href="README.tr.md">🌐 Türkçe</a>
+  <a href="DISCLAIMER.md">📜 免责声明</a> | <a href="LICENSE">🧾 开源许可证</a><br>
+  <b>简体中文</b> |
+  <a href="Docs/README.zh-TW.md">繁體中文</a> |
+  <a href="Docs/README.en.md">English</a> |
+  <a href="Docs/README.es.md">Español</a> |
+  <a href="Docs/README.fr.md">Français</a> |
+  <a href="Docs/README.de.md">Deutsch</a> |
+  <a href="Docs/README.it.md">Italiano</a> |
+  <a href="Docs/README.tr.md">Türkçe</a>
 </p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/Windows-7%20%7C%208%20%7C%208.1%20%7C%2010%20%7C%2011-0078D6?style=flat-square" alt="Windows 7 / 8 / 8.1 / 10 / 11">
 </p>
+
+---
+
+
+## 🌐 多语言支持
+
+软件界面支持以下 8 种语言。点击语言名称可阅读对应的 GitHub 项目说明；在软件「设置」中可以切换界面语言。
+
+[简体中文](README.md) · [繁體中文](Docs/README.zh-TW.md) · [English](Docs/README.en.md) · [Español](Docs/README.es.md) · [Français](Docs/README.fr.md) · [Deutsch](Docs/README.de.md) · [Italiano](Docs/README.it.md) · [Türkçe](Docs/README.tr.md)
 
 ---
 
@@ -41,21 +55,21 @@ RMT 基于 **AutoHotkey v2** 开发，支持通过界面配置和可视化编辑
 
 ## 🚀 快速上手
 
-📘 [点击这里，10分钟上手 RMT！](https://zclucas.github.io/RMT/)  
+📘 [点击这里，10分钟上手 RMT！](https://zclucas.github.io/RMT/)<br>
 帮助你理解核心词条与配置逻辑，从入门到精通。
 
 ---
 
 ## ☕ 打赏支持
 
-RMT（若梦兔）是完全免费的开源项目。  
+RMT（若梦兔）是完全免费的开源项目。<br>
 如果你觉得它对你有帮助，欢迎请我喝杯咖啡！☕
 
 | 微信 | 支付宝 | 爱发电（月度守护） |
 |------|--------|------------------|
 | ![微信打赏](Images/Soft/WeiXin.png) | ![支付宝打赏](Images/Soft/ZhiFuBao.png) | ![爱发电赞助](Images/Soft/AiFaDian.png) |
 
-> 💡 你的支持将激励我不断维护与优化！  
+> 💡 你的支持将激励我不断维护与优化！<br>
 > 爱发电支持按月赞助，平台会收取约 6% 手续费；微信与支付宝适合单次赞助。<br>
 > 如果暂时不方便，也可以通过 **Star⭐ 项目** 或 **分享给朋友** 支持我！
 
@@ -102,10 +116,10 @@ RMT（若梦兔）是完全免费的开源项目。
 
 RMT 支持用户自由 **分享 / 下载** 宏配置文件，你可以在以下平台获取或贡献配置：
 
-🔗 **RMT 配置共享仓库**  
+🔗 **RMT 配置共享仓库**<br>
 📦 https://forum.ruomengtu.com/c/share/61
 
-> ✨ 你可以将自己录制或编辑的宏上传到共享仓库，与社区共同成长  
+> ✨ 你可以将自己录制或编辑的宏上传到共享仓库，与社区共同成长<br>
 > ⚠️ 若默认浏览器无法访问，请尝试更换其他浏览器
 
 ---

@@ -1,4 +1,4 @@
-# RMT 自动打包脚本
+﻿# RMT 自动打包脚本
 # 使用 Ahk2Exe.exe 编译主程序、Worker 和更新程序
 # 此脚本需要编码格式为UTF-8 BOM 或者 UTF-16才能正常运行
 # 若运行直接闪退，请在powershell执行：Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
@@ -353,7 +353,7 @@ function Show-CompileOutput {
 }
 
 function Pack-HelpDoc {
-    $WebDir = Join-Path $ProjectRoot "Web/JS"
+    $WebDir = Join-Path $ProjectRoot "Docs/Web/JS"
 
     if (-not (Test-Path (Join-Path $WebDir "SingleHtml.js"))) {
         Write-Log "未找到 SingleHtml.js，跳过" "Yellow"
@@ -375,14 +375,14 @@ function Pack-HelpDoc {
     }
     finally { Pop-Location }
 
-    $indexHtml = Join-Path $ProjectRoot "Web\index.html"
+    $indexHtml = Join-Path $ProjectRoot "Docs\Web\index.html"
     if (-not (Test-Path $indexHtml)) {
-        Write-Log "帮助文档打包失败：未生成 Web\index.html" "Red"
+        Write-Log "帮助文档打包失败：未生成 Docs\Web\index.html" "Red"
         return $false
     }
 
     $size = [math]::Round((Get-Item $indexHtml).Length / 1MB, 2)
-    Write-Log "[OK] 帮助文档打包成功 (${size} MB)：Web\index.html" "Green"
+    Write-Log "[OK] 帮助文档打包成功 (${size} MB)：Docs\Web\index.html" "Green"
     return $true
 }
 
@@ -665,14 +665,14 @@ function New-Release {
 function Copy-HelpDocs {
     param([string]$ReleaseDir)
 
-    # 源码帮助页位于 Web\index.html；发行包复制到程序根目录，兼容更新与资源下载。
-    $indexSrc = Join-Path $ProjectRoot "Web\index.html"
+    # 源码帮助页位于 Docs\Web\index.html；发行包复制到程序根目录，兼容更新与资源下载。
+    $indexSrc = Join-Path $ProjectRoot "Docs\Web\index.html"
     $indexDst = Join-Path $ReleaseDir "index.html"
     if (Test-Path -LiteralPath $indexSrc) {
         Copy-IntoRelease -Source $indexSrc -Destination $indexDst
         Write-Log "  已复制: index.html" "Gray"
     } else {
-        Write-Log "  [WARN] 未找到帮助文档: index.html（先确认 Web\JS\SingleHtml.js 已生成）" "Yellow"
+        Write-Log "  [WARN] 未找到帮助文档: index.html（先确认 Docs\Web\JS\SingleHtml.js 已生成）" "Yellow"
     }
 }
 
@@ -1237,7 +1237,7 @@ function New-RMTAssets {
     Write-Log "生成 $assetsDir ..." "Gray"
 
     # Windows tar 在部分系统代码页下无法按名称提取带重音的条目。
-    $langArchiveNames = @{ "Español.txt" = "Spanish.txt"; "Français.txt" = "French.txt"; "繁體中文.txt" = "TraditionalChinese.txt" }
+    $langArchiveNames = @{ "Español.txt" = "Spanish.txt"; "Français.txt" = "French.txt"; "繁體中文.txt" = "TraditionalChinese.txt"; "Türkçe.txt" = "Turkish.txt" }
     $bundles = [ordered]@{
         "Lang.zip" = @(
 
@@ -1260,7 +1260,7 @@ function New-RMTAssets {
             @{ Dest = "Work.exe"; Src = "Release$Arch\Thread\Work.exe" },
             # 使用整包中的成品，确保文件校验下载到的更新程序与发行版一致。
             @{ Dest = "Update.exe"; Src = (Join-Path $PackageDir "Thread\Update.exe") },
-            @{ Dest = "index.html"; Src = "Web\index.html" }
+            @{ Dest = "index.html"; Src = "Docs\Web\index.html" }
         )
         "Input.zip" = @(
             @{ Dest = "IbInputSimulator.dll"; Src = "Plugins\IbInputSimulator.dll" },

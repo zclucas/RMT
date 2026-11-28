@@ -3,7 +3,7 @@ const path = require('path');
 const vm = require('vm');
 
 const WEB_DIR = path.dirname(__dirname);
-const ROOT_DIR = path.dirname(WEB_DIR);
+const ROOT_DIR = path.dirname(path.dirname(WEB_DIR));
 const OUTPUTS = [
   path.join(WEB_DIR, 'index.html')
 ];
@@ -51,7 +51,7 @@ function readWebText(...parts) {
 }
 
 function fixImagePaths(mdContent) {
-  return mdContent.replace(/!\[([^\]]*)\]\(\/RMT\/Web\/([^)]+)\)/g, '![$1]($2)');
+  return mdContent.replace(/!\[([^\]]*)\]\(\/RMT\/Docs\/Web\/([^)]+)\)/g, '![$1]($2)');
 }
 
 function imageToBase64(relPath, baseDir = WEB_DIR) {

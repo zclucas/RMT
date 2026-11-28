@@ -312,14 +312,14 @@ OnTrayEndRecord(*) {
     OnForceEndRecord()
 }
 
-; 源码使用 Web\index.html；发行版使用根目录，开发编译版可回退到 Web。
+; 源码使用 Docs\Web\index.html；发行版使用根目录，开发编译版可回退到 Docs\Web。
 ; 相对路径也供文件校验使用，确保下载位置与文档入口一致。
 GetHelpDocRelativePath() {
     if (!A_IsCompiled)
-        return "Web\index.html"
-    if (FileExist(A_ScriptDir "\index.html") || !FileExist(A_ScriptDir "\Web\index.html"))
+        return "Docs\Web\index.html"
+    if (FileExist(A_ScriptDir "\index.html") || !FileExist(A_ScriptDir "\Docs\Web\index.html"))
         return "index.html"
-    return "Web\index.html"
+    return "Docs\Web\index.html"
 }
 
 GetHelpDocPath() {

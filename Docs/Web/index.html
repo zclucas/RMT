@@ -4450,7 +4450,7 @@ if ($code -ne 0) {
 <li>按改动范围完成源码运行、编译或功能验证，在 PR 中说明变更目的、影响范围和验证结果。</li>
 <li><strong>PR 的目标分支（base）必须选择 <code>Dev</code>，不能提交到 <code>master</code>。</strong> 创建 PR 后再次检查目标分支。</li>
 </ol>
-<p>版本号以 <code>RMT.ahk</code> 中的 <code>RMT_VERSION</code> 为准。功能新增、优化和修复记录写入 <code>Web/更新日志.md</code> 对应版本章节，按版本倒序排列；条目简洁，避免展开实现细节。</p>
+<p>版本号以 <code>RMT.ahk</code> 中的 <code>RMT_VERSION</code> 为准。功能新增、优化和修复记录写入 <code>Docs/Web/更新日志.md</code> 对应版本章节，按版本倒序排列；条目简洁，避免展开实现细节。</p>
 <h2>开发环境与目录</h2>
 <ul>
 <li>Windows：主程序使用 AutoHotkey v2，界面基于 AHK-XAML / WPF。</li>
@@ -4474,7 +4474,7 @@ if ($code -ne 0) {
 <li><code>Log/</code>、<code>Cache/</code>：程序运行日志与缓存。</li>
 <li><code>Scripts/</code>：正式维护的构建、打包、翻译检查脚本及资源策略。</li>
 <li><code>.github/</code>：CI、发布工作流及其辅助脚本。</li>
-<li><code>Web/</code>：Markdown 文档、帮助页生成器及生成的 <code>index.html</code>。</li>
+<li><code>Docs/</code>：GitHub 多语言 README；<code>Docs/Web/</code> 包含帮助文档、生成器及生成的 <code>index.html</code>。</li>
 <li><code>ReleaseX64/</code>、<code>ReleaseX86/</code>：发行版所需的架构资源。</li>
 <li><code>Test/</code>：临时验证内容，已加入 <code>.gitignore</code>。</li>
 </ul>
@@ -4677,10 +4677,10 @@ ExecuteMacroCmdOnce → MacroCommandActions → 各指令处理函数
 .\Scripts\CheckTranslations.ps1 -Strict
 
 # 根据 Markdown 重新生成离线帮助
-node Web/JS/SingleHtml.js
+node Docs/Web/JS/SingleHtml.js
 </code></pre>
-<p>语言登记在 <code>Main/Shared/OfficialLanguages.ahk</code>，当前包括简体中文、繁体中文、英语、西班牙语、法语、德语和意大利语。新增或修改界面文本时同步相应语言键；翻译检查脚本的 <code>-Fix</code> 会修改语言文件，使用后检查差异。</p>
-<p>帮助内容修改 <code>Web/</code> 下的 Markdown 源文件，再由生成器嵌入图片及脚本，输出 <code>Web/index.html</code>。生成后打开帮助页，检查章节跳转、搜索及修改内容。源码模式使用 <code>Web/index.html</code>，发行版使用程序根目录的 <code>index.html</code>。</p>
+<p>语言登记在 <code>Main/Shared/OfficialLanguages.ahk</code>，当前包括简体中文、繁体中文、英语、西班牙语、法语、德语、意大利语和土耳其语。新增或修改界面文本时同步相应语言键；翻译检查脚本的 <code>-Fix</code> 会修改语言文件，使用后检查差异。</p>
+<p>帮助内容修改 <code>Docs/Web/</code> 下的 Markdown 源文件，再由生成器嵌入图片及脚本，输出 <code>Docs/Web/index.html</code>。生成后打开帮助页，检查章节跳转、搜索及修改内容。源码模式使用 <code>Docs/Web/index.html</code>，发行版使用程序根目录的 <code>index.html</code>。</p>
 <h3>提交前验证</h3>
 <p>根据实际改动选择检查范围，并在 PR 中记录结果：</p>
 <ul>
@@ -4719,8 +4719,12 @@ node Web/JS/SingleHtml.js
 <p>发布前检查工作流、版本号、资源清单及两站结果；具体维护选项以当前工作流定义为准。</p>
 </div></div>
     <div class="page hidden" id="page87" data-route="更新日志/RMTv1.3F4更新内容" data-group="更新日志"><div class="content"><h1>RMTv1.3F4更新内容</h1>
+<h3>新增</h3>
+<ul><li><strong>土耳其语</strong>：新增界面语言包与 GitHub 语言入口。</li></ul>
+
 <h3>优化</h3>
 <ul>
+<li><strong>文档目录</strong>：多语言说明与帮助文档统一至 Docs。</li>
 <li><p><strong>控件点击</strong>：左右键长按支持自定义时间和变量。</p>
 </li>
 <li><p><strong>区域随机</strong>：点击范围收缩至控件中心80%。</p>

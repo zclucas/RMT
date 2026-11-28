@@ -7,6 +7,7 @@ OfficialLanguages() {
         "Español", {code: "es", flag: "es", entry: "Spanish.txt"},
         "Français", {code: "fr", flag: "fr", entry: "French.txt"},
         "Deutsch", {code: "de", flag: "de", entry: "Deutsch.txt"},
-        "Italiano", {code: "it", flag: "it", entry: "Italiano.txt"})
+        "Italiano", {code: "it", flag: "it", entry: "Italiano.txt"},
+        "Türkçe", {code: "tr", flag: "tr", entry: "Turkish.txt"})
     return languages
 }

@@ -1,16 +1,20 @@
 <h1 align="center">🐇 RMT (RuoMengTu)</h1>
 
 <p align="center">
-  <b>AutoHotkey v2 Tabanlı Görsel Otomasyon Aracı</b><br>
-  Sıkıcı işleri makrolara bırakın — siz daha anlamlı işlere odaklanın.
+  <b>Una herramienta de automatización visual basada en AutoHotkey v2</b><br>
+  Deja que las macros hagan el trabajo aburrido — para que puedas hacer algo más significativo.
 </p>
 
 <p align="center">
-  <a href="DISCLAIMER.md">📜 Sorumluluk Reddi</a> | 
-  <a href="LICENSE">🧾 Lisans</a> |
-  <a href="README.md">🌐 中文版</a> |
-  <a href="README.en.md">🌐 English</a> |
-  🌐 Türkçe
+  <a href="../DISCLAIMER.md">📜 Aviso legal</a> | <a href="../LICENSE">🧾 Licencia</a><br>
+  <a href="../README.md">简体中文</a> |
+  <a href="README.zh-TW.md">繁體中文</a> |
+  <a href="README.en.md">English</a> |
+  <b>Español</b> |
+  <a href="README.fr.md">Français</a> |
+  <a href="README.de.md">Deutsch</a> |
+  <a href="README.it.md">Italiano</a> |
+  <a href="README.tr.md">Türkçe</a>
 </p>
 
 <p align="center">
@@ -19,116 +23,125 @@
 
 ---
 
-## 🧩 Tanıtım
 
-**RMT (RuoMengTu), Windows için ücretsiz ve açık kaynaklı bir görsel otomasyon aracıdır. Klavye ve fare eylemlerini, görüntü tanımayı, tarayıcı etkileşimlerini ve ofis görevlerini tekrarlanabilir otomatik iş akışlarına dönüştürmek için kayıtları, komutları ve akış şemalarını kullanın.**
+## 🌐 Idiomas disponibles
 
-**AutoHotkey v2** üzerine inşa edilen RMT, yapılandırma arayüzleri ve görsel düzenleyiciler aracılığıyla otomatik iş akışları oluşturmanıza, çalıştırmanıza ve paylaşmanıza olanak tanır.
+La interfaz admite los ocho idiomas siguientes. Selecciona un idioma para leer su README en GitHub. Puedes cambiar el idioma de la aplicación en Configuración.
 
-✨ **Temel Özellikler:**
-
-- ⌨️ **Eylem kaydı ve yürütme:** Klavye, fare ve oyun kumandası eylemlerini kaydedin, düzenleyin ve çalıştırın.
-- 🧩 **Görsel iş akışı düzenleme:** Çok iş parçacıklı yürütme desteğiyle komutlar ve akış şemaları kullanarak değişkenleri, koşulları, döngüleri, dallanmaları ve makro çağrılarını birleştirin.
-- 🎯 **Birden fazla tetikleme yöntemi:** Kısayol tuşları, kısayol dizileri (hotstrings), zamanlamalar, hareketler, dairesel menüler ve özel makro panelleri kullanın.
-- 🔍 **Görsel tanıma:** Görüntüleri, renkleri, OCR ile metinleri ve YOLO ile nesneleri algılayın, ardından sonuçlara göre işlem yapın.
-- 🪟 **Masaüstü ve pencere otomasyonu:** Pencereleri yönetin, denetimleri seçip etkileşime geçin ve belirtilen pencerelerde arka plan işlemleri gerçekleştirin.
-- 🌐 **Tarayıcı otomasyonu:** Web öğelerini seçin, tıklayın ve metin girin, veri çıkarın, sekmeleri yönetin ve JavaScript çalıştırın.
-- 📊 **Ofis ve veri işleme:** Excel dosyalarını okuyun ve yazın, dosyalarla çalışın, metinleri ve dizileri işleyin ve ağ istekleri gönderin.
-- 🤖 **Yapay zekâ desteği:** Yapay zekâ yardımıyla makro parametrelerini düzenleyin ve ekran metni, ekran görüntüleri veya sorulara dayalı kararlar alın.
-- 🛠️ **Hata ayıklama ve yapılandırma paylaşımı:** Kesme noktalarını, değişken izlemeyi, yürütme günlüklerini ve hata tanılamayı kullanın; yapılandırmaları içe aktarın, dışa aktarın ve toplulukla paylaşın.
-
-> 💬 İster tekrarlayan tıklamalar ister karmaşık iş akışları olsun, RMT bilgisayarınızın *otomatik olarak çalışmasını* sağlar.
+[简体中文](../README.md) · [繁體中文](README.zh-TW.md) · [English](README.en.md) · [Español](README.es.md) · [Français](README.fr.md) · [Deutsch](README.de.md) · [Italiano](README.it.md) · [Türkçe](README.tr.md)
 
 ---
 
-## ☕ Projeyi Destekleyin
+## 🧩 Introducción
 
-**RMT (RuoMengTu)** tamamen ücretsiz ve açık kaynaklı bir projedir.  
-Faydalı bulursanız bana bir kahve ısmarlayabilirsiniz! ☕
+**RMT (RuoMengTu) es una herramienta de automatización visual gratuita y de código abierto para Windows. Utiliza grabaciones, comandos y diagramas de flujo para combinar acciones de teclado y ratón, reconocimiento de imágenes, interacciones con el navegador y tareas de oficina en flujos de trabajo automatizados y repetibles.**
+
+Construida sobre **AutoHotkey v2**, RMT te permite crear, ejecutar y compartir flujos de trabajo automatizados a través de interfaces de configuración y editores visuales.
+
+✨ **Características principales:**
+
+- ⌨️ **Grabación y ejecución de acciones:** Graba, edita y ejecuta acciones de teclado, ratón y gamepad.
+- 🧩 **Edición visual de flujos de trabajo:** Combina variables, condiciones, bucles, ramificaciones y llamadas a macros usando comandos y diagramas de flujo, con soporte para ejecución multihilo.
+- 🎯 **Múltiples métodos de activación:** Usa atajos de teclado, hotstrings, programaciones, gestos, menús radiales y paneles de macros personalizados.
+- 🔍 **Reconocimiento visual:** Detecta imágenes, colores, texto con OCR y objetos con YOLO, luego actúa según los resultados.
+- 🪟 **Automatización de escritorio y ventanas:** Gestiona ventanas, selecciona e interactúa con controles, y realiza operaciones en segundo plano en ventanas específicas.
+- 🌐 **Automatización del navegador:** Selecciona elementos web, haz clic e ingresa texto, extrae datos, gestiona pestañas y ejecuta JavaScript.
+- 📊 **Procesamiento de oficina y datos:** Lee y escribe archivos de Excel, trabaja con archivos, procesa texto y matrices, y envía solicitudes de red.
+- 🤖 **Asistencia de IA:** Edita parámetros de macros con asistencia de IA y toma decisiones basadas en texto en pantalla, capturas de pantalla o preguntas.
+- 🛠️ **Depuración y uso compartido de configuraciones:** Usa puntos de interrupción, monitoreo de variables, registros de ejecución y diagnóstico de errores; importa, exporta y comparte configuraciones con la comunidad.
+
+> 💬 Ya sean clics repetitivos o flujos de trabajo complejos, RMT permite que tu computadora *trabaje automáticamente*.
+
+---
+
+## ☕ Apoya el proyecto
+
+**RMT (RuoMengTu)** es un proyecto completamente gratuito y de código abierto.<br>
+Si te resulta útil, ¡puedes invitarme un café! ☕
 
 | WeChat | Alipay |
 |---------|---------|
-| ![WeChat](Images/Soft/WeiXin.png) | ![Alipay](Images/Soft/ZhiFuBao.png) |
+| ![WeChat](../Images/Soft/WeiXin.png) | ![Alipay](../Images/Soft/ZhiFuBao.png) |
 
-> 💡 Desteğiniz, projeyi geliştirmeye ve sürdürmeye devam etmem için beni motive ediyor!  
-> Bağış yapamıyorsanız bile projeye **⭐ Star** vererek veya başkalarıyla **paylaşarak** destek olabilirsiniz!
-
----
-
-## 🚀 Hızlı Başlangıç
-
-📘 [10 dakikada RMT öğrenmek için buraya tıklayın!](https://zclucas.github.io/RMT/)  
-Başlangıçtan uzmanlığa kadar temel kavramları ve yapılandırma mantığını kavrayın.
+> 💡 ¡Tu apoyo me anima a seguir mejorando y manteniendo el proyecto!<br>
+> Si no puedes donar, ¡también puedes apoyar dándole al proyecto una **⭐ Estrella** o **compartiéndolo** con otros!
 
 ---
 
-## 🎥 Yazılım Güncellemeleri ve Özellik Demoları
+## 🚀 Inicio rápido
 
-| Sürüm | Öne Çıkanlar | Video Bağlantısı |
+📘 [¡Haz clic aquí para aprender RMT en 10 minutos!](https://zclucas.github.io/RMT/)<br>
+Comprende los conceptos centrales y la lógica de configuración — desde principiante hasta experto.
+
+---
+
+## 🎥 Actualizaciones de software y demostraciones de funciones
+
+| Versión | Aspectos destacados | Enlace de video |
 |--------|------------|------------|
-| ButtonAssist 1.0 | İlk sürüm — yolculuk başlıyor! | [BV1EU411f7dC](https://www.bilibili.com/video/BV1EU411f7dC) |
-| ButtonAssist 2.0 | Sürece özgü tetikleyiciler için destek | [BV1ojtHeUEjR](https://www.bilibili.com/video/BV1ojtHeUEjR) |
-| ButtonAssist 3.0 | Görüntü arama özelliği eklendi | [BV1i5CEYtEok](https://www.bilibili.com/video/BV1i5CEYtEok) |
-| ButtonAssist 4.0 | Grafik düzenleyici + oyun kumandası makroları | [BV13Lr1YREMr](https://www.bilibili.com/video/BV13Lr1YREMr) |
-| ButtonAssist 5.0 | Makro komut kaydı eklendi | [BV1kr9NYZE36](https://www.bilibili.com/video/BV1kr9NYZE36) |
-| ButtonAssist 6.0 | Metin tanıma yetenekleri eklendi | [BV1UCZPYGEN8](https://www.bilibili.com/video/BV1UCZPYGEN8) |
-| RMT 1.0 | Gelişmiş mantık komutları, büyük özellik yükseltmesi | [BV1oWVRzaEzk](https://www.bilibili.com/video/BV1oWVRzaEzk) |
-| RMT 1.0.5 | Çoklu iş parçacığı + komut zincirleme | [BV1yATVzVE4E](https://www.bilibili.com/video/BV1yATVzVE4E) |
-| RMT 1.0.6 | Oyun kumandası makro kaydı + çok noktalı renk seçimi | [BV1jD3eziE4d](https://www.bilibili.com/video/BV1jD3eziE4d) |
-| RMT 1.0.7 | Zamanlanmış makrolar, özel çıkartmalar, yapılandırma yönetimi | [BV1T2e8zAEaf](https://www.bilibili.com/video/BV1T2e8zAEaf) |
-| RMT 1.0.8 | Canlı yayın, topluluk tartışması ve Soru-Cevap | [BV1CYx1zmEx3](https://www.bilibili.com/video/BV1CYx1zmEx3) |
-| RMT 1.0.8 | Menü makroları eklendi, paylaşılabilir yapılandırmalar | [BV1571XBDEdR](https://www.bilibili.com/video/BV1571XBDEdR) |
-| RMT 1.0.9 | Büyük düzenleyici yenilemesi + değişken izleyici | [BV1YYvSB2ExQ](https://www.bilibili.com/video/BV1YYvSB2ExQ) |
-| RMT 1.1 | Arka plan araması + Excel okuma/yazma | [BV1BvoxBCEuE](https://www.bilibili.com/video/BV1BvoxBCEuE) |
-| RMT 1.2 | Görsel düzenleyici + arayüz (UI) makroları | [BV1yR8x6xEBW](https://www.bilibili.com/video/BV1yR8x6xEBW) |
+| ButtonAssist 1.0 | Primer lanzamiento — ¡el viaje comienza! | [BV1EU411f7dC](https://www.bilibili.com/video/BV1EU411f7dC) |
+| ButtonAssist 2.0 | Soporte para activadores específicos de procesos | [BV1ojtHeUEjR](https://www.bilibili.com/video/BV1ojtHeUEjR) |
+| ButtonAssist 3.0 | Se introduce la función de búsqueda de imágenes | [BV1i5CEYtEok](https://www.bilibili.com/video/BV1i5CEYtEok) |
+| ButtonAssist 4.0 | Editor gráfico + macros de gamepad | [BV13Lr1YREMr](https://www.bilibili.com/video/BV13Lr1YREMr) |
+| ButtonAssist 5.0 | Llega la grabación de comandos de macros | [BV1kr9NYZE36](https://www.bilibili.com/video/BV1kr9NYZE36) |
+| ButtonAssist 6.0 | Se añaden capacidades de reconocimiento de texto | [BV1UCZPYGEN8](https://www.bilibili.com/video/BV1UCZPYGEN8) |
+| RMT 1.0 | Comandos lógicos mejorados, gran actualización de funciones | [BV1oWVRzaEzk](https://www.bilibili.com/video/BV1oWVRzaEzk) |
+| RMT 1.0.5 | Multihilo + encadenamiento de comandos | [BV1yATVzVE4E](https://www.bilibili.com/video/BV1yATVzVE4E) |
+| RMT 1.0.6 | Grabación de macros de gamepad + selección de color multipunto | [BV1jD3eziE4d](https://www.bilibili.com/video/BV1jD3eziE4d) |
+| RMT 1.0.7 | Macros programadas, stickers personalizados, gestión de configuraciones | [BV1T2e8zAEaf](https://www.bilibili.com/video/BV1T2e8zAEaf) |
+| RMT 1.0.8 | Transmisión en vivo, discusión comunitaria y preguntas y respuestas | [BV1CYx1zmEx3](https://www.bilibili.com/video/BV1CYx1zmEx3) |
+| RMT 1.0.8 | Se introducen macros de menú, configuraciones compartibles | [BV1571XBDEdR](https://www.bilibili.com/video/BV1571XBDEdR) |
+| RMT 1.0.9 | Gran renovación del editor + monitor de variables | [BV1YYvSB2ExQ](https://www.bilibili.com/video/BV1YYvSB2ExQ) |
+| RMT 1.1 | Búsqueda en segundo plano + lectura/escritura de Excel | [BV1BvoxBCEuE](https://www.bilibili.com/video/BV1BvoxBCEuE) |
+| RMT 1.2 | Editor visual + macros de interfaz de usuario | [BV1yR8x6xEBW](https://www.bilibili.com/video/BV1yR8x6xEBW) |
 
 
-🎬 Bilibili'de daha fazla video mevcut:👉 [@浮生若梦的兔子 (RMT Geliştiricisi)](https://space.bilibili.com/397441876?spm_id_from=333.1007.0.0)
+🎬 Más videos disponibles en Bilibili:👉 [@浮生若梦的兔子 (Desarrollador de RMT)](https://space.bilibili.com/397441876?spm_id_from=333.1007.0.0)
 
 ---
 
-## 💾 İndirme
+## 💾 Descarga
 
-| Kaynak | Bağlantı | Açıklama |
+| Fuente | Enlace | Descripción |
 |--------|------|-------------|
-| 🅶 GitCode | [RMT Sürümleri](https://gitcode.com/ruomengtu/RMT/releases) | Birincil indirme |
-| 🐱 GitHub | [RMT Sürümleri](https://github.com/zclucas/RMT/releases) | Yedek indirme |
-| 📦 Baidu Drive | [Buradan İndirin](https://pan.baidu.com/s/1NsS0UTgViDv6Ulo-rE-Q2Q?pwd=RMMT) | Yedek bağlantı |
-| ☁️ Aliyun Drive | [Buradan İndirin](https://www.alipan.com/s/KdQojvKuHyn) | Yedek bağlantı |
+| 🅶 GitCode | [RMT Releases](https://gitcode.com/ruomengtu/RMT/releases) | Descarga principal |
+| 🐱 GitHub | [RMT Releases](https://github.com/zclucas/RMT/releases) | Descarga de respaldo |
+| 📦 Baidu Drive | [Descargar aquí](https://pan.baidu.com/s/1NsS0UTgViDv6Ulo-rE-Q2Q?pwd=RMMT) | Enlace de respaldo |
+| ☁️ Aliyun Drive | [Descargar aquí](https://www.alipan.com/s/KdQojvKuHyn) | Enlace de respaldo |
 
-> ⚠️ Baidu Drive veya Aliyun Drive'dan indirilen dosyalar eksik olabilir ya da bazı dosyalar güvenlik yazılımları tarafından kaldırılabilir.
+> ⚠️ Los archivos descargados de Baidu Drive o Aliyun Drive pueden estar incompletos, o algunos archivos pueden ser eliminados por el software de seguridad.
 
 ---
 
-## 🗂️ Yapılandırma Paylaşım Deposu
+## 🗂️ Repositorio de intercambio de configuraciones
 
-RMT, kullanıcıların makro yapılandırma dosyalarını özgürce **paylaşmasına, indirmesine ve değiş tokuş etmesine** olanak tanır.  
-Aşağıdaki platform üzerinden yapılandırmalara göz atabilir veya katkıda bulunabilirsiniz:
+RMT permite a los usuarios **compartir, descargar e intercambiar** libremente archivos de configuración de macros.<br>
+Puedes explorar o contribuir con configuraciones a través de la plataforma a continuación:
 
-🔗 **RMT Yapılandırma Deposu**  
+🔗 **Repositorio de configuraciones de RMT**<br>
 📦 https://forum.ruomengtu.com/c/share/61
 
-> ✨ Kaydettiğiniz veya düzenlediğiniz makroları depoya yükleyebilir ve toplulukla birlikte büyüyebilirsiniz  
-> ⚠️ Sayfa varsayılan tarayıcınızda açılmıyorsa lütfen başka bir tarayıcı deneyin
+> ✨ Puedes subir tus macros grabadas o editadas al repositorio y crecer con la comunidad<br>
+> ⚠️ Si la página no es accesible en tu navegador predeterminado, prueba con otro navegador
 
 ---
 
-## 🌐 Topluluk ve Destek
+## 🌐 Comunidad y soporte
 
-Yapılandırmaları paylaşmak, kullanımı tartışmak, sorun bildirmek veya yardım almak için **resmi RMT topluluğuna** katılın:
+Únete a la **comunidad oficial de RMT** para compartir configuraciones, discutir su uso, reportar problemas u obtener ayuda:
 
-| Tür | Bağlantı |
+| Tipo | Enlace |
 |:--|:--|
-| 👥 **QQ Grubu** | 🔗 [Gruba Katıl (837661891)](https://qm.qq.com/q/DgpDumEPzq) |
-| 💬 **RMT Forumu** | 🔗 [Forumu Ziyaret Et](https://forum.ruomengtu.com/) |
+| 👥 **Grupo de QQ** | 🔗 [Unirse al grupo (837661891)](https://qm.qq.com/q/DgpDumEPzq) |
+| 💬 **Foro de RMT** | 🔗 [Visitar foro](https://forum.ruomengtu.com/) |
 
-> 💡 Yeni başlayanlar, ileri düzey kullanıcılar ve katkıda bulunanların tümü katılmaya davetlidir!
+> 💡 ¡Principiantes, usuarios avanzados y colaboradores son bienvenidos a participar!
 
 ---
 
-## ⭐ Aşağıdaki Destekçilere Özel Teşekkürler
+## ⭐ Agradecimiento especial a los siguientes seguidores
 
-| Tarih (2025) | Takma Ad | Notlar | Tarih (2025) | Takma Ad | Notlar |
+| Date (2025) | Nickname | Remarks | Date (2025) | Nickname | Remarks |
 |--------------|------|------|--------------|------|------|
 | 5/12 21:33:06 | *物 | 第一个赞助 | 5/12 21:48:19 | *援 | 帅啊 |
 | 5/12 23:17:35 | 0*1 | 加油up | 5/14 12:19:56 | *印 |  |
@@ -190,7 +203,7 @@ Yapılandırmaları paylaşmak, kullanımı tartışmak, sorun bildirmek veya ya
 
 ---
 
-| Tarih (2026) | Takma Ad | Notlar | Tarih (2026) | Takma Ad | Notlar |
+| Date (2026) | Nickname | Remarks | Date (2026) | Nickname | Remarks |
 |--------------|------|------|--------------|------|------|
 | 1/1 18:53:23 | *叽 |  | 1/2 23:29:44 | z*z |  |
 | 1/4 17:03:44 | **赟 | 谢谢你，啊赟 | 1/4 23:27:15 | *美 | 祝兔子老大新年快乐 |
@@ -281,6 +294,4 @@ Yapılandırmaları paylaşmak, kullanımı tartışmak, sorun bildirmek veya ya
 
 ---
 
-<p align="center">
-  ❤️ Açık kaynağı daha sıcak ve anlamlı kılan her katkıda bulunana ve kullanıcıya teşekkürler.
-</p>
+<p align="center">❤️ Gracias a cada colaborador y usuario que hace que el código abierto sea más cálido y significativo.</p>

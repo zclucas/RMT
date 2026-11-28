@@ -1,15 +1,20 @@
 <h1 align="center">🐇 RMT (RuoMengTu)</h1>
 
 <p align="center">
-  <b>A Visual Automation Tool Based on AutoHotkey v2</b><br>
-  Let macros do the boring work — so you can do something more meaningful.
+  <b>Uno strumento di automazione visuale basato su AutoHotkey v2</b><br>
+  Lascia che le macro facciano il lavoro noioso — così puoi fare qualcosa di più significativo.
 </p>
 
 <p align="center">
-  <a href="DISCLAIMER.md">📜 Disclaimer</a> | 
-  <a href="LICENSE">🧾 License</a> |
-  <a href="README.md">🌐 中文版</a> |
-  <a href="README.tr.md">🌐 Türkçe</a>
+  <a href="../DISCLAIMER.md">📜 Esclusione di responsabilità</a> | <a href="../LICENSE">🧾 Licenza</a><br>
+  <a href="../README.md">简体中文</a> |
+  <a href="README.zh-TW.md">繁體中文</a> |
+  <a href="README.en.md">English</a> |
+  <a href="README.es.md">Español</a> |
+  <a href="README.fr.md">Français</a> |
+  <a href="README.de.md">Deutsch</a> |
+  <b>Italiano</b> |
+  <a href="README.tr.md">Türkçe</a>
 </p>
 
 <p align="center">
@@ -18,114 +23,123 @@
 
 ---
 
-## 🧩 Introduction
 
-**RMT (RuoMengTu) is a free and open-source visual automation tool for Windows. Use recordings, commands, and flowcharts to combine keyboard and mouse actions, image recognition, browser interactions, and office tasks into repeatable automated workflows.**
+## 🌐 Lingue supportate
 
-Built on **AutoHotkey v2**, RMT lets you create, run, and share automated workflows through configuration interfaces and visual editors.
+L’interfaccia supporta le otto lingue seguenti. Scegli una lingua per leggere il relativo README su GitHub. Puoi cambiare la lingua dell’applicazione nelle impostazioni.
 
-✨ **Key Features:**
-
-- ⌨️ **Action recording and execution:** Record, edit, and run keyboard, mouse, and gamepad actions.
-- 🧩 **Visual workflow editing:** Combine variables, conditions, loops, branches, and macro calls using commands and flowcharts, with support for multithreaded execution.
-- 🎯 **Multiple trigger methods:** Use hotkeys, hotstrings, schedules, gestures, radial menus, and custom macro panels.
-- 🔍 **Visual recognition:** Detect images, colors, text with OCR, and objects with YOLO, then act on the results.
-- 🪟 **Desktop and window automation:** Manage windows, pick and interact with controls, and perform background operations on specified windows.
-- 🌐 **Browser automation:** Pick web elements, click and enter text, extract data, manage tabs, and execute JavaScript.
-- 📊 **Office and data processing:** Read and write Excel files, work with files, process text and arrays, and send network requests.
-- 🤖 **AI assistance:** Edit macro parameters with AI assistance and make decisions based on screen text, screenshots, or questions.
-- 🛠️ **Debugging and configuration sharing:** Use breakpoints, variable monitoring, execution logs, and error diagnostics; import, export, and share configurations with the community.
-
-> 💬 Whether it's repetitive clicks or complex workflows, RMT lets your computer *work automatically*.
+[简体中文](../README.md) · [繁體中文](README.zh-TW.md) · [English](README.en.md) · [Español](README.es.md) · [Français](README.fr.md) · [Deutsch](README.de.md) · [Italiano](README.it.md) · [Türkçe](README.tr.md)
 
 ---
 
-## ☕ Support the Project
+## 🧩 Introduzione
 
-**RMT (RuoMengTu)** is a completely free and open-source project.  
-If you find it helpful, you’re welcome to buy me a coffee! ☕
+**RMT (RuoMengTu) è uno strumento di automazione visuale gratuito e open source per Windows. Utilizza registrazioni, comandi e diagrammi di flusso per combinare azioni di tastiera e mouse, riconoscimento di immagini, interazioni con il browser e attività d'ufficio in flussi di lavoro automatizzati e ripetibili.**
+
+Basato su **AutoHotkey v2**, RMT ti consente di creare, eseguire e condividere flussi di lavoro automatizzati tramite interfacce di configurazione ed editor visuali.
+
+✨ **Caratteristiche principali:**
+
+- ⌨️ **Registrazione ed esecuzione di azioni:** Registra, modifica ed esegui azioni di tastiera, mouse e gamepad.
+- 🧩 **Modifica visuale dei flussi di lavoro:** Combina variabili, condizioni, cicli, rami e chiamate macro utilizzando comandi e diagrammi di flusso, con supporto per l'esecuzione multithread.
+- 🎯 **Molteplici metodi di attivazione:** Usa scorciatoie da tastiera, hotstring, pianificazioni, gesti, menu radiali e pannelli macro personalizzati.
+- 🔍 **Riconoscimento visuale:** Rileva immagini, colori, testo con OCR e oggetti con YOLO, quindi agisci in base ai risultati.
+- 🪟 **Automazione desktop e finestre:** Gestisci finestre, seleziona e interagisci con i controlli ed esegui operazioni in background su finestre specificate.
+- 🌐 **Automazione del browser:** Seleziona elementi web, clicca e inserisci testo, estrai dati, gestisci schede ed esegui JavaScript.
+- 📊 **Office ed elaborazione dati:** Leggi e scrivi file Excel, lavora con file, elabora testo e array e invia richieste di rete.
+- 🤖 **Assistenza AI:** Modifica i parametri delle macro con l'assistenza AI e prendi decisioni in base al testo sullo schermo, a screenshot o a domande.
+- 🛠️ **Debug e condivisione della configurazione:** Usa punti di interruzione, monitoraggio delle variabili, log di esecuzione e diagnostica degli errori; importa, esporta e condividi configurazioni con la community.
+
+> 💬 Che si tratti di clic ripetitivi o flussi di lavoro complessi, RMT lascia che il tuo computer *lavori automaticamente*.
+
+---
+
+## ☕ Sostieni il progetto
+
+**RMT (RuoMengTu)** è un progetto completamente gratuito e open source.<br>
+Se lo trovi utile, sei il benvenuto a offrirmi un caffè! ☕
 
 | WeChat | Alipay |
 |---------|---------|
-| ![WeChat](Images/Soft/WeiXin.png) | ![Alipay](Images/Soft/ZhiFuBao.png) |
+| ![WeChat](../Images/Soft/WeiXin.png) | ![Alipay](../Images/Soft/ZhiFuBao.png) |
 
-> 💡 Your support encourages me to keep improving and maintaining the project!  
-> If you can’t donate, you can still support by giving the project a **⭐ Star** or **sharing it** with others!
-
----
-
-## 🚀 Quick Start
-
-📘 [Click here to learn RMT in 10 minutes!](https://zclucas.github.io/RMT/)  
-Understand the core concepts and configuration logic — from beginner to expert.
+> 💡 Il tuo supporto mi incoraggia a continuare a migliorare e mantenere il progetto!<br>
+> Se non puoi donare, puoi comunque supportare dando al progetto una **⭐ Stella** o **condividendolo** con altri!
 
 ---
 
-## 🎥 Software Updates & Feature Demos
+## 🚀 Avvio rapido
 
-| Version | Highlights | Video Link |
+📘 [Clicca qui per imparare RMT in 10 minuti!](https://zclucas.github.io/RMT/)<br>
+Comprendi i concetti fondamentali e la logica di configurazione — da principiante a esperto.
+
+---
+
+## 🎥 Aggiornamenti software e demo delle funzionalità
+
+| Versione | Punti salienti | Link video |
 |--------|------------|------------|
-| ButtonAssist 1.0 | First release — the journey begins! | [BV1EU411f7dC](https://www.bilibili.com/video/BV1EU411f7dC) |
-| ButtonAssist 2.0 | Support for process-specific triggers | [BV1ojtHeUEjR](https://www.bilibili.com/video/BV1ojtHeUEjR) |
-| ButtonAssist 3.0 | Image search feature introduced | [BV1i5CEYtEok](https://www.bilibili.com/video/BV1i5CEYtEok) |
-| ButtonAssist 4.0 | Graphical editor + gamepad macros | [BV13Lr1YREMr](https://www.bilibili.com/video/BV13Lr1YREMr) |
-| ButtonAssist 5.0 | Macro command recording arrives | [BV1kr9NYZE36](https://www.bilibili.com/video/BV1kr9NYZE36) |
-| ButtonAssist 6.0 | Text recognition capabilities added | [BV1UCZPYGEN8](https://www.bilibili.com/video/BV1UCZPYGEN8) |
-| RMT 1.0 | Enhanced logic commands, major feature upgrade | [BV1oWVRzaEzk](https://www.bilibili.com/video/BV1oWVRzaEzk) |
-| RMT 1.0.5 | Multithreading + command chaining | [BV1yATVzVE4E](https://www.bilibili.com/video/BV1yATVzVE4E) |
-| RMT 1.0.6 | Gamepad macro recording + multi-point color picking | [BV1jD3eziE4d](https://www.bilibili.com/video/BV1jD3eziE4d) |
-| RMT 1.0.7 | Scheduled macros, custom stickers, configuration management | [BV1T2e8zAEaf](https://www.bilibili.com/video/BV1T2e8zAEaf) |
-| RMT 1.0.8 | Live stream, community discussion & Q&A | [BV1CYx1zmEx3](https://www.bilibili.com/video/BV1CYx1zmEx3) |
-| RMT 1.0.8 | Menu macros introduced, shareable configurations | [BV1571XBDEdR](https://www.bilibili.com/video/BV1571XBDEdR) |
-| RMT 1.0.9 | Major editor overhaul + variable monitor | [BV1YYvSB2ExQ](https://www.bilibili.com/video/BV1YYvSB2ExQ) |
-| RMT 1.1 | Background search + Excel read/write | [BV1BvoxBCEuE](https://www.bilibili.com/video/BV1BvoxBCEuE) |
-| RMT 1.2 | Visual editor + UI macros | [BV1yR8x6xEBW](https://www.bilibili.com/video/BV1yR8x6xEBW) |
+| ButtonAssist 1.0 | Prima release — il viaggio inizia! | [BV1EU411f7dC](https://www.bilibili.com/video/BV1EU411f7dC) |
+| ButtonAssist 2.0 | Supporto per trigger specifici per processo | [BV1ojtHeUEjR](https://www.bilibili.com/video/BV1ojtHeUEjR) |
+| ButtonAssist 3.0 | Introdotta la funzione di ricerca immagini | [BV1i5CEYtEok](https://www.bilibili.com/video/BV1i5CEYtEok) |
+| ButtonAssist 4.0 | Editor grafico + macro per gamepad | [BV13Lr1YREMr](https://www.bilibili.com/video/BV13Lr1YREMr) |
+| ButtonAssist 5.0 | Arriva la registrazione dei comandi macro | [BV1kr9NYZE36](https://www.bilibili.com/video/BV1kr9NYZE36) |
+| ButtonAssist 6.0 | Aggiunte capacità di riconoscimento del testo | [BV1UCZPYGEN8](https://www.bilibili.com/video/BV1UCZPYGEN8) |
+| RMT 1.0 | Comandi logici migliorati, importante aggiornamento delle funzionalità | [BV1oWVRzaEzk](https://www.bilibili.com/video/BV1oWVRzaEzk) |
+| RMT 1.0.5 | Multithreading + concatenamento dei comandi | [BV1yATVzVE4E](https://www.bilibili.com/video/BV1yATVzVE4E) |
+| RMT 1.0.6 | Registrazione macro per gamepad + selezione colori multi-punto | [BV1jD3eziE4d](https://www.bilibili.com/video/BV1jD3eziE4d) |
+| RMT 1.0.7 | Macro pianificate, adesivi personalizzati, gestione della configurazione | [BV1T2e8zAEaf](https://www.bilibili.com/video/BV1T2e8zAEaf) |
+| RMT 1.0.8 | Live stream, discussione della community e Q&A | [BV1CYx1zmEx3](https://www.bilibili.com/video/BV1CYx1zmEx3) |
+| RMT 1.0.8 | Introdotte le macro da menu, configurazioni condivisibili | [BV1571XBDEdR](https://www.bilibili.com/video/BV1571XBDEdR) |
+| RMT 1.0.9 | Revisione importante dell'editor + monitor delle variabili | [BV1YYvSB2ExQ](https://www.bilibili.com/video/BV1YYvSB2ExQ) |
+| RMT 1.1 | Ricerca in background + lettura/scrittura Excel | [BV1BvoxBCEuE](https://www.bilibili.com/video/BV1BvoxBCEuE) |
+| RMT 1.2 | Editor visuale + macro UI | [BV1yR8x6xEBW](https://www.bilibili.com/video/BV1yR8x6xEBW) |
 
 
-🎬 More videos available on Bilibili:👉 [@浮生若梦的兔子 (RMT Developer)](https://space.bilibili.com/397441876?spm_id_from=333.1007.0.0)
+🎬 Altri video disponibili su Bilibili:👉 [@浮生若梦的兔子 (RMT Developer)](https://space.bilibili.com/397441876?spm_id_from=333.1007.0.0)
 
 ---
 
 ## 💾 Download
 
-| Source | Link | Description |
+| Fonte | Link | Descrizione |
 |--------|------|-------------|
-| 🅶 GitCode | [RMT Releases](https://gitcode.com/ruomengtu/RMT/releases) | Primary download |
-| 🐱 GitHub | [RMT Releases](https://github.com/zclucas/RMT/releases) | Backup download |
-| 📦 Baidu Drive | [Download Here](https://pan.baidu.com/s/1NsS0UTgViDv6Ulo-rE-Q2Q?pwd=RMMT) | Backup link |
-| ☁️ Aliyun Drive | [Download Here](https://www.alipan.com/s/KdQojvKuHyn) | Backup link |
+| 🅶 GitCode | [RMT Releases](https://gitcode.com/ruomengtu/RMT/releases) | Download principale |
+| 🐱 GitHub | [RMT Releases](https://github.com/zclucas/RMT/releases) | Download di backup |
+| 📦 Baidu Drive | [Scarica qui](https://pan.baidu.com/s/1NsS0UTgViDv6Ulo-rE-Q2Q?pwd=RMMT) | Link di backup |
+| ☁️ Aliyun Drive | [Scarica qui](https://www.alipan.com/s/KdQojvKuHyn) | Link di backup |
 
-> ⚠️ Files downloaded from Baidu Drive or Aliyun Drive may be incomplete, or some files may be removed by security software.
+> ⚠️ I file scaricati da Baidu Drive o Aliyun Drive potrebbero essere incompleti, o alcuni file potrebbero essere rimossi dal software di sicurezza.
 
 ---
 
-## 🗂️ Configuration Sharing Repository
+## 🗂️ Repository di condivisione delle configurazioni
 
-RMT allows users to freely **share, download, and exchange** macro configuration files.  
-You can browse or contribute configurations via the platform below:
+RMT consente agli utenti di **condividere, scaricare e scambiare** liberamente file di configurazione delle macro.<br>
+Puoi sfogliare o contribuire alle configurazioni tramite la piattaforma sottostante:
 
-🔗 **RMT Configuration Repository**  
+🔗 **Repository configurazioni RMT**<br>
 📦 https://forum.ruomengtu.com/c/share/61
 
-> ✨ You can upload your recorded or edited macros to the repository and grow with the community  
-> ⚠️ If the page is not accessible in your default browser, please try another browser
+> ✨ Puoi caricare le tue macro registrate o modificate nel repository e crescere con la community<br>
+> ⚠️ Se la pagina non è accessibile nel tuo browser predefinito, prova con un altro browser
 
 ---
 
-## 🌐 Community & Support
+## 🌐 Community e supporto
 
-Join the **official RMT community** to share configurations, discuss usage, report issues, or get help:
+Unisciti alla **community ufficiale RMT** per condividere configurazioni, discutere l'utilizzo, segnalare problemi o ottenere aiuto:
 
-| Type | Link |
+| Tipo | Link |
 |:--|:--|
-| 👥 **QQ Group** | 🔗 [Join Group (837661891)](https://qm.qq.com/q/DgpDumEPzq) |
-| 💬 **RMT Forum** | 🔗 [Visit Forum](https://forum.ruomengtu.com/) |
+| 👥 **Gruppo QQ** | 🔗 [Unisciti al gruppo (837661891)](https://qm.qq.com/q/DgpDumEPzq) |
+| 💬 **Forum RMT** | 🔗 [Visita il forum](https://forum.ruomengtu.com/) |
 
-> 💡 Beginners, advanced users, and contributors are all welcome to participate!
+> 💡 Principianti, utenti avanzati e contributori sono tutti benvenuti a partecipare!
 
 ---
 
-## ⭐ Special Thanks to the Following Supporters
+## ⭐ Ringraziamenti speciali ai seguenti sostenitori
 
 | Date (2025) | Nickname | Remarks | Date (2025) | Nickname | Remarks |
 |--------------|------|------|--------------|------|------|
@@ -280,6 +294,4 @@ Join the **official RMT community** to share configurations, discuss usage, repo
 
 ---
 
-<p align="center">
-  ❤️ Thank you to every contributor and user for making open source warmer and more meaningful.
-</p>
+<p align="center">❤️ Grazie a ogni contributore e utente che rende l'open source più caldo e significativo.</p>
