@@ -14,11 +14,6 @@ SHMVAR_API int32_t ShmVar_Init(const char* mapName, size_t initialSize) {
         return SHMVAR_ERR_INVALID_ARG;
     }
 
-    // Limit maximum size to 4GB due to 32-bit offset indexing
-    if (initialSize > shm::MAX_SHM_SIZE) {
-        return SHMVAR_ERR_INVALID_ARG;
-    }
-
     std::lock_guard<std::mutex> guard(g_lifecycleLock);
 
     // If already initialized with same name, return OK
@@ -63,7 +58,7 @@ SHMVAR_API int32_t ShmVar_Init(const char* mapName, size_t initialSize) {
     }
 
     // Create File Mapping using INVALID_HANDLE_VALUE (pure RAM)
-    DWORD sizeHigh = static_cast<DWORD>((initialSize >> 32) & 0xFFFFFFFF);
+    DWORD sizeHigh = static_cast<DWORD>((static_cast<uint64_t>(initialSize) >> 32) & 0xFFFFFFFF);
     DWORD sizeLow = static_cast<DWORD>(initialSize & 0xFFFFFFFF);
 
     HANDLE hMap = CreateFileMappingA(
@@ -112,7 +107,6 @@ SHMVAR_API int32_t ShmVar_Init(const char* mapName, size_t initialSize) {
         }
 
         header->magic = shm::SHM_MAGIC;
-        header->version = shm::SHM_VERSION;
         header->totalSize = initialSize;
         header->arenaOffset = arenaOff;
         header->arenaSize = arenaSz;
@@ -127,7 +121,7 @@ SHMVAR_API int32_t ShmVar_Init(const char* mapName, size_t initialSize) {
         SetEvent(hNoReadersEvent); // Initially no readers
     } else {
         // Validate existing shared memory layout
-        if (header->magic != shm::SHM_MAGIC || header->version != shm::SHM_VERSION || header->totalSize > shm::MAX_SHM_SIZE) {
+        if (header->magic != shm::SHM_MAGIC) {
             UnmapViewOfFile(pBase);
             CloseHandle(hMap);
             CloseHandle(hNotifyEvent);
@@ -428,6 +422,42 @@ SHMVAR_API int32_t ShmVar_GetType(const char* key, int32_t* outType, size_t* out
     if (outType) *outType = node->type;
     if (outSize) *outSize = node->dataLen;
 
+    return SHMVAR_OK;
+}
+
+SHMVAR_API int32_t ShmVar_GetKeys(char* buf, size_t bufSize, size_t* outLen) {
+    if (!outLen || (!buf && bufSize != 0)) return SHMVAR_ERR_INVALID_ARG;
+    *outLen = 0;
+    if (!g_ctx.baseAddr) return SHMVAR_ERR_NOT_INIT;
+
+    auto* header = reinterpret_cast<ShmHeader*>(g_ctx.baseAddr);
+    CrossProcessSharedLock lock(header, g_ctx.sync);
+    if (!lock.isLocked()) return SHMVAR_ERR_SYS_FAIL;
+
+    // Read length and copy under the same shared lock. Each UTF-8 key includes NUL.
+    size_t required = 0;
+    for (auto offset : header->buckets) {
+        while (offset != OFFSET_NIL) {
+            auto* node = OffsetToPointer<ShmNode>(g_ctx.baseAddr, offset);
+            required += static_cast<size_t>(node->keyLen) + 1;
+            offset = node->nextOffset;
+        }
+    }
+    *outLen = required;
+    if (required == 0) return SHMVAR_OK;
+    if (!buf || bufSize < required) return SHMVAR_ERR_BUF_TOO_SMALL;
+
+    size_t written = 0;
+    for (auto offset : header->buckets) {
+        while (offset != OFFSET_NIL) {
+            auto* node = OffsetToPointer<ShmNode>(g_ctx.baseAddr, offset);
+            const auto* key = OffsetToPointer<const char>(g_ctx.baseAddr, node->keyOffset);
+            std::memcpy(buf + written, key, node->keyLen);
+            written += node->keyLen;
+            buf[written++] = '\0';
+            offset = node->nextOffset;
+        }
+    }
     return SHMVAR_OK;
 }
 

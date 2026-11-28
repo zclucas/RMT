@@ -68,11 +68,11 @@ class XAML_DevTools {
                             </Border>
                             <ControlTemplate.Triggers>
                                 <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter TargetName="border" Property="Background" Value="#1AFFFFFF"/>
+                                    <Setter TargetName="border" Property="Background" Value="{DynamicResource EditHoverBg}"/>
                                     <Setter Property="Foreground" Value="{DynamicResource TextMain}"/>
                                 </Trigger>
                                 <Trigger Property="IsPressed" Value="True">
-                                    <Setter TargetName="border" Property="Background" Value="#2AFFFFFF"/>
+                                    <Setter TargetName="border" Property="Background" Value="{DynamicResource BtnPressBg}"/>
                                 </Trigger>
                             </ControlTemplate.Triggers>
                         </ControlTemplate>
@@ -101,7 +101,7 @@ class XAML_DevTools {
                                     <Setter Property="FontWeight" Value="SemiBold"/>
                                 </Trigger>
                                 <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter TargetName="border" Property="Background" Value="#1AFFFFFF"/>
+                                    <Setter TargetName="border" Property="Background" Value="{DynamicResource EditHoverBg}"/>
                                     <Setter Property="Foreground" Value="{DynamicResource TextMain}"/>
                                 </Trigger>
                             </ControlTemplate.Triggers>

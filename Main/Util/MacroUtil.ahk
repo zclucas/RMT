@@ -170,6 +170,8 @@ RunMacroHook(tableItem, item, phase, force := false) {
 
     hookTable := AcquireMacroHookTable()
     hookItem := hookTable.Items[1]
+    ; 钩子使用临时表执行，控制指令仍属于发起它的真实宏。
+    hookTable._rmtCommandSource := {tableID: tableItem.ID, itemID: item.ID}
     who := ProcessTag()
     try {
         hookItem.Killed := false
@@ -207,6 +209,7 @@ RunMacroHook(tableItem, item, phase, force := false) {
             , tableItem.ID, item.ID, phase, e.Message, e.Line))
         try RMTErrorShow("钩子执行异常(" phase "): " e.Message, RMT_LV_ERROR, who)
     } finally {
+        hookTable.DeleteProp("_rmtCommandSource")
         hookTable.HookBusy := false
     }
     return true
@@ -265,8 +268,6 @@ MacroCommandActions() {
         "搜索Pro", SearchOnTrigger,
         "搜索All", SearchOnTrigger,
         "搜索Combo", SearchOnTrigger,
-        "组合搜索", SearchOnTrigger,
-        "搜索Multi", SearchOnTrigger,
         "移动", OnMouseMove,
         "移动Pro", OnMMPro,
         "增量移动", OnDeltaMove,
@@ -289,7 +290,6 @@ MacroCommandActions() {
         "等待确定", OnWaitConfirm,
         "网络请求", OnHttpRequest,
         "浏览器", OnBrowser,
-        "窗口控件", OnWindowControl,
         "控件信息", OnWindowControl,
         "控件操作", OnWindowControl,
         "AI判断", OnAiDecision,
@@ -975,25 +975,24 @@ OnMMPro(tableItem, cmd, index) {
     LastSumTime := 0
     MoveMode := CmdEnumMoveMode(ObjHasOwnProp(Data, "MouseMoveMode") ? Data.MouseMoveMode : "绝对移动")
     ; §20 新版已去除「移动次数」，恒 1 次；旧配置数据保留 Count/Interval 字段则沿用
-    Count := ObjHasOwnProp(Data, "Count") ? Data.Count : 1
-    Data.Count := MoveMode == "游戏视角" ? Count : 1
-    loop Data.Count {
+    Count := MoveMode == "游戏视角" && ObjHasOwnProp(Data, "Count") ? Data.Count : 1
+    loop Count {
         WaitIfPaused(tableItem, index)
 
         item := tableItem.Items[index]
         if (item && item.Killed)
             return
 
-        FloatInterval := RandomizeDurationByPercent(ObjHasOwnProp(Data, "Interval") ? Data.Interval : 0, MainSoftData.PreIntervalFloat)
         OnMMProOnce(tableItem, index, Data)
-        if (A_Index != Data.Count)
+        if (A_Index != Count) {
+            FloatInterval := RandomizeDurationByPercent(ObjHasOwnProp(Data, "Interval") ? Data.Interval : 0, MainSoftData.PreIntervalFloat)
             Sleep(FloatInterval)
+        }
     }
 }
 
 OnMMProOnce(tableItem, index, Data) {
     ; Speed 为界面速度 0~100（越大越快），由 MouseMoveUtil 按按键类型换算
-    Speed := Data.Speed
     MoveMode := CmdEnumMoveMode(ObjHasOwnProp(Data, "MouseMoveMode") ? Data.MouseMoveMode : "绝对移动")
     keyMode := GetMacroInputBackend(tableItem, index)
     IsHumanMouse := ObjHasOwnProp(Data, "IsHumanMouse") ? Data.IsHumanMouse : 0
@@ -1010,6 +1009,7 @@ OnMMProOnce(tableItem, index, Data) {
     if (MoveMode == "游戏视角")
         return MoveMouseGameView(PosX, PosY)
 
+    Speed := Data.Speed
     action := CmdEnumMMAction(Data.ActionType)
     isDrag := action == "A到B拖拽" || action == "拖拽"
     isABDrag := action == "A到B拖拽"
@@ -1055,7 +1055,9 @@ OnMMProOnce(tableItem, index, Data) {
 OnDeltaMove(tableItem, cmd, index) {
     paramArr := StrSplit(cmd, "_")
     SplitSerialTextAndNumbers(paramArr[1], &textOnly, &numbersOnly)
-    if (numbersOnly != "" && MySoftData.DataFileMap.Has(GetCommandKey(textOnly))) {
+    direct := DirectCommandScope()
+    if ((IsObject(direct) && paramArr[1] == direct.token)
+        || (numbersOnly != "" && MySoftData.DataFileMap.Has(GetCommandKey(textOnly)))) {
         Data := GetMacroCMDData(paramArr[1])
         deltaX := Data.DeltaX
         deltaY := Data.DeltaY
@@ -1768,7 +1770,9 @@ OnRMTCMD(tableItem, cmd, index) {
     }
     if (ApplyRmtInputControl(cmdStr))
         return
-    MyExcuteRMTCMDAction(cmd)
+    source := tableItem.HasProp("_rmtCommandSource")
+        ? tableItem._rmtCommandSource : {tableID: tableItem.ID, itemID: tableItem.Items[index].ID}
+    MyExcuteRMTCMDAction(cmd, source.tableID, source.itemID)
 }
 
 OnInterval(tableItem, cmd, index) {
@@ -1778,8 +1782,8 @@ OnInterval(tableItem, cmd, index) {
     if (numbersOnly != "" && MySoftData.DataFileMap.Has(textOnly)) {
         Data := GetMacroCMDData(paramArr[1])
         time1 := Data.Time1
-        time2 := Data.Time2
         isRandom := CmdEnumZh(Data.Type, CmdEnumIntervalNames()) == "随机"
+        time2 := isRandom ? Data.Time2 : ""
     } else {
         time1 := paramArr[2]
         time2 := paramArr.Length >= 3 ? paramArr[3] : ""
@@ -1835,14 +1839,18 @@ OnPressKey(tableItem, cmd, index) {
     paramArr := SplitCommand(cmd)
     ; 阶段5：新格式 按键<serial> 走配置文件；旧格式 按键_a_点击_100 兼容
     SplitSerialTextAndNumbers(paramArr[1], &textOnly, &numbersOnly)
-    isConfigCmd := (numbersOnly != "" && MySoftData.DataFileMap.Has(textOnly))
+    direct := DirectCommandScope()
+    isConfigCmd := (IsObject(direct) && paramArr[1] == direct.token)
+        || (numbersOnly != "" && MySoftData.DataFileMap.Has(textOnly))
     if (isConfigCmd) {
         Data := GetMacroCMDData(paramArr[1])
         keyName := Data.KeyName
-        keyTypeVal := CmdEnumKeyAct(Data.KeyType)
-        holdTime := Data.HoldTime
-        count := Data.Count
-        intervalTime := Data.IntervalTime
+        axisConfig := Data.HasOwnProp("IsAxis") && Data.IsAxis && InStr(Data.KeyName, "JoyAxis")
+        keyTypeVal := axisConfig ? "按下" : CmdEnumKeyAct(Data.KeyType)
+        click := keyTypeVal == "点击" && !axisConfig
+        holdTime := click ? Data.HoldTime : 0
+        count := axisConfig ? 1 : Data.Count
+        intervalTime := click && count != 1 ? Data.IntervalTime : 0
     } else {
         Data := ""
         keyName := paramArr[2]
@@ -1851,9 +1859,10 @@ OnPressKey(tableItem, cmd, index) {
         isTextAxisCmd := (paramArr.Length == 2 && RegExMatch(paramArr[2]
             , "^(JoyAxisL[XY]|JoyAxisR[XY]|JoyAxisL[TR]|JoyAxisR[TR]):(-?[0-9]+)$"))
         keyTypeVal := isTextAxisCmd ? "按下" : CmdEnumKeyAct(paramArr[3])
-        holdTime := paramArr.Length >= 4 ? Integer(paramArr[4]) : 100
+        click := keyTypeVal == "点击"
+        holdTime := click && paramArr.Length >= 4 ? Integer(paramArr[4]) : 100
         count := paramArr.Length >= 5 ? Integer(paramArr[5]) : 1
-        intervalTime := paramArr.Length >= 6 ? Integer(paramArr[6]) : 0
+        intervalTime := click && count != 1 && paramArr.Length >= 6 ? Integer(paramArr[6]) : 0
     }
 
     ; 录制产生的通用键名（AxisLXMin/DpadUp/AxisLT/JoyN 等）→ 友好键名（JoyAxisLXMin/JoyDpadUp/JoyLT/JoyA），
@@ -1874,7 +1883,7 @@ OnPressKey(tableItem, cmd, index) {
     ;   2) 录制纯文本（可读、剪贴板粘贴）：按键_JoyAxisLX:75 → 值内联在键名
     axisKey := ""
     axisValue := ""
-    if (isConfigCmd && IsObject(Data) && Data.IsAxis && InStr(Data.KeyName, "JoyAxis")) {
+    if (isConfigCmd && axisConfig) {
         axisKey := Data.KeyName
         axisValue := Data.HasOwnProp("AxisValue") ? Data.AxisValue : 0
     } else if (!isConfigCmd && RegExMatch(keyName
@@ -1910,8 +1919,9 @@ OnPressKey(tableItem, cmd, index) {
         if (item.Killed)
             break
 
-        FloatHold := RandomizeDurationByPercent(holdTime, MainSoftData.HoldFloat)
-        FloatInterval := RandomizeDurationByPercent(intervalTime, MainSoftData.PreIntervalFloat)
+        click := CmdEnumKeyAct(keyType) == "点击"
+        FloatHold := click ? RandomizeDurationByPercent(holdTime, MainSoftData.HoldFloat) : 0
+        FloatInterval := click && A_Index != count ? RandomizeDurationByPercent(intervalTime, MainSoftData.PreIntervalFloat) : 0
         SendKeyWrapper(keyName, FloatHold, tableItem, index, keyType, action)
         if (CmdEnumKeyAct(keyType) == "点击" && A_Index != count && FloatInterval > 0)
             InterruptibleSleep(tableItem, index, FloatInterval, false)
@@ -2287,9 +2297,9 @@ WindowReadInfo(data, query, preview := "") {
         target := "ahk_id " hwnd
         try {
             switch data.ActionType {
-                case "窗口位置", "位置与宽高":
+                case "位置与宽高":
                     WinGetPos(&x, &y, &w, &h, target)
-                    values := data.ActionType == "窗口位置" ? [x, y] : [x, y, w, h]
+                    values := [x, y, w, h]
                 case "标题类名句柄":
                     values := [WinGetTitle(target), WinGetClass(target), hwnd]
                 case "进程信息":
@@ -2302,9 +2312,6 @@ WindowReadInfo(data, query, preview := "") {
                     exStyle := WinGetExStyle(target)
                     values := [1, WinActive(target) ? 1 : 0, mm == -1 ? 1 : 0, mm == 1 ? 1 : 0, (exStyle & 0x8) ? 1 : 0,
                         alpha == "" ? 100 : Round(alpha * 100 / 255), (exStyle & 0x20) ? 1 : 0]
-                case "透明度与鼠标穿透状态":
-                    alpha := WinGetTransparent(target)
-                    values := [alpha == "" ? 100 : Round(alpha * 100 / 255), (WinGetExStyle(target) & 0x20) ? 1 : 0]
             }
         } catch as e {
             if (IsObject(preview))
@@ -2355,18 +2362,6 @@ OnWindowManage(tableItem, cmd, index) {
     hwnds := WindowMatchedHandles(winTitle, matchMode)
     if (!hwnds.Length)
         return
-
-    ; 查询返回第一个匹配窗口的完整宽高，与工具监视的尺寸一致。
-    if (Data.ActionType == "获取窗口宽高") {
-        try {
-            WinGetPos(, , &width, &height, "ahk_id " hwnds[1])
-            widthVar := GetVarName(Data.WidthVarName)
-            heightVar := GetVarName(Data.HeightVarName)
-            if (widthVar != "" && heightVar != "")
-                MySetGlobalVariable([widthVar, heightVar], [width, height], false)
-        }
-        return
-    }
 
     if (Data.ActionType == "激活窗口") {
         ; 逐个激活时从后向前，最后让原本最靠前的匹配窗口获得焦点。
@@ -2485,8 +2480,7 @@ ApplyKeyCheckResult(Data, isJoy := false) {
         else
             digitalKeys.Push(key)
     }
-    checkType := isJoy ? CmdEnumJoyCheck(Data.CheckType, analogKeys.Length > 0) : CmdEnumZh(Data.CheckType, CmdEnumKeyCheckNames())
-    stateType := CmdEnumZh(Data.StateType, CmdEnumStateNames())
+    checkType := isJoy ? CurrentJoyCheck(Data.CheckType) : CmdEnumZh(Data.CheckType, CmdEnumKeyCheckNames())
 
     if (analogKeys.Length > 0) {
         ok := true
@@ -2500,6 +2494,7 @@ ApplyKeyCheckResult(Data, isJoy := false) {
         return
     }
 
+    stateType := CmdEnumZh(Data.StateType, CmdEnumStateNames())
     stateMode := stateType == "物理状态" ? "P" : ""
     isAllPressed := true
     isAnyPressed := false
@@ -2592,7 +2587,7 @@ IsJoyAxisCompare(name, stored, cmpType) {
     if (ahkAxis == "")
         return false
     isTrig := (name == "LT" || name == "RT")
-    compare := CmdEnumJoyCheck(cmpType, true)
+    compare := CurrentJoyCheck(cmpType)
     axis := StrLower(name)
     matches := MatchXInputJoyState((state) => JoyAxisMatches(
         isTrig ? Round(state.%axis% * 100 / 255) : state.%axis%, stored, compare), &hasXInput)
@@ -2656,14 +2651,20 @@ JoyAxisMatches(value, target, compare) {
 }
 
 OnScreenShot(tableItem, cmd, index) {
-    static processId := DllCall("GetCurrentProcessId", "UInt"), shotSequence := 0
     paramArr := StrSplit(cmd, "_")
     Data := GetMacroCMDData(paramArr[1])
 
-    startX := GetReplaceVarText(tableItem, index, Data.StartPosX)
-    startY := GetReplaceVarText(tableItem, index, Data.StartPosY)
-    endX := GetReplaceVarText(tableItem, index, Data.EndPosX)
-    endY := GetReplaceVarText(tableItem, index, Data.EndPosY)
+    if (CmdEnumZh(Data.ScreenShotType, CmdEnumShotNames()) == "自定义截图") {
+        area := DispatchInputRequest("IS", GetItemByIndex(tableItem, index))
+        if (!IsObject(area) || area.Length != 4)
+            return
+        startX := area[1], startY := area[2], endX := area[3], endY := area[4]
+    } else {
+        startX := GetReplaceVarText(tableItem, index, Data.StartPosX)
+        startY := GetReplaceVarText(tableItem, index, Data.StartPosY)
+        endX := GetReplaceVarText(tableItem, index, Data.EndPosX)
+        endY := GetReplaceVarText(tableItem, index, Data.EndPosY)
+    }
 
     ShotDebugLog(Format("抓图 cmd={} type={} 原始坐标 startX={} startY={} endX={} endY={}"
         , cmd, Data.ScreenShotType, Data.StartPosX, Data.StartPosY, Data.EndPosX, Data.EndPosY))
@@ -2701,10 +2702,10 @@ OnScreenShot(tableItem, cmd, index) {
         }
     }
 
-    if (CmdEnumNameType(Data.NameType) == "固定名称" && Data.FixedName != "") {
-        fileName := Data.FixedName ".png"
+    if (CmdEnumNameType(Data.NameType) == "固定名称") {
+        fileName := "Shot" RegExReplace(Data.SerialStr, "\D") ".png"
     } else {
-        fileName := Format("{}-{}-{:03}-{}-{}.png", Data.SerialStr, A_Now, A_MSec, processId, ++shotSequence)
+        fileName := GetNextImageSerial(baseDir) ".png"
     }
 
     filePath := baseDir "\" fileName
@@ -2773,7 +2774,15 @@ OnScreenShot(tableItem, cmd, index) {
 
     ShotDebugLog(Format("抓图成功：{}", filePath))
 
-    if (Data.ResultToggle) {
+    if (Data.ToClipboard) {
+        bitmap := Gdip_CreateBitmapFromFile(filePath)
+        if (bitmap) {
+            try Gdip_SetBitmapToClipboard(bitmap)
+            finally Gdip_DisposeImage(bitmap)
+        }
+    }
+
+    if (Data.ResultSaveName != "") {
         MySetGlobalVariable([Data.ResultSaveName], [filePath], false)
     }
 }

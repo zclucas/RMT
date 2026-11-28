@@ -12,18 +12,13 @@ class WindowControlData {
     Argument := ""
     WriteKind := "text"
     WaitType := "等待出现"
-    ClickType := ""
+    ClickType := "左键单击"
     ClickHoldMs := 500
-    ClickPoint := "中心点"
     ScrollOffset := 0
-    WaitOperator := "等于"
-    WaitValue := ""
     WaitValueKind := "text"
     WaitLogic := "且"
-    WaitConditions := []
+    WaitConditions := [["等于", "", "运行时控件值"]]
     ResultVar := ""
-    TypeVar := ""
-    ClassVar := ""
     ErrorVar := ""
     TimeoutMs := TimeoutPolicy.DefaultMs
     TimeoutAction := TimeoutPolicy.DefaultAction
@@ -33,8 +28,10 @@ class WindowControlData {
 class ControlInfoData extends WindowControlData {
     ActionType := "检测控件存在"
     ResultVar := "Res"
+    ValueVar := "ConValue"
     ControlVar := "TargetCon"
-    HwndVar := "ConHwnd"
+    HwndVar := ""
+    StateVar := ""
     XVar := "ConX"
     YVar := "ConY"
     WindowXVar := "ConWinX"
@@ -46,27 +43,29 @@ class ControlInfoData extends WindowControlData {
 }
 
 class WindowControl {
-    static Actions := ["点击控件", "聚焦控件", "写入控件值", "读取控件值", "读取控件文本", "读取控件信息",
-        "选中控件", "加入选区", "移出选区", "切换勾选", "设置勾选", "展开控件", "折叠控件", "滚动到控件",
-        "设置范围值", "读取范围值", "等待控件出现", "检测控件存在", "展开/折叠", "读取位置/宽高"]
-    ; Actions 的旧枚举顺序保留，仅在编辑菜单中移除已合并的操作。
-    static InfoActions := ["检测控件存在", "读取控件值", "读取位置/宽高"]
+    static Actions := ["点击控件", "聚焦控件", "写入控件值", "滚动到控件", "等待控件出现", "检测控件存在", "读取位置/宽高"]
+    static InfoActions := ["检测控件存在", "读取位置/宽高"]
     static PositionFields := ["XVar", "YVar", "WindowXVar", "WindowYVar", "WidthVar", "HeightVar"]
 
-    static NormalizeAction(action) {
-        action := CmdEnumZh(action, this.Actions)
-        return action == "读取控件文本" || action == "读取范围值" ? "读取控件值" : action
+    static NormalizeAction(action) => this.Choice(action, this.Actions, "控件操作")
+
+    static Choice(value, choices, label := "控件选项") {
+        value := GetConfigKey(value, choices)
+        for choice in choices
+            if (Type(value) == "String" && value == choice)
+                return choice
+        throw ValueError(GetLang("不支持的") GetLang(label) "：" value)
+    }
+
+    static ChoiceIndex(value, choices) {
+        value := this.Choice(value, choices)
+        for index, choice in choices
+            if (value == choice)
+                return index - 1
     }
     static OperationActions := ["点击控件", "写入控件值", "等待控件出现", "聚焦控件", "滚动到控件"]
     static WaitTypes := ["等待出现", "等待消失", "可用", "禁用", "值变化", "值满足条件", "值不满足条件"]
     static ClickTypes := ["左键单击", "左键双击", "左键长按", "右键单击", "右键双击", "右键长按"]
-    static ClickPoints := ["中心点", "区域随机"]
-
-    static NormalizeClickType(kind) => kind == "左键" ? "左键单击" : kind == "右键" ? "右键单击"
-        : kind == "长按300ms" || kind == "长按500ms" ? "左键长按" : kind
-
-    static ClickHoldValue(data) => data.ClickType == "长按300ms" ? 300 : data.ClickType == "长按500ms" ? 500
-        : data.HasOwnProp("ClickHoldMs") ? data.ClickHoldMs : 500
 
     static ResolveClickHoldMs(value, resolve := "") {
         if (TimeoutPolicy.IsVariable(value)) {
@@ -83,16 +82,6 @@ class WindowControl {
     static ConditionOperators(kind) => kind == "text"
         ? ["等于", "不等于", "包含", "不包含", "开头是", "结尾是", "为空", "不为空"]
         : ["大于", "大于等于", "等于", "不等于", "小于", "小于等于"]
-
-    static CommandKey(action) {
-        action := this.NormalizeAction(action)
-        if (action == "读取控件信息")
-            return "控件信息"
-        for name in this.InfoActions
-            if (action == name)
-                return "控件信息"
-        return "控件操作"
-    }
 
     ; Automation ID is scoped to siblings. Fall back to name and class, then the occurrence in that group.
     static Describe(element) {
@@ -221,7 +210,7 @@ class WindowControl {
         }
     }
 
-    static Find(selector, stabilize := false) {
+    static Find(selector) {
         active := WinExist("A")
         matched := 0
         ambiguous := false
@@ -236,7 +225,7 @@ class WindowControl {
                 else {
                     element := this._Object(6, this._Automation(), "Ptr", hwnd)
                     if (element)
-                        element := this._ResolvePath(element, selector["path"], stabilize)
+                        element := this._ResolvePath(element, selector["path"])
                 }
             } catch {
                 continue
@@ -263,7 +252,7 @@ class WindowControl {
         selector := this.ParseSelector(this.ResolveTarget(data.Selector))
         action := this.NormalizeAction(data.ActionType)
         waiting := this.UsesTimeout(action)
-        waitType := data.HasOwnProp("WaitType") ? data.WaitType : "等待出现"
+        waitType := data.WaitType
         baseline := IsSet(waitBaseline) ? waitBaseline : {set: false, value: ""}
         deadline := this.UsesTimeout(action) ? A_TickCount + TimeoutPolicy.ResolveMs(data.TimeoutMs) : 0
         while (!cancelled()) {
@@ -284,8 +273,20 @@ class WindowControl {
 
         switch action {
             case "等待控件出现", "检测控件存在":
-                if (action == "检测控件存在" && IsSet(outputs))
+                if (action == "检测控件存在" && IsSet(outputs)) {
                     outputs.hwnd := this._NativeHwnd(element)
+                    outputs.value := ""
+                    if (data.ValueVar != "") {
+                        result := this.ProbeValue(element)
+                        if (result.supported)
+                            outputs.value := result.value
+                    }
+                    if (data.StateVar != "") {
+                        enabled := outputs.hwnd ? DllCall("IsWindowEnabled", "Ptr", outputs.hwnd) : this._Int(element, 28)
+                        visible := !this._Int(element, 38) && (!outputs.hwnd || DllCall("IsWindowVisible", "Ptr", outputs.hwnd))
+                        outputs.state := (enabled ? "可交互" : "不可交互") "-" (visible ? "可见" : "不可见")
+                    }
+                }
                 return 1
             case "读取位置/宽高":
                 bounds := this._Bounds(element)
@@ -305,13 +306,8 @@ class WindowControl {
                     "windowX", bounds.windowX, "windowY", bounds.windowY,
                     "width", bounds.right - bounds.left, "height", bounds.bottom - bounds.top), 0)
             case "点击控件":
-                if ((!data.HasOwnProp("ClickType") || data.ClickType == "") && !(element is ExcelControlTarget))
-                    ComCall(3, this._RequiredPattern(element, "invoke"))
-                else {
-                    kind := data.ClickType == "" ? "左键单击" : this.NormalizeClickType(data.ClickType)
-                    hold := InStr(kind, "长按") ? this.ResolveClickHoldMs(this.ClickHoldValue(data), resolve) : 0
-                    return this._ClickElement(element, kind, data.ClickPoint, cancelled, hold)
-                }
+                hold := InStr(data.ClickType, "长按") ? this.ResolveClickHoldMs(data.ClickHoldMs, resolve) : 0
+                return this._ClickElement(element, data.ClickType, cancelled, hold)
             case "聚焦控件":
                 if (element is ExcelControlTarget)
                     element.Reveal()
@@ -319,52 +315,12 @@ class WindowControl {
                     ComCall(3, element)
             case "写入控件值":
                 return this.WriteValue(element, arg)
-            case "展开/折叠":
-                pattern := this._RequiredPattern(element, "expand")
-                state := this._Int(pattern, 5)
-                if (state == 3)
-                    throw Error(GetLang("此控件没有可展开的内容。"))
-                ComCall(state == 0 ? 3 : 4, pattern)
-                return state == 0 ? 1 : 0
-            case "读取控件值":
-                result := this.ProbeValue(element)
-                if (!result.supported)
-                    throw Error(result.reason)
-                return result.value
-            case "读取控件信息":
-                info := this.Describe(element)
-                info["enabled"] := this._Int(element, 28)
-                info["offscreen"] := this._Int(element, 38)
-                info["bounds"] := this._Bounds(element)
-                result := this.ProbeValue(element)
-                info["value"] := result.supported ? result.value : ""
-                return JSON.stringify(info, 0)
-            case "选中控件", "加入选区", "移出选区":
-                ComCall(Map("选中控件", 3, "加入选区", 4, "移出选区", 5)[action], this._RequiredPattern(element, "selection"))
-            case "切换勾选", "设置勾选":
-                toggle := this._RequiredPattern(element, "toggle")
-                if (action == "切换勾选") {
-                    ComCall(3, toggle)
-                    return this._Int(toggle, 4)
-                }
-                if (arg != "0" && arg != "1")
-                    throw Error(GetLang("勾选状态请输入 0 或 1。"))
-                loop 2 {
-                    if (this._Int(toggle, 4) == Integer(arg))
-                        return Integer(arg)
-                    ComCall(3, toggle)
-                }
-                if (this._Int(toggle, 4) != Integer(arg))
-                    throw Error(GetLang("控件未达到指定状态。"))
-                return Integer(arg)
-            case "展开控件", "折叠控件":
-                ComCall(action == "展开控件" ? 3 : 4, this._RequiredPattern(element, "expand"))
             case "滚动到控件":
                 if (element is ExcelControlTarget)
                     element.Reveal()
                 else
                     ComCall(3, this._RequiredPattern(element, "scroll"))
-                offset := data.HasOwnProp("ScrollOffset") ? data.ScrollOffset : 0
+                offset := data.ScrollOffset
                 if (IsObject(resolve))
                     offset := resolve(String(offset))
                 if (!IsInteger(offset) || Abs(Number(offset)) > 100000)
@@ -375,10 +331,6 @@ class WindowControl {
                     else
                         this._OffsetScroll(element, Integer(offset))
                 }
-            case "设置范围值":
-                if (!IsNumber(arg))
-                    throw Error(GetLang("控件值必须是数字。"))
-                ComCall(3, this._RequiredPattern(element, "range"), "Double", Number(arg))
         }
         return 1
     }
@@ -406,14 +358,11 @@ class WindowControl {
         return waitType == "值不满足条件" ? !matched : matched
     }
 
-    ; 条件保留旧版 [比较符, 右值]，第三项新增左值；旧配置默认使用本次控件值。
     static GetWaitConditions(data) {
-        source := data.HasOwnProp("WaitConditions") && data.WaitConditions is Array && data.WaitConditions.Length
-            ? data.WaitConditions : [[data.WaitOperator, data.WaitValue]]
-        conditions := []
-        for condition in source
-            conditions.Push([condition[1], condition[2], condition.Length >= 3 ? condition[3] : "运行时控件值"])
-        return conditions
+        for condition in data.WaitConditions
+            if (!(condition is Array) || condition.Length != 3)
+                throw ValueError(GetLang("控件等待条件格式无效。"))
+        return data.WaitConditions
     }
 
     static IsRuntimeControlValue(source) => source == "运行时控件值" || source == "{运行时控件值}"
@@ -426,7 +375,7 @@ class WindowControl {
     }
 
     static MatchWaitConditions(value, data, kind, resolve := "") {
-        useOr := data.HasOwnProp("WaitLogic") && data.WaitLogic == "或"
+        useOr := data.WaitLogic == "或"
         for condition in this.GetWaitConditions(data) {
             current := this.IsRuntimeControlValue(condition[3])
             left := current ? value : condition[3]
@@ -499,15 +448,13 @@ class WindowControl {
         throw Error(GetLang("条件运算符无效。"))
     }
 
-    static _ClickElement(element, kind, pointMode, cancelled, holdMs := 500) {
-        if (kind == "长按300ms" || kind == "长按500ms")
-            holdMs := kind == "长按300ms" ? 300 : 500
-        kind := this.NormalizeClickType(kind)
+    static _ClickElement(element, kind, cancelled, holdMs := 500) {
+        kind := GetLangKey(kind)
         valid := false
         for candidate in this.ClickTypes
             if (candidate == kind)
                 valid := true
-        if (!valid || (pointMode != "中心点" && pointMode != "区域随机"))
+        if (!valid)
             throw Error(GetLang("点击参数无效。"))
         if (element is ExcelControlTarget) {
             element.Reveal()
@@ -516,6 +463,14 @@ class WindowControl {
         }
         if (!this._Int(element, 28))
             throw Error(GetLang("此控件已禁用。"))
+        if (cancelled())
+            return ""
+        ; Invoke 表达控件默认动作；右键、双击和长按仍需对应鼠标事件。
+        if (kind == "左键单击" && (invoke := this._Pattern(element, "invoke"))) {
+            ; 已调用后报错不能再模拟点击，避免控件已响应却被重复触发。
+            ComCall(3, invoke)
+            return cancelled() ? "" : 1
+        }
         hwnd := this._ElementWindow(element)
         WinActivate("ahk_id " hwnd)
         deadline := A_TickCount + 2000
@@ -529,8 +484,6 @@ class WindowControl {
         if (this._Int(element, 38) && (scroll := this._Pattern(element, "scroll")))
             ComCall(3, scroll)
         bounds := this._Bounds(element)
-        if (pointMode == "区域随机")
-            bounds := this._InnerRandomBounds(bounds)
         walker := this._Object(14, this._Automation())
         node := element
         loop 64 {
@@ -546,20 +499,16 @@ class WindowControl {
         if (bounds.right <= bounds.left || bounds.bottom <= bounds.top)
             throw Error(GetLang("目标控件不在可点击区域。"))
         valid := false
-        loop (pointMode == "区域随机" ? 8 : 1) {
-            x := pointMode == "区域随机" ? Random(bounds.left, bounds.right - 1) : Floor((bounds.left + bounds.right) / 2)
-            y := pointMode == "区域随机" ? Random(bounds.top, bounds.bottom - 1) : Floor((bounds.top + bounds.bottom) / 2)
-            hit := this._HitTest(x, y).element
-            loop 64 {
-                if (this._Equals(hit, element)) {
-                    valid := true
-                    break
-                }
-                hit := this._Object(3, walker, "Ptr", hit)
-                if (!hit)
-                    break
+        x := Floor((bounds.left + bounds.right) / 2)
+        y := Floor((bounds.top + bounds.bottom) / 2)
+        hit := this._HitTest(x, y).element
+        loop 64 {
+            if (this._Equals(hit, element)) {
+                valid := true
+                break
             }
-            if (valid)
+            hit := this._Object(3, walker, "Ptr", hit)
+            if (!hit)
                 break
         }
         if (!valid)
@@ -567,32 +516,31 @@ class WindowControl {
         button := InStr(kind, "右键") ? "Right" : "Left"
         count := InStr(kind, "双击") ? 2 : 1
         hold := InStr(kind, "长按") ? this.ResolveClickHoldMs(holdMs) : 0
-        DllCall("SetCursorPos", "Int", x, "Int", y)
-        loop count {
-            if (cancelled())
-                return ""
-            Click(button " Down")
-            try {
-                endTime := A_TickCount + hold
-                while (A_TickCount < endTime && !cancelled())
-                    Sleep(Max(1, Min(20, endTime - A_TickCount)))
-            } finally {
-                Click(button " Up")
+        ; 屏幕坐标不受当前 CoordMode 影响；取消或点击异常也必须恢复光标。
+        cursor := Buffer(8)
+        if (!DllCall("GetCursorPos", "Ptr", cursor))
+            throw OSError()
+        try {
+            if (!DllCall("SetCursorPos", "Int", x, "Int", y))
+                throw OSError()
+            loop count {
+                if (cancelled())
+                    return ""
+                try {
+                    Click(button " Down")
+                    endTime := A_TickCount + hold
+                    while (A_TickCount < endTime && !cancelled())
+                        Sleep(Max(1, Min(20, endTime - A_TickCount)))
+                } finally {
+                    Click(button " Up")
+                }
+                if (A_Index < count)
+                    Sleep(50)
             }
-            if (A_Index < count)
-                Sleep(50)
+        } finally {
+            DllCall("SetCursorPos", "Int", NumGet(cursor, 0, "Int"), "Int", NumGet(cursor, 4, "Int"))
         }
         return cancelled() ? "" : 1
-    }
-
-    static _InnerRandomBounds(bounds) {
-        if (bounds.right <= bounds.left || bounds.bottom <= bounds.top)
-            return bounds
-        width := Max(1, Floor((bounds.right - bounds.left) * 0.8))
-        height := Max(1, Floor((bounds.bottom - bounds.top) * 0.8))
-        left := Floor((bounds.left + bounds.right - width) / 2)
-        top := Floor((bounds.top + bounds.bottom - height) / 2)
-        return {left: left, top: top, right: left + width, bottom: top + height}
     }
 
     static _ElementWindow(element) {
@@ -641,7 +589,7 @@ class WindowControl {
         throw Error(GetLang("目标容器不支持滚动偏移。"))
     }
 
-    ; 拾取预览、读取值、信息 JSON 共用同一套判断，空文本也是可读取的值。
+    ; 拾取预览与基础信息共用读取逻辑，空文本也是可读取的值。
     static ProbeValue(element, preview := false) {
         try {
             if (cell := ControlExcel.FromElement(element))
@@ -669,6 +617,18 @@ class WindowControl {
             }
             if (pattern := this._Pattern(element, "selection"))
                 return this._Value(this._Int(pattern, 6) ? 1 : 0, "选中状态（0/1）")
+            ; 部分 UIA 提供者将原生 Edit 的文本截到4096字；直接读取原生文本。
+            if (type == 50004 && (hwnd := this._NativeControl(element, "edit"))
+                && !(DllCall("GetWindowLongW", "Ptr", hwnd, "Int", -16, "UInt") & 0x20)) {
+                length := this._Send(hwnd, 0xE) ; WM_GETTEXTLENGTH
+                if (preview)
+                    length := Min(length, 100)
+                if (length > 32 * 1024 * 1024)
+                    throw Error(GetLang("控件文本超过64MB，无法完整读取。"))
+                text := Buffer((length + 1) * 2, 0)
+                copied := this._Send(hwnd, 0xD, length + 1, text.Ptr) ; WM_GETTEXT
+                return this._Value(StrGet(text.Ptr, copied, "UTF-16"), "文本")
+            }
             if (pattern := this._Pattern(element, "text")) {
                 range := this._Object(7, pattern)
                 return this._Value(this._String(range, 12, "Int", preview ? 100 : -1), "文本")
@@ -832,31 +792,15 @@ class WindowControl {
         }
     }
 
-    ; 点击执行使用 Invoke；拾取时只检查能力和启用状态，不触发操作。
-    static ProbeClick(element, physical := false) {
+    ; 拾取只检查启用状态和位置，不触发点击。
+    static ProbeClick(element) {
         try {
             if (element is ExcelControlTarget)
                 return {supported: true}
-            if (physical) {
-                bounds := this._Bounds(element)
-                return {supported: !!this._Int(element, 28) && bounds.right > bounds.left && bounds.bottom > bounds.top}
-            }
-            return {supported: !!this._Int(element, 28) && !!this._Pattern(element, "invoke")}
+            bounds := this._Bounds(element)
+            return {supported: !!this._Int(element, 28) && bounds.right > bounds.left && bounds.bottom > bounds.top}
         } catch {
             return {supported: false}
-        }
-    }
-
-    static ProbeExpand(element) {
-        try {
-            pattern := this._Pattern(element, "expand")
-            if (!pattern || this._Int(pattern, 5) == 3)
-                return {supported: false, reason: GetLang("此控件没有可展开的内容。")}
-            if (!this._Int(element, 28))
-                return {supported: false, reason: GetLang("此控件已禁用。")}
-            return {supported: true, reason: GetLang(this._Int(pattern, 5) == 0 ? "当前折叠，执行后展开。" : "当前展开，执行后折叠。")}
-        } catch as e {
-            return {supported: false, reason: e.Message}
         }
     }
 
@@ -903,12 +847,24 @@ class WindowControl {
             case "state":
                 state := Number(arg)
                 if (pattern := this._Pattern(element, "toggle")) {
+                    current := this._Int(pattern, 4)
                     loop 3 {
-                        if (this._Int(pattern, 4) == state)
+                        if (current == state)
                             return state
                         ComCall(3, pattern)
+                        deadline := A_TickCount + 500
+                        ; 等待提供者更新状态，避免异步 Toggle 被重复触发。
+                        loop {
+                            next := this._Int(pattern, 4)
+                            if (next != current)
+                                break
+                            if (A_TickCount >= deadline)
+                                throw Error(GetLang("控件未达到指定状态。"))
+                            Sleep(20)
+                        }
+                        current := next
                     }
-                    if (this._Int(pattern, 4) != state)
+                    if (current != state)
                         throw Error(GetLang("控件未达到指定状态。"))
                 } else if (this._WebSwitch(element)) {
                     return this._WriteWebSwitch(element, state)
@@ -964,7 +920,8 @@ class WindowControl {
         if (!hwnd)
             return 0
         name := WinGetClass(hwnd)
-        return kind == "combo" ? (RegExMatch(name, "i)^(ComboBox|WindowsForms10\.COMBOBOX(?:\..*)?)$") ? hwnd : 0)
+        return kind == "edit" ? (RegExMatch(name, "i)^(Edit|WindowsForms10\.EDIT(?:\..*)?)$") ? hwnd : 0)
+            : kind == "combo" ? (RegExMatch(name, "i)^(ComboBox|WindowsForms10\.COMBOBOX(?:\..*)?)$") ? hwnd : 0)
             : (name == "msctls_progress32" ? hwnd : 0)
     }
 
@@ -1087,14 +1044,10 @@ class WindowControl {
             return false
         if (key["id"] != "")
             return this._String(element, 29) == key["id"]
-        cls := this._String(element, 30)
-        ; 新拾取的开关使用稳定类名；旧选择器仍按原有类名、序号匹配。
-        if (key["class"] == this._StableClass(key["class"]))
-            cls := this._StableClass(cls)
-        return this._String(element, 23) == key["name"] && cls == key["class"]
+        return this._String(element, 23) == key["name"] && this._StableClass(this._String(element, 30)) == key["class"]
     }
 
-    static _ResolvePath(element, path, stabilize := false) {
+    static _ResolvePath(element, path) {
         walker := this._Object(14, this._Automation())
         for key in path {
             child := this._Object(4, walker, "Ptr", element)
@@ -1106,17 +1059,6 @@ class WindowControl {
             }
             if (!child)
                 return 0
-            stableClass := this._StableClass(key["class"])
-            if (stabilize && stableClass != key["class"]) {
-                key["class"] := stableClass
-                key["index"] := 1
-                sibling := this._Object(7, walker, "Ptr", child)
-                while (sibling) {
-                    if (this._Matches(sibling, key))
-                        key["index"] += 1
-                    sibling := this._Object(7, walker, "Ptr", sibling)
-                }
-            }
             element := child
         }
         return element
@@ -1186,21 +1128,29 @@ OnWindowControl(tableItem, cmd, index) {
     }
     if (cancelled())
         return
-    if (WindowControl.UsesTimeout(CmdEnumZh(data.ActionType, WindowControl.Actions)))
+    if (WindowControl.UsesTimeout(data.ActionType))
         TimeoutPolicy.WriteStatus(data, timedOut)
     names := [], values := []
     controlAction := WindowControl.NormalizeAction(data.ActionType)
     if (failure != "" && controlAction == "检测控件存在")
         value := 0
-    if (controlAction == "检测控件存在" && data.HasOwnProp("HwndVar") && data.HwndVar != "") {
+    if (controlAction == "检测控件存在" && data.HwndVar != "") {
         names.Push(data.HwndVar)
         values.Push(failure == "" && value == 1 ? outputs.hwnd : 0)
+    }
+    if (controlAction == "检测控件存在" && data.StateVar != "") {
+        names.Push(data.StateVar)
+        values.Push(failure == "" && value == 1 ? outputs.state : "不可见")
+    }
+    if (controlAction == "检测控件存在" && data.ValueVar != "") {
+        names.Push(data.ValueVar)
+        values.Push(failure == "" && value == 1 ? outputs.value : "")
     }
     if (controlAction == "读取位置/宽高") {
         bounds := failure == "" ? outputs.bounds : ""
         for pair in [["XVar", "x"], ["YVar", "y"], ["WindowXVar", "windowX"], ["WindowYVar", "windowY"],
             ["WidthVar", "width"], ["HeightVar", "height"]] {
-            if (!data.HasOwnProp(pair[1]) || data.%pair[1]% == "")
+            if (data.%pair[1]% == "")
                 continue
             names.Push(data.%pair[1]%)
             values.Push(!IsObject(bounds) ? 0 : pair[2] == "width" ? bounds.right - bounds.left
@@ -1208,17 +1158,9 @@ OnWindowControl(tableItem, cmd, index) {
         }
     }
     if (WindowControl.NormalizeAction(data.ActionType) == "检测控件存在"
-        && data.HasOwnProp("ControlVar") && data.ControlVar != "") {
+        && data.ControlVar != "") {
         names.Push(data.ControlVar)
         values.Push(failure == "" && value == 1 ? runData.Selector : "")
-    }
-    info := failure == "" && WindowControl.NormalizeAction(data.ActionType) == "读取控件信息" ? JSON.parse(value) : Map()
-    for pair in [["TypeVar", "type"], ["ClassVar", "class"]] {
-        name := data.HasOwnProp(pair[1]) ? data.%pair[1]% : ""
-        if (name != "") {
-            names.Push(name)
-            values.Push(info.Get(pair[2], pair[2] == "type" ? 0 : ""))
-        }
     }
     if (names.Length)
         MySetGlobalVariable(names, values, false)

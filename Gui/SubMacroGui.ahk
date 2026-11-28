@@ -80,7 +80,7 @@ class SubMacroGui {
         this._title := title
         titleHeight := XAMLHost.CmdTitleBarHeight()
 
-        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(XAMLHost.FontSize())
+        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(CmdEditorForm.FontSize())
         main.Rows(titleHeight, "Auto")
 
         ; === 标题栏 ===
@@ -89,7 +89,7 @@ class SubMacroGui {
         ; === 内容 ===
         body := main.Add("Grid").Grid_Row(1).Margin("16,8,16,8")
         body.Rows("36", "36", "36", "24", "24", "56")
-        body.Cols("96", "*", "12", "96", "190")
+        body.Cols(CmdEditorForm.PairColumns()*)
 
         ; 行0：备注（宽度与宏类型下拉一致）
         body.Add("TextBlock").Grid_Row(0).Grid_Column(0).Text(GetLang("备注：")).VerticalAlignment("Center")
@@ -110,7 +110,7 @@ class SubMacroGui {
         body.Add("TextBlock").Grid_Row(2).Grid_Column(0).Text(GetLang("操作类型:")).ToolTip(GetLang("调用会等待目标宏结束，触发会让两个宏同时运行。")).VerticalAlignment("Center")
         body.Add("ComboBox").Grid_Row(2).Grid_Column(1).Name("CallTypeCombo").Height(26).MinHeight(26).VerticalAlignment("Center")
         insertRow := body.Add("Grid").Name("InsertRow").Grid_Row(2).Grid_Column(3).Grid_ColumnSpan(2).Visibility("Collapsed")
-        insertRow.Cols("96", "*")
+        insertRow.Cols(CmdEditorForm.LabelWidth(), "*")
         insertRow.Add("TextBlock").Grid_Column(0).Text(GetLang("调用次数：")).VerticalAlignment("Center")
         insertRow.Add("ComboBox").Grid_Column(1).Name("InsertCountCombo").Height(26).MinHeight(26).IsEditable("True").VerticalAlignment("Center")
 
@@ -125,7 +125,7 @@ class SubMacroGui {
         ; === 创建 XAMLHost ===
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)
         this.ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", this.OwnerHwnd)
-        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="600" SizeToContent="Height"')
+        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="' CmdEditorForm.Width '" SizeToContent="Height"')
         this.ui.xaml := StrReplace(this.ui.xaml, 'FontFamily="Segoe UI Variable Display, Segoe UI, sans-serif"', 'FontFamily="' MainSoftData.FontType '"')
         this.ui.xaml := StrReplace(this.ui.xaml, '%resources%', '')
 

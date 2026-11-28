@@ -7,7 +7,7 @@
 ; §15.1 多目标重构：左侧目标列表（ListBox + AddXamlItem 动态注入目标卡片，单选高亮），
 ;   每个目标独立配置 搜索类型/窗口信息/坐标/图片/颜色/文本/相似度；
 ;   右侧整体设置（搜索次数/间隔/满足个数/鼠标动作/结果保存/目标点保存/找到/未找到指令）。
-; §19 合并决策：移除「屏幕规格」行（ConfigDLCon/ConfigArr 不再在 GUI 管理，旧配置字段保留无害）。
+; §19 合并决策：移除「屏幕规格」行（ConfigDLCon/ConfigArr 不再在 GUI 管理，单目标分辨率配置不用于组合搜索）。
 ; 屏幕级功能（预览框/取色器/截图/鼠标跟踪/F1-F3热键）沿用原生全局函数，作用于当前选中目标。
 ; =====================================================================
 
@@ -27,7 +27,7 @@ class SearchComboGui {
         this.LastIsWin := ""
         this.MacroGui := ""
         this.CurTarget := 1           ; 当前选中目标（工具行/预览/框选/取色作用于它）
-        this.TargetList := []          ; 目标数组（= Data.SearchTargetArr 或旧配置构造）
+        this.TargetList := []          ; 目标数组（Data.SearchTargetArr）
         this.ImageProcessGui := ""
         this._textBuilder := ""
 
@@ -75,7 +75,7 @@ class SearchComboGui {
         titleHeight := XAMLHost.CmdTitleBarHeight()
         labelWidth := 6 * XAMLHost.ScaleFontSize(XAMLHost.FontSize())
 
-        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(XAMLHost.FontSize())
+        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(CmdEditorForm.FontSize())
         main.Rows(titleHeight, "32", "*", "44")
 
         ; === 标题栏 ===
@@ -88,25 +88,25 @@ class SearchComboGui {
         leftTop.Cols("72", "4", "110", "12", "72", "8", "140", "8", "*")
         remarkPos := leftTop.Add("StackPanel").Grid_ColumnSpan(7).Orientation("Horizontal").HorizontalAlignment("Left").VerticalAlignment("Center")
         remarkPos.Add("TextBlock").Text(GetLang("备注：")).VerticalAlignment("Center")
-            .Foreground("{DynamicResource TextMain}").FontSize("12")
+            .Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
         remarkPos.Add("TextBox").Name("RemarkCon").Style("{StaticResource RmtSingleLineTextBox}").Width(190).Height(26).MinHeight(26).Margin("8,0,0,0")
             .HorizontalAlignment("Left").VerticalAlignment("Center").VerticalContentAlignment("Center").Padding("4,0")
             .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
         remarkPos.Add("TextBlock").Text(GetLang("屏幕坐标：")).VerticalAlignment("Center").Margin("16,0,0,0")
-            .Foreground("{DynamicResource TextMain}").FontSize("12")
+            .Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
         remarkPos.Add("TextBlock").Name("MousePosCon").Text("0,0").VerticalAlignment("Center")
-            .Foreground("{DynamicResource TextMain}").FontSize("12")
+            .Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
         winG := leftTop.Add("StackPanel").Grid_Column(8).Orientation("Horizontal").HorizontalAlignment("Left").VerticalAlignment("Center")
         winG.Add("TextBlock").Text(GetLang("窗口坐标：")).VerticalAlignment("Center")
-            .Foreground("{DynamicResource TextMain}").FontSize("12")
+            .Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
         winG.Add("TextBlock").Name("MouseWinPosCon").Text("0,0").VerticalAlignment("Center")
-            .Foreground("{DynamicResource TextMain}").FontSize("12")
+            .Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
         clrG := top.Add("StackPanel").Grid_Column(2).Orientation("Horizontal").VerticalAlignment("Center")
         clrG.Add("TextBlock").Text(GetLang("鼠标颜色：")).VerticalAlignment("Center")
-            .Foreground("{DynamicResource TextMain}").FontSize("12")
+            .Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
         clrG.Add("TextBlock").Name("MouseColorCon").Text("FFFFFF").VerticalAlignment("Center")
-            .Foreground("{DynamicResource TextMain}").FontSize("12")
+            .Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
         clrG.Add("Border").Name("MouseColorTipCon").Width(16).Height(16).Background("#FF0000")
             .BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1").VerticalAlignment("Center").Margin("6,0,0,0")
 
@@ -140,16 +140,16 @@ class SearchComboGui {
         sr := rightPanel.Add("Grid").Margin("0,8,0,0")
         sr.Cols(labelWidth, "*", 8, "*")
         sr.Add("TextBlock").Grid_Column(0).Text(GetLang("搜索次数：")).ToolTip(GetLang("左侧设置尝试次数，右侧设置重试前等待的毫秒数。")).VerticalAlignment("Center")
-            .Foreground("{DynamicResource TextMain}").FontSize("12")
+            .Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
         sr.Add("ComboBox").Grid_Column(1).Name("SearchCountCon").Height(28).MinHeight(28)
             .HorizontalAlignment("Stretch").VerticalAlignment("Center").VerticalContentAlignment("Center")
-            .IsEditable("True").FontSize("11")
+            .IsEditable("True").FontSize(CmdEditorForm.FontSize())
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1")
         intervalHost := sr.Add("Grid").Grid_Column(3).Name("SearchIntervalHost")
         intervalHost.Add("TextBox").Name("SearchIntervalCon").Style("{StaticResource RmtSingleLineTextBox}").Height(28).MinHeight(28)
             .HorizontalAlignment("Stretch").VerticalAlignment("Center").VerticalContentAlignment("Center")
-            .Padding("2,0").TextAlignment("Center").FontSize("11")
+            .Padding("2,0").TextAlignment("Center").FontSize(CmdEditorForm.FontSize())
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1")
         intervalHost.Add("TextBlock").Text("ms").FontSize("7").IsHitTestVisible("False")
@@ -160,9 +160,9 @@ class SearchComboGui {
         ma := rightPanel.Add("Grid").Margin("0,8,0,0")
         ma.Cols(labelWidth, "*")
         ma.Add("TextBlock").Grid_Column(0).Text(GetLang("鼠标动作：")).VerticalAlignment("Center")
-            .Foreground("{DynamicResource TextMain}").FontSize("12")
+            .Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
         mac := ma.Add("ComboBox").Grid_Column(1).Name("MouseActionTypeCon").Height(28).MinHeight(28)
-            .HorizontalAlignment("Stretch").VerticalAlignment("Center").VerticalContentAlignment("Center").FontSize("11")
+            .HorizontalAlignment("Stretch").VerticalAlignment("Center").VerticalContentAlignment("Center").FontSize(CmdEditorForm.FontSize())
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1")
         CmdEditorForm.SearchMouseActionItemStyle(mac, true)
@@ -172,25 +172,25 @@ class SearchComboGui {
         ms := rightPanel.Add("Grid").Margin("0,8,0,0")
         ms.Cols(labelWidth, "*", 8, "*")
         ms.Add("TextBlock").Grid_Column(0).Name("SpeedTipCon").Text(GetLang("移动速度：")).ToolTip(GetLang("左侧填写移动速度，右侧填写点击次数。")).VerticalAlignment("Center")
-            .Foreground("{DynamicResource TextMain}").FontSize("12")
+            .Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
         ms.Add("TextBox").Grid_Column(1).Name("SpeedCon").Style("{StaticResource RmtSingleLineTextBox}").Height(28).MinHeight(28)
             .HorizontalAlignment("Stretch").VerticalAlignment("Center").VerticalContentAlignment("Center")
-            .Padding("2,0").TextAlignment("Center").FontSize("11")
+            .Padding("2,0").TextAlignment("Center").FontSize(CmdEditorForm.FontSize())
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1").Tag("NumOnly|NoIME|MaxLen:3")
         ms.Add("TextBox").Grid_Column(3).Name("ClickCountCon").ToolTip(GetLang("这是鼠标点击次数。")).Style("{StaticResource RmtSingleLineTextBox}").Height(28).MinHeight(28)
             .HorizontalAlignment("Stretch").VerticalAlignment("Center").VerticalContentAlignment("Center")
-            .Padding("2,0").TextAlignment("Center").FontSize("11")
+            .Padding("2,0").TextAlignment("Center").FontSize(CmdEditorForm.FontSize())
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1")
 
         ; 找到 / 未找到（编辑按钮叠在输入框右上角）
-        rightPanel.Add("TextBlock").Text(GetLang("找到后的指令：（可选）")).Margin("0,10,0,0")
-            .Foreground("{DynamicResource TextMain}").FontSize("12")
+        rightPanel.Add("TextBlock").Text(GetLang("找到后执行（可选）")).Margin("0,10,0,0")
+            .Foreground("{DynamicResource TextSub}").FontSize(CmdEditorForm.FontSize())
         foundHost := rightPanel.Add("Grid").Margin("0,2,0,0")
         foundHost.Add("TextBox").Name("TrueMacroCon").AcceptsReturn("True").TextWrapping("Wrap")
             .HorizontalAlignment("Stretch").Height(86).MinHeight(86)
-            .VerticalContentAlignment("Top").Padding("4,3,26,3").FontSize("11")
+            .VerticalContentAlignment("Top").Padding("4,3,26,3").FontSize(CmdEditorForm.FontSize())
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
             .ScrollViewer_VerticalScrollBarVisibility("Auto")
@@ -199,12 +199,12 @@ class SearchComboGui {
             .FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets").FontSize("12").Content(Chr(0xE70F))
             .ToolTip(GetLang("编辑")).Foreground("{DynamicResource TextMain}")
             .Background("{DynamicResource ControlBg}").BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1")
-        rightPanel.Add("TextBlock").Name("FalseMacroTipCon").Text(GetLang("未找到后的指令：（可选）")).Margin("0,6,0,0")
-            .Foreground("{DynamicResource TextMain}").FontSize("12")
+        rightPanel.Add("TextBlock").Name("FalseMacroTipCon").Text(GetLang("未找到后执行（可选）")).Margin("0,6,0,0")
+            .Foreground("{DynamicResource TextSub}").FontSize(CmdEditorForm.FontSize())
         missHost := rightPanel.Add("Grid").Name("FalseMacroHost").Margin("0,2,0,0")
         missHost.Add("TextBox").Name("FalseMacroCon").AcceptsReturn("True").TextWrapping("Wrap")
             .HorizontalAlignment("Stretch").Height(86).MinHeight(86)
-            .VerticalContentAlignment("Top").Padding("4,3,26,3").FontSize("11")
+            .VerticalContentAlignment("Top").Padding("4,3,26,3").FontSize(CmdEditorForm.FontSize())
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
             .ScrollViewer_VerticalScrollBarVisibility("Auto")
@@ -260,7 +260,7 @@ class SearchComboGui {
 
     _AddSaveCombo(parent, name, column) {
         combo := parent.Add("ComboBox").Name(name).Grid_Column(column).Height(28).MinHeight(28)
-            .VerticalAlignment("Center").VerticalContentAlignment("Center").FontSize("11").IsEditable("True")
+            .VerticalAlignment("Center").VerticalContentAlignment("Center").FontSize(CmdEditorForm.FontSize()).IsEditable("True")
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1")
         recommended := name == "ResultSaveNameCon" ? "Res" : name == "CoordXNameCon" ? "Resx" : "ResY"
@@ -376,7 +376,7 @@ class SearchComboGui {
         lastN := this.TargetList.Length
         fs := XAMLHost.FontSize()
         xaml := '<ListBoxItem ' ns ' Tag="' n '">'
-            . '<ListBoxItem.Resources><Style x:Key="ColorMatchSwitch" TargetType="CheckBox"><Setter Property="VerticalAlignment" Value="Center"/><Setter Property="Cursor" Value="Hand"/><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="CheckBox"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="50"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><Border x:Name="Track" Width="42" Height="24" CornerRadius="12" Background="{DynamicResource ControlBorder}" BorderBrush="{DynamicResource OutlineStroke}" BorderThickness="1"><Grid><TextBlock x:Name="OffGlyph" Text="×" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource TextSub}" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,7,1"/><Ellipse x:Name="Thumb" Width="18" Height="18" Fill="{DynamicResource ControlBg}" HorizontalAlignment="Left" Margin="2"/></Grid></Border><ContentPresenter Grid.Column="1" VerticalAlignment="Center"/></Grid><ControlTemplate.Triggers><Trigger Property="IsChecked" Value="True"><Setter TargetName="Track" Property="Background" Value="{DynamicResource ActionBg}"/><Setter TargetName="Thumb" Property="HorizontalAlignment" Value="Right"/><Setter TargetName="OffGlyph" Property="Visibility" Value="Collapsed"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style></ListBoxItem.Resources>'
+            . '<ListBoxItem.Resources><Style x:Key="ColorMatchSwitch" TargetType="CheckBox"><Setter Property="VerticalAlignment" Value="Center"/><Setter Property="Cursor" Value="Hand"/><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="CheckBox"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="50"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><Border x:Name="Track" Width="42" Height="24" CornerRadius="12" Background="{DynamicResource ControlBorder}" BorderBrush="{DynamicResource OutlineStroke}" BorderThickness="1"><Grid><TextBlock x:Name="OffGlyph" Text="×" FontSize="15" FontWeight="Bold" Foreground="{DynamicResource TextSub}" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,7,1"/><Ellipse x:Name="Thumb" Width="18" Height="18" Fill="{DynamicResource ControlBg}" HorizontalAlignment="Left" Margin="2"/></Grid></Border><ContentPresenter Grid.Column="1" VerticalAlignment="Center"/></Grid><ControlTemplate.Triggers><Trigger Property="IsChecked" Value="True"><Setter TargetName="Track" Property="Background" Value="{DynamicResource ActionBg}"/><Setter TargetName="Thumb" Property="HorizontalAlignment" Value="Right"/><Setter TargetName="OffGlyph" Property="Visibility" Value="Collapsed"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style></ListBoxItem.Resources>'
             . '<Border Margin="0,1,0,1" Padding="8,6,8,6" BorderBrush="{DynamicResource InputStroke}" BorderThickness="1" CornerRadius="4" Background="Transparent">'
             . '<Grid>'
             . '<Grid>'
@@ -418,8 +418,8 @@ class SearchComboGui {
             . '</Button>'
             . '</Grid>'
             . '</Grid>'
-            . '<Button Name="' this._TN(n, "PreviewBtn") '" Grid.Row="2" Grid.Column="0" Margin="0,0,5,0"'
-            . ' HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Cursor="Hand" Focusable="False"'
+            . '<Button Name="' this._TN(n, "PreviewBtn") '" Grid.Row="2" Grid.Column="0"'
+            . ' HorizontalAlignment="Left" VerticalAlignment="Stretch" Cursor="Hand" Focusable="False"'
             . ' Tag="0" ToolTip="' GetLang("搜索范围") '"'
             . ' HorizontalContentAlignment="Left" VerticalContentAlignment="Stretch"'
             . ' Background="{DynamicResource ControlBg}" BorderBrush="{DynamicResource ControlBorder}" BorderThickness="1">'
@@ -456,7 +456,7 @@ class SearchComboGui {
             . ' Background="{DynamicResource ControlBg}" BorderBrush="{DynamicResource ControlBorder}" BorderThickness="1">'
             . '<Grid><Image Name="' this._TN(n, "Image") '" Stretch="Uniform" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>'
             . '<Button Name="' this._TN(n, "ProcessBtn") '" Width="22" Height="22" MinHeight="22"'
-            . ' Padding="0" Margin="0,1,1,0" VerticalAlignment="Top" HorizontalAlignment="Right" Cursor="Hand" FontSize="12"'
+            . ' Padding="0" Margin="0,1,1,0" VerticalAlignment="Top" HorizontalAlignment="Right" Cursor="Hand" FontSize="15"'
             . ' FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Content="' Chr(0xE70F) '"'
             . ' ToolTip="' GetLang("裁剪、抠除；多点找图") '"'
             . ' Foreground="{DynamicResource TextMain}" Background="{DynamicResource ControlBg}"'
@@ -491,7 +491,7 @@ class SearchComboGui {
             . '<ComboBox Name="' this._TN(n, "Color") '" Grid.Column="0" Height="28" MinHeight="28" HorizontalAlignment="Stretch" VerticalAlignment="Center" VerticalContentAlignment="Center" FontSize="' fs '" IsEditable="True"/>'
             . '<Border Name="' this._TN(n, "ColorTip") '" Grid.Column="2" Width="20" Height="20" Background="#FF0000" VerticalAlignment="Center"/>'
             . '</Grid>'
-            . '<TextBlock Name="' this._TN(n, "TextTipLabel") '" Grid.Row="3" Grid.Column="0" Text="' GetLang("搜索文本：") '" VerticalAlignment="Center" HorizontalAlignment="Left" Foreground="{DynamicResource TextMain}" FontSize="' fs '"/>'
+            . '<TextBlock Name="' this._TN(n, "TextTipLabel") '" Grid.Row="3" Grid.Column="0" Text="' GetLang("搜索文本：") '" VerticalAlignment="Center" HorizontalAlignment="Left" Foreground="{DynamicResource TextSub}" FontSize="' fs '"/>'
             . '<Grid Name="' this._TN(n, "TextRow") '" Grid.Row="3" Grid.Column="2" Grid.ColumnSpan="3">'
             . '<Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="8"/><ColumnDefinition Width="28"/></Grid.ColumnDefinitions>'
             . '<ComboBox Name="' this._TN(n, "Text") '" Grid.Column="0" Height="28" MinHeight="28" HorizontalAlignment="Stretch" VerticalAlignment="Center" VerticalContentAlignment="Center" FontSize="' fs '" IsEditable="True"/>'
@@ -1330,31 +1330,6 @@ class SearchComboGui {
                 EndPosY: GetBuiltinVarName(this.ui.Query(tn "EndPosY"))
             }
             data.SearchTargetArr.Push(t)
-            if (n == 1) {
-                ; 顶层字段同步第一个目标（兼容旧读法/旧配置回退）
-                data.SearchType := t.SearchType
-                data.WinInfo := t.WinInfo
-                data.SearchColor := t.SearchColor
-                data.SearchText := t.SearchText
-                data.SearchImagePath := t.SearchImagePath
-                data.Similar := t.Similar
-                data.OCRType := t.OCRType
-                data.OcrEngine := t.OcrEngine
-                data.SearchImageType := t.SearchImageType
-                data.ColorMatch := t.ColorMatch
-                data.Adaptive := t.Adaptive
-                data.MultiPointData := t.MultiPointData
-                data.MultiPointSeedData := t.MultiPointSeedData
-                data.SuperMultiPointSeedData := t.SuperMultiPointSeedData
-                data.SuperMultiPointIgnoreData := t.SuperMultiPointIgnoreData
-                data.MultiPointTolerance := t.MultiPointTolerance
-                data.SuperMultiPointTolerance := t.SuperMultiPointTolerance
-                data.MultiPointMode := t.MultiPointMode
-                data.StartPosX := t.StartPosX
-                data.StartPosY := t.StartPosY
-                data.EndPosX := t.EndPosX
-                data.EndPosY := t.EndPosY
-            }
         }
         data.SatisfyCount := this.ui.Query("SatisfyCountCon") == GetLang("所有") ? -1 : this.ui.Query("SatisfyCountCon")
         data.SearchCount := this.ui.Query("SearchCountCon") == GetLang("无限") ? -1 : this.ui.Query("SearchCountCon")
@@ -1568,8 +1543,8 @@ class SearchComboGui {
 
         this._RebuildTargetList()
 
-        ; 整体设置（SatisfyCount 为新字段，旧配置缺失时回退 -1=所有）
-        satVal := ObjHasOwnProp(this.Data, "SatisfyCount") ? this.Data.SatisfyCount : -1
+        ; 整体设置：-1表示所有目标。
+        satVal := this.Data.SatisfyCount
         this._SetCombo("SatisfyCountCon", [GetLang("所有")], satVal == -1 ? GetLang("所有") : satVal)
         this._SetCombo("SearchCountCon", [GetLang("无限")], this.Data.SearchCount == -1 ? GetLang("无限") : this.Data.SearchCount)
         this.ui.Update("SearchIntervalCon", "Text", this.Data.SearchInterval)

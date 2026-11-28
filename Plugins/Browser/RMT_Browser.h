@@ -26,6 +26,7 @@ BROWSER_API int Browser_GetConnectionPort();
 BROWSER_API int Browser_OpenConnectedUrl(const char* url, int openMode, int timeoutMs);
 BROWSER_API int Browser_Navigate(const char* url, int timeoutMs);
 BROWSER_API int Browser_Reload(int ignoreCache);
+BROWSER_API int Browser_ClearCacheAndReload();
 BROWSER_API int Browser_GoBack();
 BROWSER_API int Browser_GoForward();
 BROWSER_API int Browser_CloseTab();

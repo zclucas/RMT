@@ -19,8 +19,7 @@ class TranslateData {
     TargetCustom := ""               ; Target 选「自定义」时的语言名，如 泰语
     Engine := "Index-Translate 2B"   ; 见 TranslateCommand.Engines
     Device := "自动"                 ; 自动 / GPU / CPU，只对本地引擎有效
-    Glossary := ""                   ; 旧版术语表原文，兼容读取且不自动改写
-    GlossaryItems := []              ; 新版结构化术语表 [{source, target}]
+    GlossaryItems := []              ; 结构化术语表 [{source, target}]
     ResultVar := "TransRes"
     ErrorVar := ""
 }
@@ -56,9 +55,8 @@ class TranslateCommand {
 
     static UserError(message) => Error(TranslateCommand.FriendlyErrorPrefix . message)
 
-    ; 设备归一：旧配置没有 Device 字段，按「自动」处理。
     static ResolveDevice(data) {
-        return data.HasOwnProp("Device") ? CmdEnumZh(data.Device, TranslateCommand.Devices) : "自动"
+        return CurrentCommandChoice(data.Device, TranslateCommand.Devices)
     }
 
     ; 设备 → llama 的卸载层数：自动 / GPU = -1（有 GPU 就全卸载，没有落 CPU），
@@ -77,12 +75,12 @@ class TranslateCommand {
         }
     }
 
-    ; 目标语言归一：「自定义」取 TargetCustom（旧配置没有这个字段，给空报错），
+    ; 目标语言选「自定义」时读取 TargetCustom，
     ; 其余按枚举表归一。返回语言名；再经 TargetPrompt 映射成 prompt 用的写法。
     static ResolveTarget(data) {
-        target := CmdEnumZh(data.Target, TranslateCommand.Targets)
+        target := CurrentCommandChoice(data.Target, TranslateCommand.Targets)
         if (target == "自定义") {
-            target := Trim(data.HasOwnProp("TargetCustom") ? data.TargetCustom : "")
+            target := Trim(data.TargetCustom)
             if (target == "")
                 throw TranslateCommand.UserError(GetLang("自定义目标语言不能为空"))
         }
@@ -97,15 +95,14 @@ class TranslateCommand {
 
         target := TranslateCommand.ResolveTarget(data)
         promptTarget := TranslateCommand.TargetPrompt.Has(target) ? TranslateCommand.TargetPrompt[target] : target
-        glossary := data.HasOwnProp("Glossary") ? data.Glossary : ""
-        glossaryItems := data.HasOwnProp("GlossaryItems") && data.GlossaryItems is Array ? data.GlossaryItems : []
+        glossaryItems := data.GlossaryItems
 
         if (TranslateCommand.IsLocal(data.Engine))
-            return TranslateCommand.ExecuteLocal(text, promptTarget, glossary, glossaryItems, data, cancelled, &timedOut)
-        return TranslateCommand.ExecuteRemote(text, promptTarget, glossary, glossaryItems, data, cancelled, &timedOut)
+            return TranslateCommand.ExecuteLocal(text, promptTarget, glossaryItems, data, cancelled, &timedOut)
+        return TranslateCommand.ExecuteRemote(text, promptTarget, glossaryItems, data, cancelled, &timedOut)
     }
 
-    static ExecuteLocal(text, target, glossary, glossaryItems, data, cancelled, &timedOut := false, &elapsedMs := 0) {
+    static ExecuteLocal(text, target, glossaryItems, data, cancelled, &timedOut := false, &elapsedMs := 0) {
         if (cancelled())
             return ""
         engine := TranslateEngine.Shared()
@@ -124,7 +121,7 @@ class TranslateCommand {
             if (err != "")
                 throw Error(err)
         }
-        result := engine.Translate(text, target, glossary, glossaryItems, TranslateCommand.TimeoutMs())
+        result := engine.Translate(text, target, glossaryItems, TranslateCommand.TimeoutMs())
         if (result["ok"] != 1 && InStr(result["error"], "文本过长"))
             throw TranslateCommand.UserError(result["error"])
         if (result["ok"] != 1)
@@ -136,7 +133,7 @@ class TranslateCommand {
 
     ; 与 AI判断 同一条链路：POST {base}/chat/completions。
     ; 区别只在 prompt 与不需要 JSON 约束。
-    static ExecuteRemote(text, target, glossary, glossaryItems, data, cancelled, &timedOut := false, &elapsedMs := 0) {
+    static ExecuteRemote(text, target, glossaryItems, data, cancelled, &timedOut := false, &elapsedMs := 0) {
         global SettingFile, SettingSection
         key := Trim(CfgRead(SettingFile, SettingSection, "AiApiKey", ""))
         baseUrl := RTrim(Trim(CfgRead(SettingFile, SettingSection, "AiApiBaseUrl", "")), "/")
@@ -145,8 +142,6 @@ class TranslateCommand {
             throw TranslateCommand.UserError(GetLang("请先在 AI 设置中填写 API URL 与模型"))
 
         prompt := "把下面的内容翻译成" target "。只输出译文，不要解释、不要加引号、不要重复原文。"
-        if (Trim(glossary) != "")
-            prompt .= "`n术语对照（必须遵守）：`n" glossary
         if (glossaryItems.Length) {
             prompt .= "`n术语对照（必须遵守）："
             for item in glossaryItems
@@ -157,7 +152,6 @@ class TranslateCommand {
         request.Url := baseUrl "/chat/completions"
         request.Headers := "Content-Type: application/json; charset=utf-8" (key == "" ? "" : "`nAuthorization: Bearer " key)
         request.TimeoutMs := TranslateCommand.TimeoutMs()
-        request.Retries := 0
         request.Body := JSON.stringify({model: model, temperature: 0, messages: [
             {role: "system", content: "你是翻译器，只输出译文。"},
             {role: "user", content: prompt "`n`n" text}

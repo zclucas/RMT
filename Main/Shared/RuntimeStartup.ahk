@@ -56,21 +56,21 @@ SendNativeControlMessage(Msg, wParam, lParam, hWnd) {
 ;初始化数据
 InitData() {
     InitTableItemState()
-    MySoftData.DataFileMap := Map("搜索", SearchFile, "搜索Pro", SearchProFile, "搜索All", SearchAllFile, "搜索Combo", SearchComboFile, "组合搜索", SearchComboFile, "搜索Multi", SearchComboFile, "移动Pro", MMProFile,
+    MySoftData.DataFileMap := Map("搜索", SearchFile, "搜索Pro", SearchProFile, "搜索All", SearchAllFile, "搜索Combo", SearchComboFile, "移动Pro", MMProFile,
         "输出", OutputFile, "提示", PromptFile, "运行", RunFile, "运行Pro", RunFile, "循环", LoopFile, "宏操作", SubMacroFile, "变量", VariableFile,
         "变量提取", ExVariableFile, "如果", CompareFile, "如果Pro", CompareProFile, "运算", OperationFile,
         "后台鼠标", BGMouseFile, "后台按键", BGKeyFile, "文本处理", TextOpsFile, "Timing", TimingFile, "数组", ArrayFile,
-        "输入", InputFile, "网络请求", HttpRequestFile, "浏览器", BrowserFile, "窗口控件", WindowControlFile, "控件信息", WindowControlFile, "控件操作", WindowControlFile, "AI判断", AiDecisionFile, "YOLO检测", YoloFile, "翻译", TranslateFile, "进程管理", ProcessManageFile, "文件读写", FileIOFile, "Excel", FileIOFile, "窗口信息", WindowManageFile, "窗口操作", WindowManageFile, "窗口管理", WindowManageFile, "按键检测", KeyCheckFile, "手柄检测", JoyCheckFile,
+        "输入", InputFile, "网络请求", HttpRequestFile, "浏览器", BrowserFile, "控件信息", WindowControlFile, "控件操作", WindowControlFile, "AI判断", AiDecisionFile, "YOLO检测", YoloFile, "翻译", TranslateFile, "进程管理", ProcessManageFile, "文件读写", FileIOFile, "Excel", FileIOFile, "窗口信息", WindowManageFile, "窗口操作", WindowManageFile, "窗口管理", WindowManageFile, "按键检测", KeyCheckFile, "手柄检测", JoyCheckFile,
         "注释", CommentFile, "抓图", ScreenShotFile, "图形节点", GraphNodeFile, "图形开始节点", GraphStartNodeFile,
         "间隔", IntervalFile, "按键", KeyDataFile, "移动", MoveDataFile, "RMT指令", RMTCMDFile,
         "等待", WaitFile, "等待确定", WaitConfirmFile, "时间", TimeDataFile, "倒计时", CountDownFile,
         ; §20 指令改名：新名「鼠标移动/鼠标移动Pro/增量移动」与旧名「移动/移动Pro」双键并存（旧配置序列码与宏内容零迁移兼容）
         "鼠标移动", MoveDataFile, "鼠标移动Pro", MMProFile, "增量移动", DeltaMoveFile)
-    MySoftData.DataClassMap := Map("搜索", SearchData, "搜索Pro", SearchData, "搜索All", SearchAllData, "搜索Combo", SearchData, "组合搜索", SearchData, "搜索Multi", SearchData, "移动Pro", MMProData,
+    MySoftData.DataClassMap := Map("搜索", SearchData, "搜索Pro", SearchData, "搜索All", SearchAllData, "搜索Combo", SearchComboData, "移动Pro", MMProData,
         "输出", OutputData, "提示", PromptData, "运行", RunData, "运行Pro", RunData, "循环", LoopData, "宏操作", SubMacroData, "变量", VariableData,
         "变量提取", ExVariableData, "如果", CompareData, "如果Pro", CompareProData, "运算", OperationData,
         "后台鼠标", BGMouseData, "后台按键", BGKeyData, "文本处理", TextOpsData, "Timing", TimingData, "数组", ArrayData,
-        "输入", InputData, "网络请求", HttpRequestData, "浏览器", BrowserData, "窗口控件", WindowControlData, "控件信息", ControlInfoData, "控件操作", WindowControlData, "AI判断", AiDecisionData, "YOLO检测", YoloData, "翻译", TranslateData, "进程管理", ProcessManageData, "文件读写", FileIOData, "Excel", FileIOData, "窗口信息", WindowInfoData, "窗口操作", WindowManageData, "窗口管理", WindowManageData, "按键检测", KeyCheckData, "手柄检测", KeyCheckData,
+        "输入", InputData, "网络请求", HttpRequestData, "浏览器", BrowserData, "控件信息", ControlInfoData, "控件操作", WindowControlData, "AI判断", AiDecisionData, "YOLO检测", YoloData, "翻译", TranslateData, "进程管理", ProcessManageData, "文件读写", FileIOData, "Excel", FileIOData, "窗口信息", WindowInfoData, "窗口操作", WindowManageData, "窗口管理", WindowManageData, "按键检测", KeyCheckData, "手柄检测", KeyCheckData,
         "注释", CommentData, "抓图", ScreenShotData, "图形节点", MacroGraphNode, "图形开始节点", MacroGraphStartNode,
         "间隔", IntervalData, "按键", KeyDataConfig, "移动", MoveDataConfig, "RMT指令", RMTCMDData,
         "等待", WaitData, "等待确定", WaitConfirmData, "时间", TimeData, "倒计时", CountDownData,

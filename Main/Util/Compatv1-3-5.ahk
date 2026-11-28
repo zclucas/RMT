@@ -3,7 +3,6 @@
 Compat13_UpgradeCommands(dir) {
     renames := Map()
     Compat13_UpgradeWindows(dir, renames)
-    Compat13_UpgradeControls(dir, renames)
     Compat13_ResolveCommandRenames(renames)
     Compat13_CopyCommands(dir, renames, "WaitFile", "等待",
         Map("InputFile", "输入"), Compat13_WaitData)
@@ -13,7 +12,7 @@ Compat13_UpgradeCommands(dir) {
     Compat_RewriteMacroFiles(dir, migration.Rewrite.Bind(migration), Compat13_RewriteAllBranches,
         migration.Save.Bind(migration))
     migration.Finish()
-    Compat13_ClearRenameJournal(dir, ["WindowManageFile", "WindowControlFile"])
+    Compat13_ClearRenameJournal(dir, ["WindowManageFile"])
     Compat13_ExpandMoveSerials(dir)
 }
 
@@ -75,43 +74,14 @@ Compat13_UpgradeWindows(dir, renames) {
         Cfg_WriteRoot(root, path)
 }
 
-Compat13_UpgradeControls(dir, renames) {
-    path := dir "\WindowControlFile.toml"
-    if (!FileExist(path))
-        return
-    root := Cfg_Load(path, true).Clone()
-    section := IniImport_Section()
-    values := root[section] := Cfg_Seg(root, section).Clone()
-    saved := root["Compat13Renames"] := Cfg_Seg(root, "Compat13Renames").Clone()
-    for key, target in saved
-        renames[key] := target
-    dirty := false
-    for key, raw in values.Clone() {
-        if (!RegExMatch(key, "^(.+?)(\d+)$", &serial) || GetCommandKey(serial[1]) != "窗口控件")
-            continue
-        data := TryParseCommandData(raw)
-        if (!IsObject(data))
-            continue
-        Compat13_FillDefaults(data, WindowControlData())
-        data.ActionType := CmdEnumZh(data.ActionType, WindowControl.Actions)
-        values[key] := JSON.stringify(data, 0)
-        saved[key] := Compat13_Rename(values, key, WindowControl.CommandKey(data.ActionType), renames)
-        dirty := true
-    }
-    if (dirty)
-        Cfg_WriteRoot(root, path)
-}
-
-; 同版本预览配置和导入包也可能使用旧名称；资源先落盘，再重写所有宏引用。
 Compat13_UpgradeWindowCommands(dir) {
     renames := Map()
     Compat13_UpgradeWindows(dir, renames)
-    Compat13_UpgradeControls(dir, renames)
     if (!renames.Count)
         return false
     Compat13_ResolveCommandRenames(renames)
     Compat_RewriteMacroFiles(dir, (macro) => Compat13_RewriteCommandRenames(macro, renames), Compat13_RewriteAllBranches)
-    Compat13_ClearRenameJournal(dir, ["WindowManageFile", "WindowControlFile"])
+    Compat13_ClearRenameJournal(dir, ["WindowManageFile"])
     return true
 }
 
@@ -194,6 +164,8 @@ Compat13_JoyCheckData(prefix, data) {
     }
     data.KeyArr := keys
     Compat13_FillDefaults(data, KeyCheckData())
+    data.CheckType := CmdEnumJoyCheck(data.CheckType, false)
+    data.StateType := CmdEnumZh(data.StateType, CmdEnumStateNames())
     CmdEnumNorm("手柄检测", data)
     return data
 }
@@ -204,7 +176,10 @@ Compat13_WaitData(prefix, old) {
     inputType := InputField(old, "Type")
     if (inputType != "继续" && inputType != "继续&取消")
         return ""
-    data := WaitData(true)
+    data := WaitData()
+    data.TimeoutMs := 0
+    data.TimeoutAction := ""
+    data.TimeoutStatusVar := ""
     data.WaitType := "等待确定"
     data.TimeoutMs := InputField(old, "TimeoutMs", 0)
     for field, value in data.ConfirmConfig.OwnProps()

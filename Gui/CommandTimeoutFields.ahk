@@ -28,7 +28,7 @@ class CommandTimeoutFields {
 
     static _Row(parent, label, group, labelName, tip, labelWidth) {
         if (!labelWidth)
-            return CmdEditorForm.Row(parent, label, , group, , labelName, tip)
+            return CmdEditorForm.Row(parent, label, , group, , labelName, tip, false)
         row := parent.Add("Grid").Margin("0,4").Cols(labelWidth, "*")
         caption := CmdEditorForm.Label(row, label).Margin("0")
         if (labelName != "")

@@ -66,7 +66,7 @@ class CommentGui {
         this._title := title
         titleHeight := XAMLHost.CmdTitleBarHeight()
 
-        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(XAMLHost.FontSize())
+        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(CmdEditorForm.FontSize())
         main.Rows(titleHeight, "*")
 
         ; === 标题栏 ===
@@ -77,7 +77,7 @@ class CommentGui {
         body.Rows("24", "*", "48")
         body.Add("TextBlock").Grid_Row(0).Text(GetLang("注释内容：")).VerticalAlignment("Center")
         body.Add("TextBox").Grid_Row(1).Name("ContentCon").AcceptsReturn("True").TextWrapping("Wrap")
-            .VerticalContentAlignment("Top").Margin("0,4,0,4").Padding("2,3").FontSize("11")
+            .VerticalContentAlignment("Top").Margin("0,4,0,4").Padding("2,3").FontSize(CmdEditorForm.FontSize())
             .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
             .ScrollViewer_VerticalScrollBarVisibility("Auto")

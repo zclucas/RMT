@@ -55,7 +55,7 @@
             return
         try {
             msgs := this._AiBuildApiMessages(t)
-            AiAssist.BeginChat(msgs)
+            this._AiBeginRequest(t, msgs)
             SetTimer(this.aiChatTick, 200)
         } catch as e {
             this._AiFinishChat(t, "", this._AiErrText(e))
@@ -65,6 +65,13 @@
     _AiPlainAttachLabel(text) {
         t := Trim(RegExReplace(String(text), "\[([^\]]+)\]\(rmtfile:[^)]+\)", "$1"))
         return (t != "") ? t : GetLang("附件")
+    }
+
+    _AiBeginRequest(t, messages) {
+        if (!this.HasOwnProp("_aiRequestStarted") || !IsObject(this._aiRequestStarted))
+            this._aiRequestStarted := Map()
+        this._aiRequestStarted[t] := A_TickCount
+        AiAssist.BeginChat(messages)
     }
 
     _AiErrText(e) {
@@ -93,12 +100,19 @@
             this._AiFinishChat(t, "", GetLang("无法读取请求状态"))
             return
         }
+        elapsed := this.HasOwnProp("_aiRequestStarted") && this._aiRequestStarted.Has(t)
+            ? A_TickCount - this._aiRequestStarted[t] : 0
+        if ((st == 1 && elapsed >= 180000) || (st == 0 && elapsed >= 1500)) {
+            AiAssist.CancelChat()
+            this._AiFinishChat(t, "", st == 0 ? GetLang("请求已中断，请重新发送任务。") : GetLang("模型响应超时，请检查网络或稍后重试。"))
+            return
+        }
         if (st == 1) {
             this._AiPulseThinking(t)
             return
         }
         if (st == 0) {
-            ; idle：可能尚未 latch，或结果已被另一轮 Take 取走；勿当成「中断」清掉 busy
+            ; 保留短暂状态切换窗口；异常空闲由上方兜底结束，不能永久占用 busy。
             return
         }
         ; Stop polling while synchronous tools or approval dialogs are running.
@@ -136,9 +150,10 @@
         rnd := this._aiToolRound.Has(t) ? Integer(this._aiToolRound[t]) : 0
         if (this._AiCancelRequested(t))
             return false
-        if (rnd >= 8) {
+        if (rnd >= 64) {
             this._aiToolRound[t] := 0
-            return false
+            this._AiFinishChat(t, "", GetLang("本轮已达到64轮工具调用，请检查已完成结果后继续。"))
+            return true
         }
         this._aiToolRound[t] := rnd + 1
         this._AiShowThinking(t, true, GetLang("正在调用工具"))
@@ -180,7 +195,7 @@
         this._AiShowThinking(t, false, GetLang("正在根据工具结果继续思考"))
         try {
             msgs := this._AiBuildApiMessages(t)
-            AiAssist.BeginChat(msgs)
+            this._AiBeginRequest(t, msgs)
             SetTimer(this.aiChatTick, 200)
             return true
         } catch as e {
@@ -289,7 +304,7 @@
 
     _AiSetSendMode(t, busy) {
         glyph := busy ? Chr(0xE769) : Chr(0xE724)
-        tip := busy ? GetLang("取消") : GetLang("发送")
+        tip := busy ? GetLang("取消") : "Enter：" GetLang("发送")
         try this.ui.Update("AiSend_" t, "Content", glyph)
         try this.ui.Update("AiSend_" t, "ToolTip", tip)
         try this.ui.Update("AiSend_" t, "IsEnabled", "True")
@@ -310,7 +325,7 @@
         this._AiHistPush(t, "user", "请用中文说明刚才的结果或无法完成的原因，不要空回复。")
         try {
             msgs := this._AiBuildApiMessages(t)
-            AiAssist.BeginChat(msgs)
+            this._AiBeginRequest(t, msgs)
             SetTimer(this.aiChatTick, 200)
         } catch as e {
             this._AiFinishChat(t, "", this._AiErrText(e))
@@ -354,6 +369,15 @@
         if (dots == "")
             dots := "…"
         try this.ui.Update("AiThinkTxt_" t, "Text", this._AiThinkLabel(t) dots)
+        if (this.HasOwnProp("_aiRequestStarted") && this._aiRequestStarted.Has(t)) {
+            seconds := (A_TickCount - this._aiRequestStarted[t]) // 1000
+            if (seconds >= 10) {
+                partial := ""
+                try partial := Trim(AiAssist.PeekChat())
+                label := partial != "" ? SubStr(RegExReplace(partial,"[\r\n]+"," "),1,100) : this._AiThinkLabel(t) "（" seconds "s）"
+                try this.ui.Update("AiThinkTxt_" t, "Text", label dots)
+            }
+        }
     }
 
     _AiHideThinking(t) {
@@ -390,6 +414,10 @@
                 return GetLang("正在列出目录") (path != "" ? "：" path : "")
             case "run_command":
                 return GetLang("正在执行命令")
+            case "list_instructions":
+                return GetLang("正在查询指令参数")
+            case "execute_instruction":
+                return GetLang("正在直接执行指令") (path != "" ? "：" path : "")
             case "run_script":
                 return GetLang("正在运行脚本") (fn != "" ? "：" fn : "")
             case "update_macro", "set_macro_step_enabled", "apply_macro_step_edit", "undo_macro_step_edit":
@@ -426,6 +454,17 @@
                     err := String(obj["error"])
                 if (ok && name = "validate_macro")
                     summary := AiMacroValidation.FormatReport(obj)
+                else if (ok && name = "execute_instruction") {
+                    summary := obj.Get("command", "") "：" (obj.Get("timed_out", false) ? GetLang("等待超时，条件未满足") : GetLang("已执行"))
+                    if (obj.Get("timed_out", false)) {
+                        ok := false
+                        err := GetLang("等待超时，条件未满足")
+                    }
+                    if (obj.Has("value"))
+                        summary .= "，" String(obj["value"])
+                    if (obj.Has("path"))
+                        summary .= "`n" String(obj["path"])
+                }
                 else if (ok && name = "preview_macro_step_edit") {
                     summary := obj.Get("changed", false) ? GetLang("预览已生成，尚未保存。") : GetLang("参数没有变化。")
                     for change in obj.Get("changes", [])

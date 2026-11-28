@@ -44,46 +44,46 @@ class MouseMoveGui {
         this._title := title
         titleHeight := XAMLHost.CmdTitleBarHeight()
 
-        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(XAMLHost.FontSize())
+        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(CmdEditorForm.FontSize())
         main.Rows(titleHeight, "*")
 
         ; === 标题栏 ===
         chrome := XAMLHost.AddCmdTitleBar(main, title, titleHeight)
 
         ; === 内容 ===
-        body := main.Add("Grid").Grid_Row(1).Margin("8,8,8,13")
+        body := main.Add("Grid").Grid_Row(1).Margin("16,8,16,13")
         body.Rows("26", "36", "36", "34", "*")
-        body.Cols("82", "92", "100", "110")
+        body.Cols(CmdEditorForm.LabelWidth(), "*", CmdEditorForm.LabelWidth() + 16, "*")
         speedTip := GetLang("移动速度0~100，100为瞬移")
 
         ; 行0：鼠标位置
-        body.Add("TextBlock").Grid_Row(0).Grid_ColumnSpan(4).Name("MousePosCon").Text(GetLang("当前鼠标位置:0,0")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
+        body.Add("TextBlock").Grid_Row(0).Grid_ColumnSpan(4).Name("MousePosCon").Text(GetLang("当前鼠标位置:0,0")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
 
         ; 行1：坐标位置X/Y
-        body.Add("TextBlock").Grid_Row(1).Grid_Column(0).Name("PosXLabel").Text(GetLang("坐标位置X:")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
-        body.Add("TextBox").Grid_Row(1).Grid_Column(1).Name("PosXCon").Height(26).MinHeight(26).VerticalContentAlignment("Center").FontSize("11").Padding("4,0")
+        body.Add("TextBlock").Grid_Row(1).Grid_Column(0).Name("PosXLabel").Text(GetLang("坐标位置X:")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
+        body.Add("TextBox").Grid_Row(1).Grid_Column(1).Name("PosXCon").Height(26).MinHeight(26).VerticalContentAlignment("Center").FontSize(CmdEditorForm.FontSize()).Padding("4,0")
             .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1").Tag("Int|NoIME|MaxLen:6")
-        body.Add("TextBlock").Grid_Row(1).Grid_Column(2).Name("PosYLabel").Text(GetLang("坐标位置Y:")).VerticalAlignment("Center").Margin("10,0,0,0").Foreground("{DynamicResource TextMain}").FontSize("12")
-        body.Add("TextBox").Grid_Row(1).Grid_Column(3).Name("PosYCon").Height(26).MinHeight(26).Margin("10,0,0,0").VerticalContentAlignment("Center").FontSize("11").Padding("4,0")
+        body.Add("TextBlock").Grid_Row(1).Grid_Column(2).Name("PosYLabel").Text(GetLang("坐标位置Y:")).VerticalAlignment("Center").Margin("16,0,0,0").Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
+        body.Add("TextBox").Grid_Row(1).Grid_Column(3).Name("PosYCon").Height(26).MinHeight(26).Margin("0").VerticalContentAlignment("Center").FontSize(CmdEditorForm.FontSize()).Padding("4,0")
             .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1").Tag("Int|NoIME|MaxLen:6")
 
         ; 行2：移动速度 + 移动方式
         spdHost := body.Add("Border").Grid_Row(2).Grid_Column(0).Background("Transparent").VerticalAlignment("Center").ToolTip(speedTip)
         spdHost.Add("TextBlock").Text(GetLang("移动速度：")).VerticalAlignment("Center")
-            .Foreground("{DynamicResource TextMain}").FontSize("12")
-        body.Add("TextBox").Grid_Row(2).Grid_Column(1).Name("SpeedCon").Height(26).MinHeight(26).VerticalContentAlignment("Center").FontSize("11").Padding("4,0").Text("90")
+            .Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
+        body.Add("TextBox").Grid_Row(2).Grid_Column(1).Name("SpeedCon").Height(26).MinHeight(26).VerticalContentAlignment("Center").FontSize(CmdEditorForm.FontSize()).Padding("4,0").Text("90")
             .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1").Tag("NumOnly|NoIME|MaxLen:3")
-        body.Add("TextBlock").Grid_Row(2).Grid_Column(2).Text(GetLang("移动方式：")).VerticalAlignment("Center").Margin("10,0,0,0").Foreground("{DynamicResource TextMain}").FontSize("12")
-        mm := body.Add("ComboBox").Grid_Row(2).Grid_Column(3).Name("MouseMoveModeCombo").Height(26).MinHeight(26).Margin("10,0,0,0")
-            .VerticalContentAlignment("Center").FontSize("11").Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
+        body.Add("TextBlock").Grid_Row(2).Grid_Column(2).Text(GetLang("移动方式：")).VerticalAlignment("Center").Margin("16,0,0,0").Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
+        mm := body.Add("ComboBox").Grid_Row(2).Grid_Column(3).Name("MouseMoveModeCombo").Height(26).MinHeight(26).Margin("0")
+            .VerticalContentAlignment("Center").FontSize(CmdEditorForm.FontSize()).Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
         for m in GetLangArr(["绝对移动", "相对移动"])
             mm.Add("ComboBoxItem").Content(m)
 
         ; 行3：当前指令
-        body.Add("TextBlock").Grid_Row(3).Grid_ColumnSpan(4).Name("CommandStrCon").Text(GetLang("当前指令：移动")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
+        body.Add("TextBlock").Grid_Row(3).Grid_ColumnSpan(4).Name("CommandStrCon").Text(GetLang("当前指令：移动")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
 
         ; 行4：确定
         btnRow := body.Add("StackPanel").Grid_Row(4).Grid_ColumnSpan(4).Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center")
@@ -92,7 +92,7 @@ class MouseMoveGui {
         ; === 创建 XAMLHost ===
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)
         this.ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", this.OwnerHwnd)
-        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="420" SizeToContent="Height"')
+        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="' CmdEditorForm.Width '" SizeToContent="Height"')
         this.ui.xaml := StrReplace(this.ui.xaml, 'FontFamily="Segoe UI Variable Display, Segoe UI, sans-serif"', 'FontFamily="' MainSoftData.FontType '"')
         this.ui.xaml := StrReplace(this.ui.xaml, '%resources%', '')
 

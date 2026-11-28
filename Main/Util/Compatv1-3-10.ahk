@@ -20,7 +20,7 @@ Compat13_UpgradeConditionOperands(dir) {
         }
     }
     changed := false
-    for stem in ["CompareFile", "CompareProFile", "LoopFile", "WaitFile"] {
+    for stem in ["CompareFile", "CompareProFile", "LoopFile"] {
         path := dir "\" stem ".toml"
         if (!FileExist(path))
             continue
@@ -28,23 +28,9 @@ Compat13_UpgradeConditionOperands(dir) {
             data := TryParseCommandData(raw)
             if (!IsObject(data) || data.HasOwnProp("ConditionOperandsVersion"))
                 continue
-            if (stem == "WaitFile") {
-                if (!data.HasOwnProp("WaitType") || CmdEnumWait(data.WaitType) != "等待变量值")
-                    continue
-                if (!data.HasOwnProp("Conditions") || !(data.Conditions is Array) || !data.Conditions.Length)
-                    data.Conditions := [{Variable: data.HasOwnProp("Param1") ? data.Param1 : "",
-                        Operator: "等于", Value: data.HasOwnProp("Param2") ? data.Param2 : ""}]
-                for condition in data.Conditions {
-                    for field in ["Variable", "Value"] {
-                        if (condition.HasOwnProp(field))
-                            condition.%field% := Compat13_ConditionReference(condition.%field%, vars)
-                    }
-                }
-            } else {
-                for field in ["NameArr", "VariNameArr", "VariableArr"] {
-                    if (data.HasOwnProp(field) && data.%field% is Array)
-                        Compat13_ConditionReferenceArray(data.%field%, vars)
-                }
+            for field in ["NameArr", "VariNameArr", "VariableArr"] {
+                if (data.HasOwnProp(field) && data.%field% is Array)
+                    Compat13_ConditionReferenceArray(data.%field%, vars)
             }
             ; 每条完成后写标记，写盘中断重试也不改写已经确定的字面文本。
             data.ConditionOperandsVersion := 1
@@ -75,6 +61,8 @@ Compat13_ConditionReference(value, vars) {
 }
 
 Compat13_CollectConditionVariables(data, stem, vars) {
+    if (!Compat13_Schemas().Has(stem))
+        return
     if (stem == "VariableFile" || stem == "ExVariableFile" || stem == "OperationFile") {
         field := stem == "OperationFile" ? "UpdateNameArr" : "VariableArr"
         if (data.HasOwnProp(field) && data.%field% is Array) {
@@ -87,7 +75,7 @@ Compat13_CollectConditionVariables(data, stem, vars) {
     if (data.HasOwnProp("LegacyTextProcess"))
         Compat13_CollectConditionVariables(data.LegacyTextProcess, "VariableFile", vars)
     for field in ["SaveName", "SaveVar", "VarName", "ResultSaveName", "CoordXName", "CoordYName",
-        "TimeoutStatusVar", "ResultVar", "ErrorVar", "ControlVar", "TypeVar", "ClassVar", "HwndVar",
+        "TimeoutStatusVar", "ResultVar", "ErrorVar", "ControlVar", "ValueVar", "StateVar", "ClassVar", "HwndVar",
         "XVar", "YVar", "WindowXVar", "WindowYVar", "WidthVar", "HeightVar", "CountVar", "NameVar",
         "PidVar", "PathVar", "ExistVar", "StatusVar", "StartTimeVar", "UptimeVar", "CpuVar", "GpuVar",
         "ResponseVar", "ConfVar", "RatioVar", "DepthVar"] {
@@ -118,22 +106,13 @@ Compat13_CollectConditionVariables(data, stem, vars) {
         if (data.HasOwnProp(field))
             Compat13_AddConditionVariable(vars, data.%field%)
     }
-    if (stem == "BrowserFile" && data.HasOwnProp("SaveVar") && data.SaveVar != "") {
-        for suffix in ["_Success", "_Error", "_ElapsedMs"]
-            Compat13_AddConditionVariable(vars, data.SaveVar suffix)
-    }
     if (data.HasOwnProp("SaveNameArr") && data.SaveNameArr is Array) {
         mode := data.HasOwnProp("Mode") ? CmdEnumZh(data.Mode, CmdEnumRunModeNames()) : ""
         count := mode == "等待+输入输出" ? 3 : mode == "等待+返回值" ? 1 : 0
         loop Min(count, data.SaveNameArr.Length)
             Compat13_AddConditionVariable(vars, data.SaveNameArr[A_Index])
     }
-    if (stem == "TimeDataFile") {
-        mode := TimeNormSubMode(data)
-        field := mode == "时间计算" ? "Param4" : (mode == "获取时间变量" || mode == "获取时间字符串") ? "Param1" : ""
-        if (field != "" && data.HasOwnProp(field))
-            Compat13_AddConditionVariable(vars, data.%field%)
-    }
+
 }
 
 Compat13_AddConditionVariable(vars, name) {

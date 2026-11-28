@@ -27,128 +27,33 @@ TimeEpochMilliseconds(value) {
 ; =====================================================================
 ; 时间指令执行端
 ;   SubMode 中文：等待 / 区间判断 / 倒计时
-;   旧版数字 1~5 及「获取时间变量/字符串/时间计算」由 TimeNormSubMode 归一
+;   使用当前语义键，不读取预览版数字模式。
 ; =====================================================================
 
 OnTimeData(tableItem, cmd, index) {
-    paramArr := StrSplit(cmd, "_")
-    Data := GetMacroCMDData(paramArr[1])
-    if (!IsObject(Data))
-        return
-
+    Data := GetMacroCMDData(StrSplit(cmd, "_")[1])
     switch TimeNormSubMode(Data) {
-        case "等待":
-            TimeExecWaitUntil(tableItem, index, Data)
-        case "区间判断":
-            TimeExecWindowCheck(tableItem, index, Data)
-        case "获取时间变量":
-            TimeExecGetTimeVar(tableItem, index, Data)
-        case "获取时间字符串":
-            TimeExecGetTimeStr(tableItem, index, Data)
-        case "时间计算":
-            TimeExecTimeMath(tableItem, index, Data)
+        case "等待": TimeExecWaitUntil(tableItem, index, Data)
+        case "区间判断": TimeExecWindowCheck(tableItem, index, Data)
     }
 }
 
-TimeCmdKey(serialStr) {
-    return GetLangKey(RegExReplace(String(serialStr), "\d+"))
-}
+TimeCmdKey(serialStr) => GetLangKey(RegExReplace(String(serialStr), "\d+"))
 
-TimeDataLooksLikeCountDown(Data) {
-    if (!IsObject(Data))
-        return false
-    p1 := ObjHasOwnProp(Data, "Param1") ? Trim(String(Data.Param1)) : ""
-    p2 := ObjHasOwnProp(Data, "Param2") ? GetLangKey(Trim(String(Data.Param2))) : ""
-    if (p2 == "时刻" || p2 == "时长" || p2 == "时间戳" || p2 == "指定时刻" || p2 == "SpecificTime" || p2 == "Timestamp")
-        return true
-    if (InStr(p1, ":"))
-        return true
-    if (p1 == "" && ObjHasOwnProp(Data, "Seconds") && IsNumber(Data.Seconds) && Integer(Data.Seconds) > 0)
-        return true
-    return false
-}
+TimeNormSubMode(Data) => TimeNormSubModeVal(Data.SubMode)
 
-TimeNormSubMode(Data) {
-    raw := IsObject(Data) && ObjHasOwnProp(Data, "SubMode") ? Data.SubMode : "等待"
-    cmdKey := IsObject(Data) && ObjHasOwnProp(Data, "SerialStr") ? TimeCmdKey(Data.SerialStr) : "时间"
-    return TimeNormSubModeVal(raw, cmdKey, Data)
-}
+TimeNormSubModeVal(raw) => CurrentCommandChoice(raw, ["等待", "区间判断"])
 
-TimeNormSubModeVal(raw, cmdKey := "时间", Data := "") {
-    s := GetLangKey(Trim(String(raw)))
-    switch s {
-        case "等待", "Wait", "指定时刻等待":
-            return "等待"
-        case "区间判断", "时间区间判断":
-            return "区间判断"
-        case "倒计时", "Countdown":
-            return "倒计时"
-        case "获取时间变量":
-            return "获取时间变量"
-        case "获取时间字符串":
-            return "获取时间字符串"
-        case "时间计算":
-            return "时间计算"
-    }
-    if (IsInteger(raw)) {
-        n := Integer(raw)
-        if (n == 1)
-            return "等待"
-        if (n == 2)
-            return "区间判断"
-        if (n == 4)
-            return "获取时间字符串"
-        if (n == 5)
-            return "时间计算"
-        if (n == 3) {
-            if (cmdKey == "倒计时" || TimeDataLooksLikeCountDown(Data))
-                return "倒计时"
-            return "获取时间变量"
-        }
-    }
-    if (cmdKey == "倒计时")
-        return "倒计时"
-    return "等待"
-}
-
-; 图形编辑器只有等待/区间判断/倒计时；旧节点 timeSub=3 表示倒计时，不是「获取时间变量」
 TimeGraphNormSubMode(d) {
-    typeKey := IsObject(d) && d.HasOwnProp("type") ? GetLangKey(d.type) : "时间"
-    if (typeKey == "倒计时")
+    if (GetLangKey(d.type) == "倒计时")
         return "倒计时"
-    raw := IsObject(d) && d.HasOwnProp("timeSub") ? d.timeSub : "等待"
-    s := GetLangKey(Trim(String(raw)))
-    switch s {
-        case "等待", "区间判断", "倒计时":
-            return s
-    }
-    if (IsInteger(raw)) {
-        n := Integer(raw)
-        if (n == 2)
-            return "区间判断"
-        if (n == 3)
-            return "倒计时"
-        return "等待"
-    }
-    return TimeNormSubModeVal(raw, typeKey)
-}
-
-TimeSubModeIndex(Data) {
-    switch TimeNormSubMode(Data) {
-        case "区间判断":
-            return 2
-        case "倒计时":
-            return 3
-        default:
-            return 1
-    }
+    return CurrentCommandChoice(d.HasOwnProp("timeSub") ? d.timeSub : "等待", ["等待", "区间判断", "倒计时"])
 }
 
 ; ---------- 模式1：指定时刻等待 / 相对等待 ----------
 
 TimeExecWaitUntil(tableItem, index, Data) {
-    targetMs := TimeNormWaitType(Data.Param2) == "时间戳"
-        ? TimeEpochMilliseconds(TimeResolveValue(tableItem, index, Data.Param1)) : ""
+    targetMs := TimeWaitTargetMilliseconds(tableItem, index, Data)
     targetTime := targetMs == "" ? TimeCalcTargetDateTime(tableItem, index, Data) : ""
     if (targetMs == "" && targetTime == "")
         return
@@ -175,100 +80,44 @@ TimeExecWaitUntil(tableItem, index, Data) {
         floatInterval := RandomizeDurationByPercent(checkInterval, MainSoftData.PreIntervalFloat)
         if (targetMs != "")
             floatInterval := Min(floatInterval, remaining)
+        if (timeoutMs > 0)
+            floatInterval := Min(floatInterval, Max(1, timeoutMs - (A_TickCount - startTick)))
         InterruptibleSleep(tableItem, index, floatInterval)
     }
 }
 
-TimeNormWaitType(unit) {
-    u := Trim(String(unit))
-    if (u == "")
-        return "时刻"
-    u := GetLangKey(u)
-    switch u {
-        case "SpecificTime", "指定时刻", "时刻", "Clock Time":
-            return "时刻"
-        case "TimeVariable", "时间变量", "时间戳", "Timestamp":
-            return "时间戳"
-        case "毫秒", "Milliseconds":
-            return "毫秒"
-        case "毫秒-随机", "Random Milliseconds":
-            return "毫秒-随机"
-        default:
-            return "时长"
+TimeDurationSeconds(tableItem, index, Data) {
+    parts := StrSplit(Trim(String(Data.Param1)), ":")
+    if (parts.Length == 3) {
+        h := TimeResolveValue(tableItem, index, parts[1])
+        m := TimeResolveValue(tableItem, index, parts[2])
+        s := TimeResolveValue(tableItem, index, parts[3])
+        return TimeParseDurationSecs(h ":" m ":" s, "时长")
     }
+    return TimeParseDurationSecs(TimeResolveValue(tableItem, index, Data.Param1), "时长")
 }
 
-TimeNormWindowType(unit) {
-    u := Trim(String(unit))
-    if (u == "")
-        return "时刻"
-    u := GetLangKey(u)
-    switch u {
-        case "TimeVariable", "时间变量", "时间戳", "Timestamp":
-            return "时间戳"
-        default:
-            return "时刻"
+TimeWaitTargetMilliseconds(tableItem, index, Data) {
+    switch TimeNormWaitType(Data.Param2) {
+        case "时间戳": return TimeEpochMilliseconds(TimeResolveValue(tableItem, index, Data.Param1))
+        case "时长": return UnixNow() + TimeDurationSeconds(tableItem, index, Data) * 1000
     }
+    return ""
 }
 
-TimeNormMismatch(action) {
-    a := GetLangKey(Trim(String(action)))
-    switch a {
-        case "Wait", "等待", "不满足时等待", "Wait If Unmet":
-            return "等待"
-        case "Stop", "终止", "不满足时终止", "Stop If Unmet":
-            return "终止"
-        default:
-            return "跳过"
-    }
-}
+TimeNormWaitType(unit) => CurrentCommandChoice(unit == "" ? "时刻" : unit,
+    ["时刻", "时长", "时间戳", "毫秒", "毫秒-随机"])
 
-TimeNormMathOp(op) {
-    o := GetLangKey(Trim(String(op)))
-    switch o {
-        case "Add", "增加":
-            return "增加"
-        case "Sub", "减少":
-            return "减少"
-        default:
-            return "差值"
-    }
-}
+TimeNormWindowType(unit) => CurrentCommandChoice(unit == "" ? "时刻" : unit, ["时刻", "时间戳"])
 
-TimeNormMathUnit(unit) {
-    u := GetLangKey(Trim(String(unit)))
-    switch u {
-        case "Milliseconds", "毫秒":
-            return "毫秒"
-        case "Minutes", "分钟":
-            return "分钟"
-        case "Hours", "小时":
-            return "小时"
-        case "Days", "天":
-            return "天"
-        case "HH:mm:ss", "时:分:秒":
-            return "时:分:秒"
-        default:
-            return "秒"
-    }
-}
+TimeNormMismatch(action) => CurrentCommandChoice(action == "" ? "跳过" : action, ["跳过", "等待", "终止"])
 
 TimeParseDurationSecs(val, unit) {
     raw := Trim(String(val))
     u := GetLangKey(Trim(String(unit)))
     if (RegExMatch(raw, "^(-?\d+):(-?\d+):(-?\d+)$", &mt))
         return Integer(mt[1]) * 3600 + Integer(mt[2]) * 60 + Integer(mt[3])
-    n := IsNumber(raw) ? Number(raw) : 0
-    switch u {
-        case "Minutes", "分钟":
-            return Round(n * 60)
-        case "Hours", "小时":
-            return Round(n * 3600)
-        case "Days", "天":
-            return Round(n * 86400)
-        default:
-            return Integer(n)
-    }
+    return IsNumber(raw) ? Integer(raw) : 0
 }
 
 ; 编辑器既可填写变量名，也可使用 {变量}；字面数值保持原值。
@@ -373,30 +222,6 @@ TimeParseDateTime(s) {
     return ""
 }
 
-TimeFormatResult(stamp, formatType) {
-    if (stamp == "")
-        return ""
-    switch formatType {
-        case "UnixTimestamp":
-            return TimeStrToStamp(stamp)
-        case "E":
-            w := FormatTime(stamp, "WDay")
-            return w == 1 ? 7 : w - 1
-        case "EEEE":
-            return FormatTime(stamp, "dddd")
-        case "EEE":
-            return FormatTime(stamp, "ddd")
-        case "", "Raw":
-            return FormatTime(stamp, "yyyy-MM-dd HH:mm:ss")
-        default:
-            try {
-                return FormatTime(stamp, formatType)
-            } catch {
-                return FormatTime(stamp, "yyyy-MM-dd HH:mm:ss")
-            }
-    }
-}
-
 TimeToAhkStamp(s) {
     s := Trim(s)
     if (s == "")
@@ -466,7 +291,7 @@ TimeResolveStamp(tableItem, index, raw) {
 }
 
 TimeWindowInRange(tableItem, index, Data, outside := false) {
-    kind := TimeNormWindowType(ObjHasOwnProp(Data, "Param5") ? Data.Param5 : "")
+    kind := TimeNormWindowType(Data.Param5)
     if (kind == "时间戳") {
         start := TimeRangeEndpointMilliseconds(tableItem, index, Data.Param1)
         end := TimeRangeEndpointMilliseconds(tableItem, index, Data.Param2)
@@ -518,133 +343,5 @@ TimeExecWindowCheck(tableItem, index, Data) {
                     return
                 InterruptibleSleep(tableItem, index, 1000)
             }
-    }
-}
-
-; ---------- 模式3：获取时间变量 ----------
-; Param1 = 目标变量名
-; Param2 = 来源时间（可为变量名、时间字符串、空=当前时间）
-
-TimeExecGetTimeVar(tableItem, index, Data) {
-    varName := GetVarName(Trim(Data.Param1))
-    if (varName == "")
-        return
-
-    srcParam := Trim(Data.Param2)
-    if (srcParam != "") {
-        srcVal := GetReplaceVarText(tableItem, index, srcParam)
-        stamp := TimeToAhkStamp(srcVal)
-    } else {
-        stamp := ""
-    }
-    if (stamp == "")
-        stamp := A_Now
-
-    ; 时间变量存储为标准格式字符串 "yyyy-MM-dd HH:mm:ss"
-    outVal := FormatTime(stamp, "yyyy-MM-dd HH:mm:ss")
-    try MySoftData.TimeVarMap[varName] := true
-    MySetGlobalVariable([varName], [outVal], false)
-}
-
-; ---------- 模式4：获取时间字符串 ----------
-; Param1 = 目标变量名
-; Param2 = 来源时间（可为变量名、时间字符串、空=当前时间）
-; Param3 = 格式化模板
-
-TimeExecGetTimeStr(tableItem, index, Data) {
-    varName := GetVarName(Trim(Data.Param1))
-    if (varName == "")
-        return
-
-    formatTemplate := Data.Param3 != "" ? Data.Param3 : "yyyy-MM-dd HH:mm:ss"
-    srcParam := Trim(Data.Param2)
-    epochMs := ""
-    if (srcParam != "") {
-        srcVal := GetReplaceVarText(tableItem, index, srcParam)
-        if (formatTemplate == "UnixTimestamp")
-            epochMs := TimeEpochMilliseconds(srcVal)
-        stamp := TimeToAhkStamp(srcVal)
-    } else {
-        stamp := ""
-    }
-    if (formatTemplate == "UnixTimestamp" && (epochMs != "" || stamp == ""))
-        outStr := epochMs != "" ? epochMs : UnixNow()
-    else
-        outStr := TimeFormatResult(stamp == "" ? A_Now : stamp, formatTemplate)
-    MySetGlobalVariable([varName], [outStr], false)
-}
-
-; ---------- 模式5：时间计算 ----------
-; Param1 = 时间变量1（或时间字符串）
-; Param2 = 时间变量2 / 数值偏移
-; Param3 = 操作 (Diff / Add / Sub)
-; Param4 = 保存变量名
-; Param5 = 单位/格式 (Seconds / Milliseconds / Minutes / Hours / Days / HH:mm:ss)
-
-TimeExecTimeMath(tableItem, index, Data) {
-    src1 := GetReplaceVarText(tableItem, index, Data.Param1)
-    src2 := GetReplaceVarText(tableItem, index, Data.Param2)
-    opType := TimeNormMathOp(Data.Param3 != "" ? Data.Param3 : "差值")
-    targetVar := GetVarName(Trim(Data.Param4))
-    unit := TimeNormMathUnit(Data.Param5 != "" ? Data.Param5 : "秒")
-
-    if (targetVar == "")
-        return
-
-    result := ""
-
-    if (opType == "差值") {
-        ; 计算两个时间之差 (src1 - src2)
-        t1 := TimeToAhkStamp(src1)
-        t2 := TimeToAhkStamp(src2)
-        if (t1 != "" && t2 != "") {
-            diffSec := DateDiff(t1, t2, "Seconds")
-            switch unit {
-                case "毫秒":
-                    result := diffSec * 1000
-                case "分钟":
-                    result := Round(diffSec / 60, 2)
-                case "小时":
-                    result := Round(diffSec / 3600, 2)
-                case "天":
-                    result := Round(diffSec / 86400, 2)
-                case "时:分:秒":
-                    absSec := Abs(diffSec)
-                    h := Format("{:02}", Floor(absSec / 3600))
-                    mi := Format("{:02}", Floor(Mod(absSec, 3600) / 60))
-                    se := Format("{:02}", Mod(absSec, 60))
-                    result := (diffSec < 0 ? "-" : "") h ":" mi ":" se
-                default:
-                    result := diffSec
-            }
-        }
-    } else if (opType == "增加" || opType == "减少") {
-        ; 时间增加或减少偏移
-        baseTime := TimeToAhkStamp(src1)
-        if (baseTime == "")
-            baseTime := A_Now
-
-        offsetVal := IsNumber(src2) ? Integer(src2) : 0
-        if (opType == "减少")
-            offsetVal := -offsetVal
-
-        ahkUnit := "Seconds"
-        switch unit {
-            case "分钟":
-                ahkUnit := "Minutes"
-            case "小时":
-                ahkUnit := "Hours"
-            case "天":
-                ahkUnit := "Days"
-            default:
-                ahkUnit := "Seconds"
-        }
-
-        resStamp := DateAdd(baseTime, offsetVal, ahkUnit)
-        result := FormatTime(resStamp, "yyyy-MM-dd HH:mm:ss")
-    }
-
-    if (result != "") {
-        MySetGlobalVariable([targetVar], [result], false)
     }
 }

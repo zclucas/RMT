@@ -73,13 +73,13 @@ class TextOpsGui {
 
     _AddLabel(parent, text, margin := "0,0,0,0") {
         return parent.Add("TextBlock").Text(text).VerticalAlignment("Center")
-            .Foreground("{DynamicResource TextMain}").FontSize("12").Margin(margin)
+            .Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize()).Margin(margin)
             .TextWrapping("NoWrap")
     }
 
     _StyleBox(el, width := "") {
         el.Height(26).MinHeight(26).MaxHeight(26).VerticalAlignment("Center")
-            .VerticalContentAlignment("Center").FontSize("11").Padding("4,0")
+            .VerticalContentAlignment("Center").FontSize(CmdEditorForm.FontSize()).Padding("4,0")
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
         if (width != "")
@@ -88,7 +88,7 @@ class TextOpsGui {
     }
 
     _StyleCombo(el, width := "") {
-        el.Height(26).MinHeight(26).VerticalAlignment("Center").VerticalContentAlignment("Center").FontSize("11")
+        el.Height(26).MinHeight(26).VerticalAlignment("Center").VerticalContentAlignment("Center").FontSize(CmdEditorForm.FontSize())
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
         if (width != "")
@@ -112,7 +112,7 @@ class TextOpsGui {
         this._title := title
         titleHeight := XAMLHost.CmdTitleBarHeight()
 
-        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(XAMLHost.FontSize())
+        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(CmdEditorForm.FontSize())
         main.Rows(titleHeight, "*")
 
         ; === 标题栏 ===
@@ -127,7 +127,7 @@ class TextOpsGui {
             .SnapsToDevicePixels("True")
         top := topCard.Add("Grid")
         top.Rows("36", "36")
-        top.Cols("90", "*", "10", "90", "*")
+        top.Cols(CmdEditorForm.PairColumns()*)
 
         this._AddLabel(top, GetLang("备注：")).Grid_Row(0).Grid_Column(0)
         this._StyleBox(top.Add("TextBox").Name("RemarkCon").Grid_Row(0).Grid_Column(1).Grid_ColumnSpan(4))
@@ -147,18 +147,18 @@ class TextOpsGui {
             .SnapsToDevicePixels("True")
         param := paramCard.Add("Grid")
         param.Rows("36", "36", "12")
-        param.Cols("90", "*", "10", "90", "*")
+        param.Cols(CmdEditorForm.PairColumns()*)
 
         argsGrid := param.Add("Grid").Name("ArgsGrid").Grid_Row(0).Grid_RowSpan(2).Grid_ColumnSpan(5)
         argsGrid.Rows("36", "36")
-        argsGrid.Cols("90", "*", "10", "90", "*")
+        argsGrid.Cols(CmdEditorForm.PairColumns()*)
         this._AddLabel(argsGrid, GetLang("类型选项:")).Grid_Row(0).Grid_Column(0)
         this._StyleCombo(argsGrid.Add("ComboBox").Name("ArgsTypeCombo").Grid_Row(0).Grid_Column(1))
         this._AddLabel(argsGrid, GetLang("类型参数:")).Grid_Row(0).Grid_Column(3).Name("ArgsNameTip")
         this._StyleCombo(argsGrid.Add("ComboBox").Name("ArgsNameCon").Grid_Row(0).Grid_Column(4).IsEditable("True"))
 
         searchRow := argsGrid.Add("Grid").Name("SearchRow").Grid_Row(1).Grid_ColumnSpan(5).Visibility("Hidden")
-        searchRow.Cols("90", "*", "10", "90", "*")
+        searchRow.Cols(CmdEditorForm.PairColumns()*)
         this._AddLabel(searchRow, GetLang("查找文本:")).Grid_Column(0)
         this._StyleCombo(searchRow.Add("ComboBox").Name("SearchCon").Grid_Column(1).IsEditable("True"))
         this._AddLabel(searchRow, GetLang("替换文本:")).Grid_Column(3)
@@ -186,7 +186,7 @@ class TextOpsGui {
         concatRow := param.Add("Grid").Name("ConcatRow").Grid_Row(0).Grid_RowSpan(3).Grid_ColumnSpan(5).Visibility("Collapsed")
         concatRow.Add("TextBox").Name("ConcatCon").AcceptsReturn("True").TextWrapping("Wrap")
             .HorizontalAlignment("Stretch").VerticalAlignment("Stretch").MinHeight("84")
-            .VerticalContentAlignment("Top").Padding("4,3,26,3").FontSize("11")
+            .VerticalContentAlignment("Top").Padding("4,3,26,3").FontSize(CmdEditorForm.FontSize())
             .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
             .ScrollViewer_VerticalScrollBarVisibility("Auto")
@@ -197,20 +197,20 @@ class TextOpsGui {
             .Background("{DynamicResource ControlBg}").BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1")
 
         concatArrayRow := param.Add("Grid").Name("ConcatArrayRow").Grid_Row(0).Grid_ColumnSpan(5).Visibility("Collapsed")
-        concatArrayRow.Cols("90", "*", "10", "90", "*")
+        concatArrayRow.Cols(CmdEditorForm.PairColumns()*)
         this._AddLabel(concatArrayRow, GetLang("数组名：")).Grid_Column(0)
         this._StyleCombo(concatArrayRow.Add("ComboBox").Name("ConcatArrayName").Grid_Column(1).IsEditable("True"))
         this._AddLabel(concatArrayRow, GetLang("拼接符号：")).Grid_Column(3)
         this._StyleCombo(concatArrayRow.Add("ComboBox").Name("ConcatSeparator").Grid_Column(4).IsEditable("True"))
 
-        res := body.Add("Grid").Grid_Row(2).Margin("12,0,12,0")
-        res.Cols("90", "96", "10", "160")
+        res := body.Add("Grid").Grid_Row(2).Margin("13,0,13,0")
+        res.Cols(CmdEditorForm.LabelWidth(), 96, 16, "*")
         res.Rows("36")
         this._AddLabel(res, GetLang("结果：")).Grid_Column(0)
         st := this._StyleCombo(res.Add("ComboBox").Name("SaveTypeCombo").Grid_Column(1).IsEnabled("False"))
         st.Add("ComboBoxItem").Content(GetLang("变量"))
         st.Add("ComboBoxItem").Content(GetLang("数组"))
-        this._StyleCombo(res.Add("ComboBox").Name("SaveNameCon").Grid_Column(3).IsEditable("True"), "160")
+        this._StyleCombo(res.Add("ComboBox").Name("SaveNameCon").Grid_Column(3).IsEditable("True"))
             .HorizontalAlignment("Left")
 
         btnRow := body.Add("StackPanel").Grid_Row(3).Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center")
@@ -219,7 +219,7 @@ class TextOpsGui {
         ; === 创建 XAMLHost ===
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)
         this.ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", this.OwnerHwnd)
-        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="560" SizeToContent="Height"')
+        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="' CmdEditorForm.Width '" SizeToContent="Height"')
         this.ui.xaml := StrReplace(this.ui.xaml, 'FontFamily="Segoe UI Variable Display, Segoe UI, sans-serif"', 'FontFamily="' MainSoftData.FontType '"')
         this.ui.xaml := StrReplace(this.ui.xaml, '%resources%', '')
 
@@ -590,7 +590,7 @@ class TextOpsGui {
         title := this.ParentTile GetLang("文本构造")
         titleHeight := "30"
 
-        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(XAMLHost.FontSize())
+        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(CmdEditorForm.FontSize())
         main.Rows(titleHeight, "*")
         chrome := XAMLHost.AddTitleBar(main, title, titleHeight)
 
@@ -598,7 +598,7 @@ class TextOpsGui {
         body.Rows("Auto", "6", "32", "48")
 
         body.Add("TextBox").Grid_Row(0).Name("ConcatEditCon").AcceptsReturn("True").TextWrapping("Wrap")
-            .VerticalContentAlignment("Top").Padding("2,3").FontSize("11")
+            .VerticalContentAlignment("Top").Padding("2,3").FontSize(CmdEditorForm.FontSize())
             .Height("95").MinHeight("95")
             .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
@@ -607,7 +607,7 @@ class TextOpsGui {
         row1 := body.Add("Grid").Grid_Row(2).VerticalAlignment("Center")
         row1.Cols("88", "80", "8", "200", "8", "70", "8", "70")
         row1.Add("TextBlock").Grid_Column(0).Text(GetLang("变量数组：")).ToolTip(GetLang("追加名插入名称，追加值在执行时取值。")).VerticalAlignment("Center")
-            .Foreground("{DynamicResource TextMain}").FontSize("12")
+            .Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
         vt := row1.Add("ComboBox").Grid_Column(1).Name("ConcatEditVarTypeCombo").Height(26).MinHeight(26).VerticalAlignment("Center").SelectedIndex("0")
         vt.Add("ComboBoxItem").Content(GetLang("变量"))
         vt.Add("ComboBoxItem").Content(GetLang("数组"))

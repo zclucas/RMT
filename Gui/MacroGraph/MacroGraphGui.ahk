@@ -46,7 +46,7 @@ class MacroGraphGui {
         this._sessionId := 0          ; 每次打开自增；用于忽略旧窗口迟到的异步关闭事件，避免覆盖写空
 
         ; 若梦兔全部指令（移动、移动Pro、增量移动）
-        this.CmdList := GetLangArr(["间隔", "按键", "手柄", "搜索", "搜索Pro", "搜索All", "搜索Combo", "组合搜索", "搜索Multi", "移动", "鼠标移动", "移动Pro", "鼠标移动Pro", "增量移动", "输入", "输出", "提示", "循环", "宏操作",
+        this.CmdList := GetLangArr(["间隔", "按键", "手柄", "搜索", "搜索Pro", "搜索All", "搜索Combo", "移动", "鼠标移动", "移动Pro", "鼠标移动Pro", "增量移动", "输入", "输出", "提示", "循环", "宏操作",
             "变量", "变量提取", "如果", "如果Pro", "运算", "运行", "运行Pro", "文件读写", "Excel", "网络请求", "浏览器", "文本处理", "数组", "RMT指令", "后台鼠标",
             "后台按键", "窗口信息", "窗口操作", "按键检测", "手柄检测", "等待", "注释", "抓图", "控件信息", "控件操作", "AI判断", "YOLO检测", "翻译", "进程管理"])
 
@@ -88,7 +88,6 @@ class MacroGraphGui {
         this.RunProGui := RunProGui()
         this.HttpRequestGui := HttpRequestGui()
         this.BrowserGui := BrowserGui()
-        this.WindowControlGui := WindowControlGui()
         this.ControlInfoGui := ControlInfoGui()
         this.ControlOperationGui := ControlOperationGui()
         this.AiDecisionGui := AiDecisionGui()
@@ -510,10 +509,10 @@ class MacroGraphGui {
             SaveMacroCMDData(data)
             return this._MakeNode(CorrectRemark(serial, "0 0"))
         }
-        if (cmdName == GetLang("搜索All") || cmdName == GetLang("搜索") || cmdName == GetLang("搜索Pro") || cmdName == GetLang("搜索Combo") || cmdName == GetLang("组合搜索") || cmdName == GetLang("搜索Multi")) {
+        if (cmdName == GetLang("搜索All") || cmdName == GetLang("搜索") || cmdName == GetLang("搜索Pro") || cmdName == GetLang("搜索Combo")) {
             ; 搜索/搜索Pro/搜索Combo 走 INI 持久化（参数存 SearchFile.toml，CurCMD 仅为序列码引用，与执行引擎一致）
-            serial := cmdName == GetLang("搜索All") ? AllocateCommandSerial("搜索All") : AllocateCommandSerial((cmdName == GetLang("搜索Combo") || cmdName == GetLang("组合搜索") || cmdName == GetLang("搜索Multi")) ? "搜索Combo" : (cmdName == GetLang("搜索Pro") ? "搜索Pro" : "搜索"))
-            data := cmdName == GetLang("搜索All") ? SearchAllData() : SearchData()
+            serial := cmdName == GetLang("搜索All") ? AllocateCommandSerial("搜索All") : AllocateCommandSerial((cmdName == GetLang("搜索Combo")) ? "搜索Combo" : (cmdName == GetLang("搜索Pro") ? "搜索Pro" : "搜索"))
+            data := cmdName == GetLang("搜索All") ? SearchAllData() : cmdName == GetLang("搜索Combo") ? SearchComboData() : SearchData()
             data.SerialStr := serial
             SaveMacroCMDData(data)
             return this._MakeNode(serial)
@@ -707,7 +706,7 @@ class MacroGraphGui {
             editor := this.DeltaMoveGui
         else if (IsMoveProCmd(d.type))
             editor := this.MMProGui
-        else if (d.type == GetLang("搜索Combo") || d.type == GetLang("搜索Multi"))
+        else if (d.type == GetLang("搜索Combo"))
             editor := this.SearchComboGui
         else if (d.type == GetLang("搜索All"))
             editor := this.SearchAllGui
@@ -758,7 +757,7 @@ class MacroGraphGui {
             return
         }
         ; 搜索/搜索Pro：就地刷新内联字段与分支节点内容，避免整窗重建（闪烁/窗口被销毁）
-        if (dEdit.type == GetLang("搜索All") || dEdit.type == GetLang("搜索") || dEdit.type == GetLang("搜索Pro") || dEdit.type == GetLang("搜索Combo") || dEdit.type == GetLang("搜索Multi")) {
+        if (dEdit.type == GetLang("搜索All") || dEdit.type == GetLang("搜索") || dEdit.type == GetLang("搜索Pro") || dEdit.type == GetLang("搜索Combo")) {
             this._RefreshSearchNode(id, dEdit)
             this._SaveGraphAndNotifyParent()
             return
@@ -856,7 +855,7 @@ class MacroGraphGui {
             this._RefreshBranchBody(id, false)
             return
         }
-        if (d.type == GetLang("搜索Combo") || d.type == GetLang("搜索Multi")) {
+        if (d.type == GetLang("搜索Combo")) {
             this.ui.Update("Title_" id, "Text", this._NodeTitleText(d))
             sat := d.HasOwnProp("satisfyCount") ? d.satisfyCount : -1
             this.ui.Update("SSat_" id, "Text", (sat == -1 || sat == "-1") ? GetLang("全部") : "" sat)

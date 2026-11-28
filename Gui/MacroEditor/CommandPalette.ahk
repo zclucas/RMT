@@ -11,11 +11,6 @@
             if (name == "鼠标移动" || name == "鼠标移动Pro")
                 name := StrReplace(name, "鼠标", "")
             name := GetCommandKey(name)
-            if (name == "窗口控件") {
-                this._favSet["控件信息"] := true
-                this._favSet["控件操作"] := true
-                continue
-            }
             if (name != "")
                 this._favSet[name] := true
         }
@@ -165,7 +160,7 @@
 
         for idx, cat in this.CmdCategory {
             expanded := this._catExpand.Get(cat.name, true)
-            this._AddCmdSectionHead(panel, "CatToggle_" idx, "CatArrow_" idx, "CatCount_" idx, cat.icon, GetLang(cat.name), expanded, cat.cmds.Length, "0,4,0,2")
+            this._AddCmdSectionHead(panel, "CatToggle_" idx, "CatArrow_" idx, "CatCount_" idx, cat.icon, GetLang(cat.name), expanded, cat.cmds.Length, "0,1,0,1")
                 .Background("{DynamicResource Accent}")
             catPanel := panel.Add("StackPanel").Name("CatPanel_" idx).Visibility(expanded ? "Visible" : "Collapsed")
             for cmdName in cat.cmds {

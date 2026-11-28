@@ -61,34 +61,35 @@ class UIMacroPosSettingGui {
         f1Btn.ToolTip(f1Tip)
         XAMLHost.AddTitleCloseBtn(chrome.Btns, "BtnClosePanel", titleHeight)
 
-        body := main.Add("StackPanel").Grid_Row(1).Margin("16,12,16,14")
-        labelW := 96
+        body := main.Add("Grid").Grid_Row(1).Margin("16,12,16,14")
+        body.Cols("*", "16", "*").Rows("Auto", "Auto", "Auto")
+        labelW := 6 * XAMLHost.ScaleFontSize(XAMLHost.FontSize())
 
-        modeRow := body.Add("StackPanel").Orientation("Horizontal").VerticalAlignment("Center")
-        modeRow.Add("TextBlock").Text(GetLang("位置模式") "：").Width(labelW).TextAlignment("Right")
-            .VerticalAlignment("Center").Margin("0,0,8,0")
-        mode := modeRow.Add("ComboBox").Name("PosModeCon").Width(108).Height(26).MinHeight(26)
+        modeRow := this._AddField(body, GetLang("位置模式"), labelW).Grid_Row(0).Grid_Column(0)
+        mode := modeRow.Add("ComboBox").Name("PosModeCon").Grid_Column(1).Height(30).MinHeight(30)
+            .HorizontalAlignment("Stretch")
         mode.Add("ComboBoxItem").Content(GetLang("相对坐标"))
         mode.Add("ComboBoxItem").Content(GetLang("绝对坐标"))
 
-        anchorBox := modeRow.Add("StackPanel").Name("AnchorBox").Orientation("Horizontal").VerticalAlignment("Center")
-        anchorBox.Add("TextBlock").Text(GetLang("锚点") "：").Margin("16,0,8,0").VerticalAlignment("Center")
-        anchor := anchorBox.Add("ComboBox").Name("AnchorCon").Width(88).Height(26).MinHeight(26)
-        for label in UIMacroPosSettingGui.Anchors
-            anchor.Add("ComboBoxItem").Content(GetLang(label))
+        anchorBox := this._AddField(body, GetLang("锚点"), labelW).Name("AnchorBox").Grid_Row(0).Grid_Column(2)
+        anchor := anchorBox.Add("ComboBox").Name("AnchorCon").Grid_Column(1).Height(30).MinHeight(30)
+            .HorizontalAlignment("Stretch")
+        for index, label in UIMacroPosSettingGui.Anchors
+            this._AddAnchorItem(anchor, index, label)
 
-        this._AddCoordRow(body, "OffsetRow", GetLang("偏移值") "：", "OffXCon", "OffYCon", labelW)
-        this._AddCoordRow(body, "AbsRow", GetLang("目标点") "：", "PosXCon", "PosYCon", labelW)
+        this._AddCoordRow(body, "OffsetRow", GetLang("坐标偏移"), "OffXCon", "OffYCon", labelW)
+        this._AddCoordRow(body, "AbsRow", GetLang("目标点"), "PosXCon", "PosYCon", labelW)
 
-        btnRow := body.Add("StackPanel").Orientation("Horizontal").HorizontalAlignment("Center").Margin("0,12,0,0")
-        okBtn := btnRow.Add("Button").Name("BtnOk").Content(GetLang("确定")).Width(76).Height(28).MinHeight(28).Cursor("Hand")
+        btnRow := body.Add("StackPanel").Grid_Row(2).Grid_ColumnSpan(3).Orientation("Horizontal")
+            .HorizontalAlignment("Center").Margin("0,14,0,0")
+        okBtn := btnRow.Add("Button").Name("BtnOk").Content(GetLang("确定")).Width(88).Height(30).MinHeight(30).Cursor("Hand")
             .Background("{DynamicResource ActionBg}").Foreground("{DynamicResource ActionText}")
-            .BorderBrush("{DynamicResource ActionStroke}").BorderThickness("1").FontSize(13).FontWeight("Bold")
+            .BorderBrush("{DynamicResource ActionStroke}").BorderThickness("1").FontSize(XAMLHost.FontSize()).FontWeight("Bold")
         okBtn.InjectResources(okStyle)
 
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)
         this.ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", this.OwnerHwnd)
-        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="420" Height="172"')
+        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="620" Height="190"')
         this.ui.xaml := StrReplace(this.ui.xaml, 'FontFamily="Segoe UI Variable Display, Segoe UI, sans-serif"', 'FontFamily="' MainSoftData.FontType '"')
         this.ui.xaml := StrReplace(this.ui.xaml, '%resources%', '')
 
@@ -109,19 +110,43 @@ class UIMacroPosSettingGui {
             this._BindHotkeys(true)
     }
 
-    _AddCoordRow(body, rowName, rowLabel, xName, yName, labelW) {
-        row := body.Add("StackPanel").Name(rowName).Orientation("Horizontal").Margin("0,10,0,0").VerticalAlignment("Center")
-        row.Add("TextBlock").Text(rowLabel).Width(labelW).TextAlignment("Right")
-            .VerticalAlignment("Center").Margin("0,0,8,0")
-        this._AddNumBox(row, xName)
-        this._AddNumBox(row, yName, "8,0,0,0")
+    _AddField(parent, label, labelW) {
+        field := parent.Add("Grid").VerticalAlignment("Center")
+        field.Cols(String(labelW), "*")
+        field.Add("TextBlock").Text(label "：").Grid_Column(0).TextAlignment("Right")
+            .VerticalAlignment("Center").Margin("0")
+        return field
     }
 
-    _AddNumBox(parent, name, margin := "0") {
-        parent.Add("TextBox").Name(name).Width(64).Height(26).MinHeight(26).Margin(margin)
-            .VerticalContentAlignment("Center").Padding("4,0").TextAlignment("Center")
-            .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
-            .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
+    _AddCoordRow(body, rowName, rowLabel, xName, yName, labelW) {
+        row := body.Add("Grid").Name(rowName).Grid_Row(1).Grid_ColumnSpan(3).Margin("0,10,0,0")
+        row.Cols("*", "16", "*")
+        xField := this._AddField(row, rowLabel "X", labelW).Grid_Column(0)
+        yField := this._AddField(row, rowLabel "Y", labelW).Grid_Column(2)
+        this._AddNumBox(xField, xName)
+        this._AddNumBox(yField, yName)
+    }
+
+    _AddNumBox(parent, name) {
+        parent.Add("TextBox").Name(name).Grid_Column(1).Height(30).MinHeight(30)
+            .Style("{StaticResource RmtSingleLineTextBox}").HorizontalAlignment("Stretch").TextAlignment("Center")
+    }
+
+    _AddAnchorItem(parent, index, label) {
+        item := parent.Add("ComboBoxItem").Content(GetLang(label)).HorizontalContentAlignment("Stretch")
+        template := item.Add("ComboBoxItem.Template").Add("ControlTemplate").TargetType("ComboBoxItem")
+        plate := template.Add("Border").Name("AnchorItemBg").Padding("6,4").CornerRadius(3).Background("Transparent")
+        grid := plate.Add("Grid").Cols("*", "Auto")
+        grid.Add("ContentPresenter").VerticalAlignment("Center")
+        icon := grid.Add("TextBlock").Grid_Column(1).Margin("12,0,0,0").VerticalAlignment("Center")
+            .Text(Chr(index == 5 ? 0xE81D : 0xE74A)).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets")
+            .Foreground("{DynamicResource TextSub}").RenderTransformOrigin("0.5,0.5")
+        angles := [-45, -90, -135, 0, 0, 180, 45, 90, 135]
+        icon.Add("TextBlock.RenderTransform").Add("RotateTransform").Angle(angles[index])
+        triggers := template.Add("ControlTemplate.Triggers")
+        for property in ["IsHighlighted", "IsSelected"]
+            triggers.Add("Trigger").Property(property).Value("True")
+                .Add("Setter").TargetName("AnchorItemBg").Property("Background").Value("{DynamicResource EditHoverBg}")
     }
 
     _LoadFold() {
@@ -200,8 +225,8 @@ class UIMacroPosSettingGui {
     OnPickClick(*) {
         if (!this._picking)
             return
-        CoordMode("Mouse", "Screen")
-        MouseGetPos(&x, &y, &win)
+        UIMacroScreen.Cursor(&x, &y)
+        win := UIMacroScreen.WindowAt(x, y)
         ours := this.Hwnd()
         if (ours && win && (win = ours || DllCall("GetAncestor", "Ptr", win, "UInt", 2, "Ptr") = ours)) {
             this._EndPick()
@@ -248,8 +273,7 @@ class UIMacroPosSettingGui {
     _ContainerAnchor(&ax, &ay, &baseL, &baseT) {
         baseL := 0
         baseT := 0
-        contW := A_ScreenWidth
-        contH := A_ScreenHeight
+        UIMacroScreen.PrimarySize(&contW, &contH)
         fold := this._Fold()
         hwnd := 0
         if (IsObject(fold) && fold.HasProp("FrontInfo") && fold.FrontInfo != ""
@@ -257,12 +281,11 @@ class UIMacroPosSettingGui {
             try hwnd := MyUIMacroGui.ResolveTargetHwnd(fold.FrontInfo)
         }
         if (hwnd) {
-            rect := Buffer(16, 0)
-            if (DllCall("user32\GetWindowRect", "Ptr", hwnd, "Ptr", rect)) {
-                l := NumGet(rect, 0, "Int")
-                t := NumGet(rect, 4, "Int")
-                r := NumGet(rect, 8, "Int")
-                b := NumGet(rect, 12, "Int")
+            rect := ""
+            try rect := UIMacroScreen.Rect(hwnd)
+            if (IsObject(rect)) {
+                l := rect["left"], t := rect["top"]
+                r := rect["right"], b := rect["bottom"]
                 if (r > l && b > t && l > -30000 && t > -30000) {
                     baseL := l
                     baseT := t

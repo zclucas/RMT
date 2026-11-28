@@ -13,7 +13,7 @@ class HttpRequestGui extends CommentGui {
         title := this.ParentTile GetLang("网络请求编辑器")
         this._title := title
         height := XAMLHost.CmdTitleBarHeight()
-        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(XAMLHost.FontSize())
+        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(CmdEditorForm.FontSize())
         main.Rows(height, "Auto")
         XAMLHost.AddCmdTitleBar(main, title, height)
         body := main.Add("StackPanel").Grid_Row(1).Margin("16,10").Grid_IsSharedSizeScope("True")
@@ -39,12 +39,12 @@ class HttpRequestGui extends CommentGui {
         this._Option(options, 0, 0, "状态码变量：", "StatusVar", "保存 HTTP 状态码，未收到响应时为 0。")
         this._Option(options, 0, 2, "响应体变量：", "ResponseVar", "保存服务器返回的响应体，包括 HTTP 错误响应的正文。")
         this._Option(options, 1, 0, "错误体变量：", "ErrorVar", "保存 HTTP 错误状态或请求失败信息，无错误时为空。")
-        CommandTimeoutFields.Add(body, false, "HttpRequestLabel", "HttpRequestLabel")
+        CommandTimeoutFields.Add(body, false, "HttpRequestLabel", "HttpRequestLabel", CmdEditorForm.LabelWidth())
         buttons := body.Add("StackPanel").Orientation("Horizontal").HorizontalAlignment("Center").Margin("0,8,0,0")
         AddCmdOkBtn(buttons)
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", height)
         this.ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", this.OwnerHwnd)
-        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="620" SizeToContent="Height"')
+        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="' CmdEditorForm.Width '" SizeToContent="Height"')
         this.ui.xaml := StrReplace(this.ui.xaml, '%resources%', '')
         this.ui.OnEvent("Window", "Closing", XamlWin.BindCurrent(this, "OnWindowClosing"))
         this.ui.OnEvent("Window", "LoadedHwnd", XamlWin.BindCurrent(this, "OnWindowLoad"))
@@ -130,8 +130,6 @@ class HttpRequestGui extends CommentGui {
         this.Data := GetMacroCMDData(this.SerialStr)
         this._ComboPush("Remark", "Text", parts.Length >= 2 ? parts[2] : "")
         action := TimeoutPolicy.Get(this.Data)
-        if (action == "")
-            action := TimeoutPolicy.LegacyRetryAction(this.Data.Retries)
         CommandTimeoutFields.Init(this.ui, this.Data.TimeoutMs, action,
             InputField(this.Data, "TimeoutStatusVar", TimeoutPolicy.DefaultStatusVar))
         for varName in GetGuiVarArr() {
@@ -160,8 +158,6 @@ class HttpRequestGui extends CommentGui {
         data.Method := this.ui.Query("Method")
         data.BodyType := this.ui.Query("BodyType")
         CommandTimeoutFields.Read(this.ui, data)
-        if (data.TimeoutAction == "")
-            data.Retries := this.Data.Retries
         for name in HttpRequestGui.ResultFields
             data.%name% := GetVarName(Trim(data.%name%))
         return data
@@ -202,8 +198,6 @@ class HttpRequestGui extends CommentGui {
 
     SaveData() {
         this.Data := this._ReadData()
-        if (IsInteger(this.Data.Retries))
-            this.Data.Retries := Integer(this.Data.Retries)
         HttpRequestRegisterResults(this.Data)
         SaveMacroCMDData(this.Data)
     }

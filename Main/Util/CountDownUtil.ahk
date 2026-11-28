@@ -58,15 +58,13 @@ CountDownNum(tableItem, index, raw, def) {
 }
 
 CountDownKind(Data) {
-    if (!IsObject(Data) || !ObjHasOwnProp(Data, "Param2") || Trim(String(Data.Param2)) == "")
-        return "时长"
     return TimeNormWaitType(Data.Param2)
 }
 
 CountDownTotal(tableItem, index, Data) {
     kind := CountDownKind(Data)
     if (kind == "时刻") {
-        raw := (ObjHasOwnProp(Data, "Param1") && Data.Param1 != "") ? Data.Param1 : (Data.Hour ":" Data.Min ":" Data.Sec)
+        raw := Data.Param1
         target := TimeParseDateTime(TimeResolveClock(tableItem, index, raw))
         if (target == "")
             return 0
@@ -74,22 +72,17 @@ CountDownTotal(tableItem, index, Data) {
         return d > 0 ? d : 0
     }
     if (kind == "时间戳") {
-        val := TimeResolveValue(tableItem, index, ObjHasOwnProp(Data, "Param1") ? Data.Param1 : "")
+        val := TimeResolveValue(tableItem, index, Data.Param1)
         target := TimeParseDateTime(val)
         if (target == "")
             return 0
         d := DateDiff(target, A_Now, "Seconds")
         return d > 0 ? d : 0
     }
-    if (ObjHasOwnProp(Data, "Hour") || ObjHasOwnProp(Data, "Min") || ObjHasOwnProp(Data, "Sec")) {
-        h := CountDownNum(tableItem, index, ObjHasOwnProp(Data, "Hour") ? Data.Hour : 0, 0)
-        m := CountDownNum(tableItem, index, ObjHasOwnProp(Data, "Min") ? Data.Min : 0, 0)
-        s := CountDownNum(tableItem, index, ObjHasOwnProp(Data, "Sec") ? Data.Sec : 0, 0)
-        total := h * 3600 + m * 60 + s
-        if (total > 0)
-            return total
-    }
-    return CountDownNum(tableItem, index, Data.Seconds, 0)
+    h := CountDownNum(tableItem, index, Data.Hour, 0)
+    m := CountDownNum(tableItem, index, Data.Min, 0)
+    s := CountDownNum(tableItem, index, Data.Sec, 0)
+    return h * 3600 + m * 60 + s
 }
 
 CountDownWinAlpha(pct) {

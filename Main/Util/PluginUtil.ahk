@@ -116,7 +116,7 @@ ReleaseAllCaches() {
 
 FindScreenText(&ResX, &ResY, X1, Y1, X2, Y2, text, mode, engine := "") {
     result := GetScreenTextObjArr(X1, Y1, X2, Y2, mode, engine)
-    points := SearchAllSort(SearchAllTextPoints(result, text, X1, Y1), "左右优先")
+    points := SearchAllSort(SearchAllTextPoints(result, text, X1, Y1), "上下左右")
     if (!points.Length)
         return false
     ResX := points[1][1]
@@ -177,7 +177,7 @@ GetBitmapTextObjArr(pBitmap, engine := "") {
 
 FindWinText(&ResX, &ResY, hwnd, X1, Y1, X2, Y2, text, mode, engine := "") {
     result := GetWinTextObjArr(hwnd, X1, Y1, X2, Y2, mode, engine)
-    points := SearchAllSort(SearchAllTextPoints(result, text, X1, Y1), "左右优先")
+    points := SearchAllSort(SearchAllTextPoints(result, text, X1, Y1), "上下左右")
     if (!points.Length)
         return false
     ResX := points[1][1]
@@ -197,13 +197,35 @@ GetWinTextObjArr(hwnd, X1, Y1, X2, Y2, mode, engine := "") {
     searchH := Y2 - Y1
     matPtr := DllCall("RMT_OpenCV.dll\CaptureWinMat", "Int", hwnd, "Int", searchX, "Int", searchY,
         "Int", searchW, "Int", searchH, "Cdecl Ptr")
-    if !matPtr
-        throw Error("OCR 窗口截图失败。")
+    if matPtr {
+        try {
+            ocr := GetChineseOcr(engine)
+            result := ocr.ocr_from_mat(matPtr, , true)
+            if (result is Array && result.Length)
+                return result
+        } finally {
+            DllCall("RMT_OpenCV.dll\ReleaseMat", "ptr", matPtr, "cdecl")
+        }
+    }
+    ; DWM 对从未进入屏幕的窗口可能返回空帧，直接请求目标绘制客户区。
+    ; 保持窗口位置与前台焦点，并沿用原搜索区域的相对坐标。
+    WinGetClientPos(,, &clientW, &clientH, hwnd)
+    if (X1 < 0 || Y1 < 0 || searchW <= 0 || searchH <= 0
+        || X2 > clientW || Y2 > clientH)
+        throw Error("OCR 搜索区域超出窗口客户区。")
+    bitmap := Gdip_BitmapFromHWND(hwnd, true)
+    if !bitmap
+        throw Error("OCR 窗口截图失败，请检查窗口状态或切换控件读取。")
+    crop := 0
     try {
-        ocr := GetChineseOcr(engine)
-        return ocr.ocr_from_mat(matPtr, , true)
+        crop := Gdip_CloneBitmapArea(bitmap, X1, Y1, searchW, searchH)
+        if !crop
+            throw Error("OCR 无法裁剪窗口截图。")
+        return GetBitmapTextObjArr(crop, engine)
     } finally {
-        DllCall("RMT_OpenCV.dll\ReleaseMat", "ptr", matPtr, "cdecl")
+        if crop
+            Gdip_DisposeImage(crop)
+        Gdip_DisposeImage(bitmap)
     }
 }
 

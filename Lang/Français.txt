@@ -688,6 +688,7 @@ as= Aucune
 暂停=Pause
 暂停当前宏=Pause Macro
 暂停所有宏= Tous
+暂停其他宏=Mettre les autres macros en pause
 更新= Mise à jour
 替换文本:= Remplacer :
 最后一个模块，不可删除！！！=Le dernier module ne peut pas supprimer!

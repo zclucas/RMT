@@ -42,8 +42,11 @@ TryGetUserDefinedVarValue(&Value, tableItem, index, varName) {
 
 ; 组合搜索用目标数组，单目标搜索使用指令自身的目标字段。
 GetSearchTargetArr(Data) {
-    if (ObjHasOwnProp(Data, "SearchTargetArr") && Data.SearchTargetArr is Array && Data.SearchTargetArr.Length > 0)
+    if (Type(Data) == "SearchComboData" || GetCommandKey(RegExReplace(Data.SerialStr, "\d+$")) == "搜索Combo") {
+        if (!(Data.SearchTargetArr is Array) || !Data.SearchTargetArr.Length)
+            throw ValueError(GetLang("组合搜索目标不能为空"))
         return Data.SearchTargetArr
+    }
     t := {
         SearchType:   ObjHasOwnProp(Data, "SearchType") ? CmdEnumSearch(Data.SearchType) : "屏幕图片",
         WinInfo:      ObjHasOwnProp(Data, "WinInfo") ? Data.WinInfo : "",

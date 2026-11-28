@@ -79,7 +79,7 @@ class DeltaMoveGui {
         this._title := title
         titleHeight := XAMLHost.CmdTitleBarHeight()
 
-        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(XAMLHost.FontSize())
+        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(CmdEditorForm.FontSize())
         main.Rows(titleHeight, "*")
 
         ; === 标题栏 ===
@@ -87,43 +87,43 @@ class DeltaMoveGui {
 
         ; === 内容 ===
         ; 备注独占一行；坐标偏移X/Y 同行；偏移次数/每次间隔 同行
-        body := main.Add("Grid").Grid_Row(1).Margin("15,14,15,14")
+        body := main.Add("Grid").Grid_Row(1).Margin("16,14,16,14")
         body.Rows("36", "36", "36", "28", "40")
-        body.Cols("88", "110", "88", "110")
+        body.Cols(CmdEditorForm.LabelWidth(), "*", CmdEditorForm.LabelWidth() + 16, "*")
 
         ; 行0：备注
-        body.Add("TextBlock").Grid_Row(0).Grid_Column(0).Text(GetLang("备注：")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
+        body.Add("TextBlock").Grid_Row(0).Grid_Column(0).Text(GetLang("备注：")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
         body.Add("TextBox").Grid_Row(0).Grid_Column(1).Grid_ColumnSpan(3).Name("RemarkCon").Height(26).MinHeight(26).HorizontalAlignment("Stretch")
-            .VerticalContentAlignment("Center").FontSize("11").Padding("4,0")
+            .VerticalContentAlignment("Center").FontSize(CmdEditorForm.FontSize()).Padding("4,0")
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
 
         ; 行1：坐标偏移X / 坐标偏移Y（可编辑下拉，支持变量）
-        body.Add("TextBlock").Grid_Row(1).Grid_Column(0).Text(GetLang("偏移值X:")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
+        body.Add("TextBlock").Grid_Row(1).Grid_Column(0).Text(GetLang("偏移值X:")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
         body.Add("ComboBox").Grid_Row(1).Grid_Column(1).Name("DeltaXCon").Height(26).MinHeight(26).IsEditable("True")
-            .VerticalContentAlignment("Center").FontSize("11")
+            .VerticalContentAlignment("Center").FontSize(CmdEditorForm.FontSize())
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
-        body.Add("TextBlock").Grid_Row(1).Grid_Column(2).Text(GetLang("偏移值Y:")).VerticalAlignment("Center").Margin("10,0,0,0").Foreground("{DynamicResource TextMain}").FontSize("12")
-        body.Add("ComboBox").Grid_Row(1).Grid_Column(3).Name("DeltaYCon").Height(26).MinHeight(26).Margin("10,0,0,0").IsEditable("True")
-            .VerticalContentAlignment("Center").FontSize("11")
+        body.Add("TextBlock").Grid_Row(1).Grid_Column(2).Text(GetLang("偏移值Y:")).VerticalAlignment("Center").Margin("16,0,0,0").Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
+        body.Add("ComboBox").Grid_Row(1).Grid_Column(3).Name("DeltaYCon").Height(26).MinHeight(26).Margin("0").IsEditable("True")
+            .VerticalContentAlignment("Center").FontSize(CmdEditorForm.FontSize())
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
 
         ; 行2：偏移次数 / 每次间隔（可编辑下拉，支持变量）
-        body.Add("TextBlock").Grid_Row(2).Grid_Column(0).Text(GetLang("偏移次数：")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
+        body.Add("TextBlock").Grid_Row(2).Grid_Column(0).Text(GetLang("偏移次数：")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
         body.Add("ComboBox").Grid_Row(2).Grid_Column(1).Name("CountCon").Height(26).MinHeight(26).IsEditable("True")
-            .VerticalContentAlignment("Center").FontSize("11")
+            .VerticalContentAlignment("Center").FontSize(CmdEditorForm.FontSize())
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
-        body.Add("TextBlock").Grid_Row(2).Grid_Column(2).Text(GetLang("每次间隔：")).ToolTip(GetLang("两次操作之间等待的毫秒数。")).VerticalAlignment("Center").Margin("10,0,0,0").Foreground("{DynamicResource TextMain}").FontSize("12")
-        body.Add("ComboBox").Grid_Row(2).Grid_Column(3).Name("IntervalCon").Height(26).MinHeight(26).Margin("10,0,0,0").IsEditable("True")
-            .VerticalContentAlignment("Center").FontSize("11")
+        body.Add("TextBlock").Grid_Row(2).Grid_Column(2).Text(GetLang("每次间隔：")).ToolTip(GetLang("两次操作之间等待的毫秒数。")).VerticalAlignment("Center").Margin("16,0,0,0").Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
+        body.Add("ComboBox").Grid_Row(2).Grid_Column(3).Name("IntervalCon").Height(26).MinHeight(26).Margin("0").IsEditable("True")
+            .VerticalContentAlignment("Center").FontSize(CmdEditorForm.FontSize())
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
 
         ; 行3：提示
-        body.Add("TextBlock").Grid_Row(3).Grid_ColumnSpan(4).Text(GetLang("可调整部分游戏视角")).VerticalAlignment("Center").Foreground("{DynamicResource TextSub}").FontSize("11")
+        body.Add("TextBlock").Grid_Row(3).Grid_ColumnSpan(4).Text(GetLang("可调整部分游戏视角")).VerticalAlignment("Center").Foreground("{DynamicResource TextSub}").FontSize(CmdEditorForm.FontSize())
 
         ; 行4：确定按钮
         btnRow := body.Add("StackPanel").Grid_Row(4).Grid_ColumnSpan(4).Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center")
@@ -132,7 +132,7 @@ class DeltaMoveGui {
         ; === 创建 XAMLHost ===
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)
         this.ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", this.OwnerHwnd)
-        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="460" SizeToContent="Height"')
+        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="' CmdEditorForm.Width '" SizeToContent="Height"')
         this.ui.xaml := StrReplace(this.ui.xaml, 'FontFamily="Segoe UI Variable Display, Segoe UI, sans-serif"', 'FontFamily="' MainSoftData.FontType '"')
         this.ui.xaml := StrReplace(this.ui.xaml, '%resources%', '')
 
@@ -195,8 +195,8 @@ class DeltaMoveGui {
             this.Data := GetMacroCMDData(cmdArr[1])
             dX := this.Data.DeltaX
             dY := this.Data.DeltaY
-            cnt := ObjHasOwnProp(this.Data, "Count") ? this.Data.Count : 1
-            iv := ObjHasOwnProp(this.Data, "Interval") ? this.Data.Interval : 0
+            cnt := this.Data.Count
+            iv := this.Data.Interval
         } else {
             dX := cmdArr.Length >= 2 ? cmdArr[2] : 0
             dY := cmdArr.Length >= 3 ? cmdArr[3] : 0

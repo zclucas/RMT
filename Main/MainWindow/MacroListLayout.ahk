@@ -243,7 +243,7 @@
             . '</Border>'
             . '<ControlTemplate.Triggers>'
             . '<Trigger Property="IsMouseOver" Value="True">'
-            . '<Setter TargetName="Bd" Property="Background" Value="{DynamicResource ControlBgHover}"/>'
+            . '<Setter TargetName="Bd" Property="Background" Value="{DynamicResource EditHoverBg}"/>'
             . '<Setter Property="Foreground" Value="{DynamicResource TextMain}"/>'
             . '</Trigger>'
             . '</ControlTemplate.Triggers>'

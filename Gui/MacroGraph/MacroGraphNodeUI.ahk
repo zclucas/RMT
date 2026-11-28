@@ -138,7 +138,7 @@ class MacroGraphNodeUIMixin {
         else if (d.type == GetLang("搜索Pro")) {
             this._FillSearchProBody(id, d, body)
         }
-        else if (d.type == GetLang("搜索Combo") || d.type == GetLang("搜索Multi")) {
+        else if (d.type == GetLang("搜索Combo")) {
             this._FillSearchComboBody(id, d, body)
         }
         else if (d.type == GetLang("搜索")) {
@@ -540,7 +540,7 @@ class MacroGraphNodeUIMixin {
 
     ; 搜索/如果：是否为「真假双分支」父类型（不含如果Pro）
     _IsBranchPairParentType(type) {
-        return type == GetLang("如果") || type == GetLang("搜索All") || type == GetLang("搜索") || type == GetLang("搜索Pro") || type == GetLang("搜索Combo") || type == GetLang("搜索Multi")
+        return type == GetLang("如果") || type == GetLang("搜索All") || type == GetLang("搜索") || type == GetLang("搜索Pro") || type == GetLang("搜索Combo")
     }
 
     ; 真/假分支默认相对 dy（grid=20）。
@@ -1439,7 +1439,7 @@ class MacroGraphNodeUIMixin {
     }
 
     _IsSearchTypeTitle(title) {
-        return title == GetLang("搜索All") || title == GetLang("搜索") || title == GetLang("搜索Pro") || title == GetLang("搜索Combo") || title == GetLang("搜索Multi")
+        return title == GetLang("搜索All") || title == GetLang("搜索") || title == GetLang("搜索Pro") || title == GetLang("搜索Combo")
     }
 
     ; 由指令类型名查找对应图标 URI（匹配 CmdList 顺序）；开始节点等无对应项返回空
@@ -1479,11 +1479,15 @@ class MacroGraphNodeUIMixin {
     }
 
     ; 一行 "标签 + 下拉框"，label 与下拉框同行显示，visible 控制初始显隐
-    _AddComboRow(body, rowName, labelText, comboName, items, selIndex, visible, enabled := true, labelW := "80", comboW := "96") {
+    _AddComboRow(body, rowName, labelText, comboName, items, selIndex, visible, enabled := true, labelW := "80", comboW := "96", labelName := "", labelTip := "") {
         row := body.Add("StackPanel").Name(rowName).Orientation("Horizontal").Margin("0,5,0,0")
         if (!visible)
             row.Visibility("Collapsed")
-        row.Add("TextBlock").Text(labelText).Foreground("{DynamicResource TextMain}").FontSize(this._MGFontSize(12)).Width(labelW).VerticalAlignment("Center")
+        label := row.Add("TextBlock").Text(labelText).Foreground("{DynamicResource TextMain}").FontSize(this._MGFontSize(12)).Width(labelW).VerticalAlignment("Center")
+        if (labelName != "")
+            label.Name(labelName)
+        if (labelTip != "")
+            label.ToolTip(labelTip)
         cmb := row.Add("ComboBox").Name(comboName).Width(comboW).Height("22").MinHeight("0").FontSize(this._MGFontSize(12)).Padding(this._MGComboPadding()).MaxDropDownHeight("200")
             .Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
         if (!enabled)

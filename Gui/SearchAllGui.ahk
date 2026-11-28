@@ -9,9 +9,9 @@ class SearchAllGui extends SearchProGui {
 
     BuildAllSortField(coord) {
         coord.Add("TextBlock").Grid_Row(2).Text(GetLang("搜索顺序：")).ToolTip(GetLang("决定匹配坐标在结果数组中的排列顺序。")).VerticalAlignment("Center")
-            .Foreground("{DynamicResource TextMain}").FontSize("12")
+            .Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
         sort := coord.Add("ComboBox").Grid_Row(2).Grid_Column(2).Grid_ColumnSpan(3).Name("AllSortCon").Height(28).MinHeight(28)
-            .VerticalAlignment("Center").VerticalContentAlignment("Center").FontSize("11")
+            .VerticalAlignment("Center").VerticalContentAlignment("Center").FontSize(CmdEditorForm.FontSize())
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1")
         for label in GetLangArr(this.SortOrders)
@@ -22,7 +22,7 @@ class SearchAllGui extends SearchProGui {
         coord := saveRow.Add("Grid").Grid_Column(2)
         coord.Cols(6 * XAMLHost.ScaleFontSize(XAMLHost.FontSize()), "*")
         coord.Add("TextBlock").Name("AllSaveLabel").Text(GetLang("坐标数据：")).VerticalAlignment("Center")
-            .Foreground("{DynamicResource TextMain}").FontSize("12")
+            .Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
         this._AddEditCombo(coord, "AllSaveNameCon", 0, 1, "{Binding ActualWidth, ElementName=SearchCountCon}")
     }
 
@@ -32,7 +32,7 @@ class SearchAllGui extends SearchProGui {
         for name in MySoftData.GlobalArrMap
             names.Push(name)
         this._SetCombo("AllSaveNameCon", names, this.Data.AllSaveName)
-        savedOrder := this.Data.AllSort == "左右优先" ? "上下左右" : this.Data.AllSort
+        savedOrder := this.Data.AllSort
         sortIndex := -1
         for index, order in this.SortOrders {
             if (order == savedOrder) {

@@ -666,6 +666,7 @@ as=None
 暂停=Pause
 暂停当前宏=Pause Macro
 暂停所有宏=Pause All
+暂停其他宏=Pause Other Macros
 更新=Update
 替换文本:=Replace:
 最后一个模块，不可删除！！！=The last module cannot be deleted!

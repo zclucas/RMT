@@ -127,7 +127,7 @@ GetRmtExcelEditor() {
     return editor
 }
 
-ExcelDllRun(path, sheet, mode, write, row, col, endRow, endCol, values, &result, item) {
+ExcelDllRun(path, sheet, mode, write, row, col, endRow, endCol, values, &result, item, throwOnFailure := false) {
     try {
         if (item && item.Killed)
             return false
@@ -172,6 +172,8 @@ ExcelDllRun(path, sheet, mode, write, row, col, endRow, endCol, values, &result,
         if (IsSet(job) && IsObject(job))
             try job.Cancel()
     }
+    if (throwOnFailure)
+        throw Error(failure)
     RmtDialog.Info(GetLang(write ? "写入失败：" : "读取失败：") failure)
     return false
 }

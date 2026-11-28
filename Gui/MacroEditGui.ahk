@@ -146,8 +146,8 @@ class MacroEditGui {
             {name: "流程", icon: Chr(0xE8FD), cmds: ["间隔", "等待", "循环", "如果", "如果Pro"]},
             {name: "进程/窗口", icon: Chr(0xE737), cmds: ["进程管理", "窗口信息", "窗口操作", "控件信息", "控件操作"]},
             {name: "调控", icon: Chr(0xE713), cmds: ["宏操作", "RMT指令", "运行", "运行Pro"]},
-            {name: "扩展", icon: Chr(0xEA86), cmds: ["Excel", "浏览器", "文件读写", "AI判断", "网络请求", "翻译"]},
-            {name: "其他", icon: Chr(0xE712), cmds: ["抓图", "注释"]}
+            {name: "扩展", icon: Chr(0xEA86), cmds: ["抓图", "Excel", "浏览器", "文件读写", "AI判断", "网络请求", "翻译"]},
+            {name: "其他", icon: Chr(0xE712), cmds: ["注释"]}
         ]
         this._favSet := Map()            ; 收藏指令名（中文）→ true
         this._catExpand := Map()         ; 分类名（中文）→ true（展开）

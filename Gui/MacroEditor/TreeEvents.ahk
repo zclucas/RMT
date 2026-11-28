@@ -219,9 +219,15 @@
     ; 从事件 state 读坐标。优先用绑定控件本地 DIP（控件名键），DragCoords 是窗口坐标，侧栏树偏移后不能拿来做 HitTest。
     _EventCoord(state, ctrlName) {
         coord := ""
-        if (IsObject(state) && ctrlName != "" && state.Has(ctrlName))
+        if (IsObject(state) && ctrlName != "" && state.Has(ctrlName)) {
             coord := state[ctrlName]
-        else if (IsObject(state) && state.Has("DragCoords"))
+            if (ctrlName == this.treeName && state.Has("DragCoords")) {
+                lp := StrSplit(coord, ",")
+                wp := StrSplit(state["DragCoords"], ",")
+                if (lp.Length == 2 && wp.Length == 2 && IsNumber(Trim(lp[1])) && IsNumber(Trim(lp[2])) && IsNumber(Trim(wp[1])) && IsNumber(Trim(wp[2])))
+                    this._treeOffset := {x: Number(Trim(wp[1])) - Number(Trim(lp[1])), y: Number(Trim(wp[2])) - Number(Trim(lp[2]))}
+            }
+        } else if (IsObject(state) && state.Has("DragCoords"))
             coord := state["DragCoords"]
         if (coord == "")
             return ""
@@ -298,6 +304,8 @@
         if (this.EditModeCon.Value != 1 || !IsObject(this.ui))
             return
         this._extDragGui := guiInstance
+        this._isDragging := true
+        this._StartDragHoverTimer()
         ; value = 目标树名|幽灵文本|图标路径|插入线名|幽灵名|幽灵文本名|幽灵图标名
         try this.ui.Update("Window", "TreeDragExternal"
             , this.treeName "|" displayName "|" iconPath "|" this.insertLineName "|" this.dragGhostName "|" this.dragGhostTxtName "|" this.dragGhostImgName)
@@ -306,12 +314,17 @@
     ; ==== 拖拽结果（命中/插入线/幽灵都在引擎内跑完，这里只落模型）====
 
     _OnTreeDragStartNative(state, ctrl, event) {
+        this._isDragging := true
+        this._StartDragHoverTimer()
         ; 拖拽期间禁整棵重建：树一重建，源行和落点就都对不上了
         if (IsObject(this.MacroTreeViewCon))
             this.MacroTreeViewCon._suppressRender := true
     }
 
     _OnTreeDragCancelNative(state, ctrl, event) {
+        this._isDragging := false
+        this._StopDragHoverTimer()
+        this._ClearGhostBranches()
         if (IsObject(this.MacroTreeViewCon))
             this.MacroTreeViewCon._suppressRender := false
     }
@@ -319,22 +332,195 @@
     ; 复位拖拽态：窗口关闭/重建等路径会调。引擎侧由它自己的 Up/Cancel 收尾，
     ; 这里只把可能遗留的插入线和幽灵收掉，免得下次开窗看到残影。
     _DragEndReset() {
+        this._isDragging := false
+        this._StopDragHoverTimer()
+        this._ClearGhostBranches()
         if (IsObject(this.ui)) {
             try this.ui.Update(this.insertLineName, "Visibility", "Collapsed")
             try this.ui.Update(this.dragGhostName, "IsOpen", "False")
         }
     }
 
+    _StartDragHoverTimer() {
+        if (!this.HasOwnProp("_dragHoverTimer") || !IsObject(this._dragHoverTimer))
+            this._dragHoverTimer := ObjBindMethod(this, "_OnDragHoverTick")
+        SetTimer(this._dragHoverTimer, 60)
+    }
+
+    _StopDragHoverTimer() {
+        if (this.HasOwnProp("_dragHoverTimer") && IsObject(this._dragHoverTimer))
+            SetTimer(this._dragHoverTimer, 0)
+    }
+
+    _OnDragHoverTick() {
+        if (!this.HasOwnProp("_isDragging") || !this._isDragging || !IsObject(this.MacroTreeViewCon) || !IsObject(this.ui)) {
+            this._StopDragHoverTimer()
+            return
+        }
+        if (!GetKeyState("LButton", "P")) {
+            this._StopDragHoverTimer()
+            return
+        }
+        pt := Buffer(8, 0)
+        DllCall("GetCursorPos", "Ptr", pt)
+        hwnd := this.Hwnd()
+        if (!hwnd)
+            return
+        DllCall("ScreenToClient", "Ptr", hwnd, "Ptr", pt)
+        dpi := DllCall("GetDpiForWindow", "Ptr", hwnd, "UInt")
+        scale := dpi > 0 ? dpi / 96.0 : 1.0
+        winX := NumGet(pt, 0, "Int") / scale
+        winY := NumGet(pt, 4, "Int") / scale
+        offX := this.HasOwnProp("_treeOffset") ? this._treeOffset.x : 0
+        offY := this.HasOwnProp("_treeOffset") ? this._treeOffset.y : 0
+        coord := Format("{:.1f};{:.1f}", winX - offX, winY - offY)
+        tagSlot := this._HitTest(this.treeName, coord)
+        hit := this._ResolveHit(tagSlot)
+        hitId := hit.id
+        activeCondId := this.HasOwnProp("_activeGhostCondId") ? this._activeGhostCondId : ""
+        resolvedCondId := hitId != "" ? this._FindEnclosingConditionNode(hitId) : ""
+
+        if (activeCondId != "") {
+            if (resolvedCondId == activeCondId || (hitId != "" && this._IsGhostBranchId(hitId))) {
+                this._ghostMissTicks := 0
+                this._hoverCandCondId := ""
+                return
+            }
+            this._ghostMissTicks := (this.HasOwnProp("_ghostMissTicks") ? this._ghostMissTicks : 0) + 1
+            if (this._ghostMissTicks < 3)
+                return
+            this._ClearGhostBranches()
+        }
+
+        if (resolvedCondId == "") {
+            this._hoverCandCondId := ""
+            return
+        }
+
+        ; 候选条件节点：150ms 悬停防抖，避免快速划过时频繁增删闪烁
+        if (!this.HasOwnProp("_hoverCandCondId") || this._hoverCandCondId != resolvedCondId) {
+            this._hoverCandCondId := resolvedCondId
+            this._hoverCandAt := A_TickCount
+            return
+        }
+        if (A_TickCount - this._hoverCandAt < 150)
+            return
+
+        this._ShowGhostBranchesForCondition(resolvedCondId)
+    }
+
+    _FindEnclosingConditionNode(itemId) {
+        cur := itemId
+        while (cur) {
+            cmdStr := ""
+            try cmdStr := this.MacroTreeViewCon.GetText(cur)
+            if (cmdStr != "") {
+                cmdText := StrSplit(cmdStr, "_")[1]
+                if (SubStr(cmdText, 1, 2) != "🚫") {
+                    Cmd := GetCommandKey(GetCmdOnlyText(cmdText))
+                    if (Cmd == "如果" || Cmd == "如果Pro" || Cmd == "搜索" || Cmd == "搜索Pro" || Cmd == "搜索All" || Cmd == "搜索Combo")
+                        return cur
+                }
+            }
+            cur := this.MacroTreeViewCon.GetParent(cur)
+        }
+        return ""
+    }
+
+    _IsGhostBranchId(itemId) {
+        if (itemId == "" || !this.HasOwnProp("_ghostBranchIds") || !IsObject(this._ghostBranchIds))
+            return false
+        for _, id in this._ghostBranchIds {
+            if (id == itemId)
+                return true
+        }
+        return false
+    }
+
+    _PromoteGhostBranch(itemId) {
+        if (itemId == "" || !this.HasOwnProp("_ghostBranchIds") || !IsObject(this._ghostBranchIds))
+            return
+        for idx, id in this._ghostBranchIds {
+            if (id == itemId) {
+                this._ghostBranchIds.RemoveAt(idx)
+                return
+            }
+        }
+    }
+
+    _ClearGhostBranches() {
+        if (this.HasOwnProp("_ghostBranchIds") && IsObject(this._ghostBranchIds)) {
+            for _, id in this._ghostBranchIds {
+                try this.MacroTreeViewCon.Delete(id)
+            }
+        }
+        this._ghostBranchIds := []
+        this._activeGhostCondId := ""
+        this._ghostMissTicks := 0
+        this._hoverCandCondId := ""
+        this._hoverCandAt := 0
+    }
+
+    _ShowGhostBranchesForCondition(condId) {
+        cmdStr := ""
+        try cmdStr := this.MacroTreeViewCon.GetText(condId)
+        if (cmdStr == "")
+            return
+        cmdText := StrSplit(cmdStr, "_")[1]
+        if (SubStr(cmdText, 1, 2) == "🚫")
+            return
+        Cmd := GetCommandKey(GetCmdOnlyText(cmdText))
+        IsSearch := Cmd == "搜索" || Cmd == "搜索Pro"
+            || Cmd == "搜索All" || Cmd == "搜索Combo"
+        IsIf := Cmd == "如果"
+        IsIfPro := Cmd == "如果Pro"
+        if (!IsSearch && !IsIf && !IsIfPro)
+            return
+
+        Data := GetMacroCMDData(GetCmdStr(cmdText))
+        if (!IsObject(Data))
+            return
+
+        added := []
+        if (IsIf || IsSearch) {
+            if (Data.TrueMacro == "") {
+                TrueRoot := this.MacroTreeViewCon.Add(
+                    GetLang("真"), condId, "First " this.GetCmdIconStr(GetLang("真")))
+                if (TrueRoot)
+                    added.Push(TrueRoot)
+            }
+            if (Data.FalseMacro == "") {
+                FalseRoot := this.MacroTreeViewCon.Add(
+                    GetLang("假"), condId, this.GetCmdIconStr(GetLang("假")))
+                if (FalseRoot)
+                    added.Push(FalseRoot)
+            }
+        } else if (IsIfPro) {
+            if (Data.DefaultMacro == "") {
+                CondiRoot := this.MacroTreeViewCon.Add(
+                    GetLang("条件：以上都不是"), condId, this.GetCmdIconStr(GetLang("条件")))
+                if (CondiRoot)
+                    added.Push(CondiRoot)
+            }
+        }
+
+        if (added.Length > 0) {
+            this._activeGhostCondId := condId
+            this._ghostBranchIds := added
+            try this.MacroTreeViewCon.Modify(condId, "Expand")
+        }
+    }
+
     ; 树内拖拽：payload = "source|target|slot"
     _OnTreeDropCommitted(state, ctrl, event) {
         raw := IsObject(state) && state.Has("TreeDrop") ? state["TreeDrop"] : ""
+        parts := raw == "" ? [] : StrSplit(raw, "|")
+        target := parts.Length >= 2 ? parts[2] : ""
+        this._PromoteGhostBranch(target)
         this._OnTreeDragCancelNative(state, ctrl, event)
-        if (raw == "")
-            return
-        parts := StrSplit(raw, "|")
         if (parts.Length < 2)
             return
-        this._MoveTreeNodeTo(parts[1], parts[2], parts.Length >= 3 ? parts[3] : "")
+        this._MoveTreeNodeTo(parts[1], target, parts.Length >= 3 ? parts[3] : "")
     }
 
     ; 左侧指令拖进树：payload = "|target|slot"（source 为空），落点决定插入方式
@@ -342,14 +528,15 @@
         raw := IsObject(state) && state.Has("TreeDropExternal") ? state["TreeDropExternal"] : ""
         ; 拖拽已落定，吞掉紧随其后的那次 Click，否则会再开一次「新增指令」
         this._dragCancelledAt := A_TickCount
+        parts := raw == "" ? [] : StrSplit(raw, "|")
+        target := parts.Length >= 2 ? parts[2] : ""
+        slot := parts.Length >= 3 ? parts[3] : ""
+        this._PromoteGhostBranch(target)
         this._OnTreeDragCancelNative(state, ctrl, event)
         gui := this._extDragGui
         this._extDragGui := ""
         if (!IsObject(gui))
             return
-        parts := raw == "" ? [] : StrSplit(raw, "|")
-        target := parts.Length >= 2 ? parts[2] : ""
-        slot := parts.Length >= 3 ? parts[3] : ""
         this.CurItemID := target
         if (target == "") {
             this.OnOpenSubGui(gui, 1)

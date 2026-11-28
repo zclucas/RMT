@@ -435,8 +435,6 @@ CmdEditorTitleIcon(title) {
             ["搜索Pro", "Images\Soft\SearchPro.png"],
             ["搜索All", "Images\Soft\SearchAll.png"],
             ["搜索Combo", "Images\Soft\SearchCombo.png"],
-            ["组合搜索", "Images\Soft\SearchCombo.png"],
-            ["搜索Multi", "Images\Soft\SearchCombo.png"],
             ["如果Pro", "Images\Soft\IfPro.png"],
             ["变量提取", "Images\Soft\Extract.png"],
             ["提取文本", "Images\Soft\Extract.png"],
@@ -493,6 +491,11 @@ CmdEditorTitleIcon(title) {
 
 ; 指令编辑器确定按钮：与间隔编辑器同款
 class CmdEditorForm {
+    ; 常规指令表单以控件信息编辑器为基准；专用布局不引用此宽度。
+    static Width := 620
+    static FontSize() => XAMLHost.FontSize()
+    static LabelWidth() => 6 * XAMLHost.ScaleFontSize(this.FontSize())
+    static PairColumns() => [this.LabelWidth(), "*", 16, this.LabelWidth(), "*"]
     static TimeValueTip(kind) {
         switch kind {
             case "时刻": return GetLang("按时、分、秒填写一天中的时刻。")
@@ -504,14 +507,18 @@ class CmdEditorForm {
         }
     }
 
-    static Row(parent, label, name := "", group := "CommandLabel", alignment := "Center", labelName := "", labelTip := "") {
+    static Row(parent, label, name := "", group := "CommandLabel", alignment := "Center", labelName := "", labelTip := "", fixedLabel := true) {
         row := parent.Add("Grid").Margin("0,4")
         if (name != "")
             row.Name(name)
         columns := row.Add("Grid.ColumnDefinitions")
-        columns.Add("ColumnDefinition").Width("Auto").SharedSizeGroup(group)
+        column := columns.Add("ColumnDefinition").Width(fixedLabel ? this.LabelWidth() : "Auto")
+        if (!fixedLabel)
+            column.SharedSizeGroup(group)
         columns.Add("ColumnDefinition").Width("*")
         caption := this.Label(row, label).VerticalAlignment(alignment)
+        if (fixedLabel)
+            caption.Margin("0")
         if (labelTip != "" && RTrim(labelTip, " ：:") != RTrim(GetLang(label), " ：:"))
             caption.ToolTip(labelTip)
         if (labelName != "")
@@ -756,9 +763,12 @@ AddCmdOkBtn(parent, name := "BtnOk", extraMargin := "", content := "") {
 }
 
 class ScreenAreaPreview {
+    ; 搜索 Pro 标签列为 78，配合左移 7 的边框补偿，预览框实际宽度统一为 85 DIP。
+    static ButtonWidth := 85
+
     static ButtonStyle() {
         ; 左移的距离抵消边框与内边距，让内容与同列普通标签对齐。
-        return '<Style TargetType="Button"><Setter Property="Margin" Value="-7,0,0,0"/><Setter Property="Padding" Value="6,0"/>'
+        return '<Style TargetType="Button"><Setter Property="Width" Value="' this.ButtonWidth '"/><Setter Property="HorizontalAlignment" Value="Left"/><Setter Property="Margin" Value="-7,0,0,0"/><Setter Property="Padding" Value="6,0"/>'
             . '<Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">'
             . '<Border x:Name="surface" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="3" SnapsToDevicePixels="True">'
             . '<Grid><Border x:Name="hoverTint" Background="{DynamicResource Accent}" Opacity="0.16" CornerRadius="2" Visibility="Collapsed" IsHitTestVisible="False"/>'
@@ -1148,6 +1158,11 @@ FindChromiumBrowser() {
 ; Worker 版在 Thread\WorkUtil.ahk，只做一条 IPC 上报。两边由包含链决定，函数里没有角色分支。
 ; 返回 true 表示已处理（调用方无需再弹窗）。
 RMTErrorShow(msg, level := RMT_LV_ERROR, source := "", commandContext := "") {
+    direct := DirectCommandScope()
+    if (IsObject(direct)) {
+        direct.messages.Push(Map("message", msg, "level", level, "source", source))
+        return true
+    }
     if (!IsObject(commandContext))
         commandContext := CommandErrorContext.Current()
     if (source == "")

@@ -55,7 +55,7 @@ class KeyGui {
         this._title := title
         titleHeight := XAMLHost.CmdTitleBarHeight()
 
-        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(XAMLHost.FontSize())
+        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(CmdEditorForm.FontSize())
         main.Rows(titleHeight, "*")
 
         ; === 标题栏 ===
@@ -74,7 +74,7 @@ class KeyGui {
 
         ; 行1：鼠标（居中，上收贴近键盘）
         mouseBlock := body.Add("StackPanel").Grid_Row(1).Grid_ColumnSpan(11).HorizontalAlignment("Center").Margin("0,5,0,2")
-        mouseBlock.Add("TextBlock").Text(GetLang("鼠标")).FontWeight("SemiBold").FontSize(12)
+        mouseBlock.Add("TextBlock").Text(GetLang("鼠标")).FontWeight("SemiBold").FontSize(CmdEditorForm.FontSize())
             .HorizontalAlignment("Center").Foreground("{DynamicResource TextMain}").Margin("0,0,0,6")
         mouseKeys := mouseBlock.Add("StackPanel").Orientation("Horizontal").HorizontalAlignment("Center")
         mouseDefs := [
@@ -89,31 +89,31 @@ class KeyGui {
         ; 行2：类型/时长/次数/间隔
         bottom := body.Add("StackPanel").Grid_Row(2).Grid_ColumnSpan(11).Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center").Margin("10,12,10,2")
         typeBox := bottom.Add("StackPanel").Name("TypeBox").Orientation("Horizontal").VerticalAlignment("Center")
-        typeBox.Add("TextBlock").Name("KeyTypeLabel").Text(GetLang("类型:")).ToolTip(this._TypeHelpText()).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
+        typeBox.Add("TextBlock").Name("KeyTypeLabel").Text(GetLang("类型:")).ToolTip(this._TypeHelpText()).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
         kt := typeBox.Add("ComboBox").Name("KeyTypeCon").Width(80).Height(26).MinHeight(26).Margin("4,0,0,0")
-            .VerticalContentAlignment("Center").FontSize("11").Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
+            .VerticalContentAlignment("Center").FontSize(CmdEditorForm.FontSize()).Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
         for t in GetLangArr(["按下", "松开", "点击"])
             kt.Add("ComboBoxItem").Content(t)
-        bottom.Add("TextBlock").Name("HoldTimeTipCon").Text(GetLang("点击时长:")).ToolTip(GetLang("从按下到松开的毫秒数。")).VerticalAlignment("Center").Margin("15,0,0,0").Foreground("{DynamicResource TextMain}").FontSize("12")
+        bottom.Add("TextBlock").Name("HoldTimeTipCon").Text(GetLang("点击时长:")).ToolTip(GetLang("从按下到松开的毫秒数。")).VerticalAlignment("Center").Margin("15,0,0,0").Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
         bottom.Add("TextBox").Name("HoldTimeCon").Width(60).Height(26).MinHeight(26)
             .VerticalContentAlignment("Center").Padding("4,0")
-            .TextAlignment("Center").FontSize("11").Margin("6,0,0,0")
+            .TextAlignment("Center").FontSize(CmdEditorForm.FontSize()).Margin("6,0,0,0")
             .Foreground("{DynamicResource InputText}")
             .Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
             .Tag("NumOnly|NoIME|MaxLen:5")
-        bottom.Add("TextBlock").Name("KeyCountTipCon").Text(GetLang("点击次数：")).VerticalAlignment("Center").Margin("15,0,0,0").Foreground("{DynamicResource TextMain}").FontSize("12")
+        bottom.Add("TextBlock").Name("KeyCountTipCon").Text(GetLang("点击次数：")).VerticalAlignment("Center").Margin("15,0,0,0").Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
         bottom.Add("TextBox").Name("KeyCountCon").Width(60).Height(26).MinHeight(26)
             .VerticalContentAlignment("Center").Padding("4,0")
-            .TextAlignment("Center").FontSize("11").Margin("6,0,0,0")
+            .TextAlignment("Center").FontSize(CmdEditorForm.FontSize()).Margin("6,0,0,0")
             .Foreground("{DynamicResource InputText}")
             .Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
             .Tag("NumOnly|NoIME|MaxLen:5")
-        bottom.Add("TextBlock").Name("PerIntervalTipCon").Text(GetLang("每次间隔：")).ToolTip(GetLang("两次操作之间等待的毫秒数。")).VerticalAlignment("Center").Margin("15,0,0,0").Foreground("{DynamicResource TextMain}").FontSize("12")
+        bottom.Add("TextBlock").Name("PerIntervalTipCon").Text(GetLang("每次间隔：")).ToolTip(GetLang("两次操作之间等待的毫秒数。")).VerticalAlignment("Center").Margin("15,0,0,0").Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
         bottom.Add("TextBox").Name("PerIntervalCon").Width(60).Height(26).MinHeight(26)
             .VerticalContentAlignment("Center").Padding("4,0")
-            .TextAlignment("Center").FontSize("11").Margin("6,0,0,0")
+            .TextAlignment("Center").FontSize(CmdEditorForm.FontSize()).Margin("6,0,0,0")
             .Foreground("{DynamicResource InputText}")
             .Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
@@ -123,7 +123,7 @@ class KeyGui {
         btnRow := body.Add("StackPanel").Grid_Row(3).Grid_ColumnSpan(11).Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center")
         clearBtn := btnRow.Add("Button").Name("BtnClear").Content(GetLang("清空")).Width(88).Height(32).MinHeight(32).Cursor("Hand")
             .Background("{DynamicResource ActionBg}").Foreground("{DynamicResource ActionText}")
-            .BorderBrush("{DynamicResource ActionStroke}").BorderThickness("1").FontSize(13).FontWeight("Bold")
+            .BorderBrush("{DynamicResource ActionStroke}").BorderThickness("1").FontSize(CmdEditorForm.FontSize()).FontWeight("Bold")
             .Margin("0,0,300,0")
         clearBtn.InjectResources(FrontInfoGui._OkBtnHoverStyle())
         AddCmdOkBtn(btnRow, "BtnOk")
@@ -161,7 +161,7 @@ class KeyGui {
     ; ---------------- 按键网格（Canvas 绝对定位，复刻原版键盘布局）----------------
 
     _PlaceLabel(text, x, y) {
-        this._keyGrid.Add("TextBlock").Text(text).FontWeight("SemiBold").FontSize(12)
+        this._keyGrid.Add("TextBlock").Text(text).FontWeight("SemiBold").FontSize(CmdEditorForm.FontSize())
             .SetProp("Canvas.Left", String(x)).SetProp("Canvas.Top", String(y))
     }
 
@@ -175,7 +175,7 @@ class KeyGui {
         name := "KeyBtn_" this._keySeq
         btn := this._keyGrid.Add("Button").Name(name).Width(width).Height(25)
             .SetProp("Canvas.Left", String(x - 10)).SetProp("Canvas.Top", String(y))
-            .Content(display).FontSize(11).Cursor("Hand").Padding("2,0").Tag("0")
+            .Content(display).FontSize(CmdEditorForm.FontSize()).Cursor("Hand").Padding("2,0").Tag("0")
             .Background("{DynamicResource InputBg}").Foreground("{DynamicResource TextMain}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
         btn.InjectResources(FrontInfoGui._KeyPickBtnStyle())
@@ -197,7 +197,7 @@ class KeyGui {
         this._keySeq += 1
         name := "KeyBtn_" this._keySeq
         btn := parent.Add("Button").Name(name).Width(width).Height(25)
-            .Content(display).FontSize(11).Cursor("Hand").Padding("2,0").Tag("0")
+            .Content(display).FontSize(CmdEditorForm.FontSize()).Cursor("Hand").Padding("2,0").Tag("0")
             .Background("{DynamicResource InputBg}").Foreground("{DynamicResource TextMain}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
         btn.InjectResources(FrontInfoGui._KeyPickBtnStyle())
@@ -317,7 +317,8 @@ class KeyGui {
     }
 
     _KeyTypeText() {
-        return IsObject(this.ui) ? this.ui.Query("KeyTypeCon") : ""
+        ; 建窗前静态下拉候选项尚不可查询，选中索引已在初始化队列中。
+        return GetLang(this._KeyTypeIndex())
     }
 
     _SetKeyType(text) {

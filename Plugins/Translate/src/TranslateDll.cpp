@@ -98,34 +98,8 @@ std::string Trim(const std::string& s) {
 // ---------------------------------------------------------------------
 // prompt
 // ---------------------------------------------------------------------
-// 旧格式继续按行兼容；新条目由 ABI 结构体传入，避免内容与分隔符冲突。
-std::string BuildGlossaryBlock(const std::string& legacyGlossary,
-                               const TranslateGlossaryItem* glossaryItems, int32_t glossaryCount) {
+std::string BuildGlossaryBlock(const TranslateGlossaryItem* glossaryItems, int32_t glossaryCount) {
     std::string pairs;
-    std::string extra;
-    size_t pos = 0;
-    if (!legacyGlossary.empty()) {
-        while (pos <= legacyGlossary.size()) {
-            size_t nl = legacyGlossary.find('\n', pos);
-            std::string line = Trim(legacyGlossary.substr(pos, nl == std::string::npos ? std::string::npos : nl - pos));
-            if (!line.empty()) {
-                size_t sep = line.find_first_of(":：=");
-                if (sep != std::string::npos && sep + 1 < line.size()) {
-                    std::string k = Trim(line.substr(0, sep));
-                    std::string v = Trim(line.substr(sep + 1));
-                    if (!k.empty() && !v.empty()) {
-                        if (!pairs.empty()) pairs += "；";
-                        pairs += k + " → " + v;
-                    }
-                } else {
-                    if (!extra.empty()) extra += "；";
-                    extra += line;
-                }
-            }
-            if (nl == std::string::npos) break;
-            pos = nl + 1;
-        }
-    }
     for (int32_t i = 0; glossaryItems && i < glossaryCount; ++i) {
         const auto& item = glossaryItems[i];
         if (!item.source || !item.target || !item.source[0] || !item.target[0])
@@ -135,17 +109,16 @@ std::string BuildGlossaryBlock(const std::string& legacyGlossary,
     }
     std::string out;
     if (!pairs.empty()) out += "术语对照（必须遵守）：" + pairs + "\n";
-    if (!extra.empty()) out += "额外要求：" + extra + "\n";
     return out;
 }
 
-std::string BuildPrompt(const std::string& text, const std::string& target, const std::string& legacyGlossary,
+std::string BuildPrompt(const std::string& text, const std::string& target,
                         const TranslateGlossaryItem* glossaryItems, int32_t glossaryCount) {
     std::string lang = target.empty() ? std::string("简体中文") : target;
     std::string p;
     p += "<|im_start|>user\n";
     p += "把下面的内容翻译成" + lang + "。只输出译文，不要解释、不要加引号、不要重复原文、不要保留原文。\n";
-    p += BuildGlossaryBlock(legacyGlossary, glossaryItems, glossaryCount);
+    p += BuildGlossaryBlock(glossaryItems, glossaryCount);
     p += "\n";
     p += text;
     p += "<|im_end|>\n";
@@ -293,24 +266,21 @@ int TRANSLATE_CALL Translate_Load(const wchar_t* ggufPath, const TranslateOption
     }
     std::string path = Utf16ToUtf8(ggufPath);
 
-    // 参数：按 structSize 保守拷贝，旧宿主少传字段时新字段保持默认
+    // 可省略参数使用当前默认值；传入参数时必须符合当前ABI。
     std::memset(&g_opt, 0, sizeof(g_opt));
     g_opt.nCtx = 2048;
     g_opt.maxTokens = 512;
     g_opt.nBatch = 512;
-    g_opt.timeoutMs = 30000;
     g_opt.nGpuLayers = -1;   // 自动：有 Vulkan GPU 全卸载，没有落 CPU
-    if (opt && opt->structSize > 0) {
-        std::memcpy(&g_opt, opt, static_cast<size_t>(std::min<int32_t>(opt->structSize, sizeof(g_opt))));
+    if (opt) {
+        if (opt->structSize != static_cast<int32_t>(sizeof(TranslateOptions))) {
+            SetError("翻译组件参数版本不匹配");
+            return 0;
+        }
+        g_opt = *opt;
         if (g_opt.nCtx <= 0) g_opt.nCtx = 2048;
         if (g_opt.maxTokens <= 0) g_opt.maxTokens = 512;
         if (g_opt.nBatch <= 0) g_opt.nBatch = 512;
-        if (g_opt.timeoutMs <= 0) g_opt.timeoutMs = 30000;
-        // 0 = 仅 CPU 是合法取值，不能一律归一成 -1。只有旧宿主（structSize 没覆盖到
-        // 这个字段）才会留下零填充；nGpuLayers 是最后一个字段，structSize 小于整个
-        // 结构体就说明宿主头文件里没有它。
-        if (opt->structSize < static_cast<int32_t>(sizeof(TranslateOptions)))
-            g_opt.nGpuLayers = -1;
     }
 
     UnloadLocked();
@@ -356,7 +326,7 @@ void TRANSLATE_CALL Translate_Cancel(void) {
     g_cancel.store(true);
 }
 
-int TRANSLATE_CALL Translate_Run(const wchar_t* text, const wchar_t* target, const wchar_t* legacyGlossary,
+int TRANSLATE_CALL Translate_Run(const wchar_t* text, const wchar_t* target,
                                  const TranslateGlossaryItem* glossaryItems, int32_t glossaryCount,
                                  int32_t timeoutMs, wchar_t* out, int32_t outChars, TranslateStats* stats) {
     std::lock_guard<std::mutex> lock(g_mu);
@@ -399,12 +369,12 @@ int TRANSLATE_CALL Translate_Run(const wchar_t* text, const wchar_t* target, con
     int rc = 1;
     std::string generated;
     int64_t t0 = NowMs();
-    const int32_t runTimeoutMs = timeoutMs > 0 ? timeoutMs : g_opt.timeoutMs;
+    const int32_t runTimeoutMs = timeoutMs > 0 ? timeoutMs : 30000;
 
     auto tokens_free = [&]() { llama_free(ctx); };
 
     // ---- tokenize ----
-    std::string prompt = BuildPrompt(src, Utf16ToUtf8(target), Utf16ToUtf8(legacyGlossary),
+    std::string prompt = BuildPrompt(src, Utf16ToUtf8(target),
                                      glossaryItems, glossaryCount);
     const int n_max = static_cast<int>(prompt.size()) + 32;
     std::vector<llama_token> tokens(static_cast<size_t>(n_max));

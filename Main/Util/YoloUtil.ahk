@@ -16,6 +16,8 @@
 
 class YoloData {
     SerialStr := ""
+    Source := "屏幕"
+    ImagePath := ""
     ModelName := ""        ; 全局模型库中的模型名
     Device := "CPU"
     Region := ""           ; 屏幕区域 x1,y1,x2,y2，空=主屏全屏
@@ -125,10 +127,11 @@ class YoloModelStore {
 }
 
 class Yolo {
+    static Sources := ["屏幕", "图片文件"]
     static ApiVersion := 2
     ; 内核实际编入的执行后端。当前发布的内核是 CPU 版，只有 CPU 可用；
     ; 其它设备要在编译内核时带上对应 EP（CUDA / DirectML / TensorRT / CoreML），
-    ; 否则加载直接返回 -2。旧配置里存了别的设备名，执行时会被归到 CPU。
+    ; 否则加载直接返回 -2。
     static Devices := ["CPU"]
     static Actions := ["无动作", "左键单击", "左键双击", "右键单击"]
     static Targets := ["最高置信度", "最左", "最上", "面积最大"]
@@ -142,12 +145,6 @@ class Yolo {
         "classify", "图像分类",
         "semantic", "语义分割",
         "depth", "深度估计")
-
-    ; 与 DLL 无关的字段：旧配置反序列化后缺字段，用它补齐默认值。
-    static Fields := ["ModelName", "Device", "Region", "ConfLevel", "Iou", "MaxDet", "Classes",
-        "TargetMode", "ActionType", "OffsetX", "OffsetY", "KeypointConf", "AnchorKpt",
-        "MinMaskRatio", "MinRatio", "TopK", "SampleX", "SampleY",
-        "CountVar", "ClassVar", "ConfVar", "RatioVar", "DepthVar", "ResultVar", "ErrorVar"]
 
     static _handles := Map()   ; "路径|设备|iou" → 内核句柄
     static _infos := Map()     ; "路径|设备" → 模型信息对象
@@ -338,7 +335,6 @@ class Yolo {
         if (reason != "")
             throw Error(reason)
 
-        data := this.Normalize(data)
         modelName := Trim(resolve(data.ModelName))
         if (modelName == "")
             throw Error(GetLang("请先在模型库里选择模型。"))
@@ -348,21 +344,36 @@ class Yolo {
         if !FileExist(path)
             throw Error(Format(GetLang("模型文件不存在：{}"), path))
 
-        device := CmdEnumZh(data.Device, this.Devices)
-        iou := this.ParseIou(resolve(data.Iou))
+        device := CurrentCommandChoice(data.Device, this.Devices)
+        hint := CommandYoloTask(data)
+        ; 首次遇到未知任务先读模型信息，不用尚未确定是否需要的 NMS 参数。
+        iou := hint == "" ? 0.45 : this.ResolveIou(hint, data, resolve)
         info := this.Info(path, device, iou)
         task := this._Prop(info, "task", "")
         if (task == "")
             task := "detect"
+        iou := this.ResolveIou(task, data, resolve)
 
-        region := this.ParseRegion(resolve(data.Region))
+        source := data.HasOwnProp("Source") ? CurrentCommandChoice(resolve(data.Source), this.Sources) : "屏幕"
+        imagePath := ""
+        if (source == "图片文件") {
+            imagePath := Trim(resolve(data.ImagePath))
+            if (imagePath == "" || !FileExist(imagePath))
+                throw Error(GetLang("检测图片文件不存在：") imagePath)
+            if (CurrentCommandChoice(data.ActionType, this.Actions) != "无动作")
+                throw Error(GetLang("图片文件检测不能点击屏幕，请将找到后设为无动作。"))
+            size := GetImageSize(imagePath)
+            region := [0, 0, size[1], size[2]]
+        } else
+            region := this.ParseRegion(resolve(data.Region))
         opts := this.BuildOptions(task, data, resolve, region)
         handle := this.Acquire(path, device, iou)
 
         if (cancelled())
             return ""
 
-        raw := this.RunFrame(handle, region, opts)
+        raw := this.RunFrame(handle, region, opts, imagePath)
+        raw.coordinateSpace := imagePath == "" ? "screen" : "image"
         if (cancelled())
             return ""
 
@@ -370,15 +381,19 @@ class Yolo {
     }
 
     ; 截屏 → 推理 → 解析。输入区域是屏幕坐标，内核拿到的是区域内的图。
-    static RunFrame(handle, region, opts) {
+    static ResolveIou(task, data, resolve) {
+        return task == "classify" || task == "semantic" || task == "depth" ? 0.45 : this.ParseIou(resolve(data.Iou))
+    }
+
+    static RunFrame(handle, region, opts, imagePath := "") {
         x := region[1], y := region[2]
         width := region[3] - region[1], height := region[4] - region[2]
         if (width <= 0 || height <= 0)
             throw Error(GetLang("检测区域无效。"))
 
-        pBitmap := Gdip_BitmapFromScreen(Format("{}|{}|{}|{}", x, y, width, height))
+        pBitmap := imagePath == "" ? Gdip_BitmapFromScreen(Format("{}|{}|{}|{}", x, y, width, height)) : Gdip_CreateBitmapFromFile(imagePath)
         if (!pBitmap)
-            throw Error(GetLang("屏幕截图失败。"))
+            throw Error(GetLang(imagePath == "" ? "屏幕截图失败。" : "读取检测图片失败。"))
 
         stride := 0, scan0 := 0, bitmapData := 0
         locked := false
@@ -436,6 +451,11 @@ class Yolo {
             }
             return opts
         }
+        if (task == "semantic") {
+            opts.minMaskRatio := this.ParseRatio(resolve(data.MinRatio),
+                GetLang("比例须为 0~1 之间的数字。"))
+            return opts
+        }
 
         opts.conf := this.ParseConf(resolve(data.ConfLevel))
 
@@ -456,9 +476,6 @@ class Yolo {
         } else if (task == "segment") {
             opts.minMaskRatio := this.ParseRatio(resolve(data.MinMaskRatio),
                 GetLang("比例须为 0~1 之间的数字。"))
-        } else if (task == "semantic") {
-            opts.minMaskRatio := this.ParseRatio(resolve(data.MinRatio),
-                GetLang("比例须为 0~1 之间的数字。"))
         }
         return opts
     }
@@ -467,7 +484,7 @@ class Yolo {
 
     ; 把内核的原始 JSON 变成“该任务要写的那几个变量”。
     static BuildOutcome(task, raw, data, resolve, region, opts) {
-        out := {count: "", name: "", conf: "", ratio: "", depth: "", result: ""}
+        out := {task: task, count: "", name: "", conf: "", ratio: "", depth: "", result: ""}
 
         switch task {
             case "classify":
@@ -495,7 +512,7 @@ class Yolo {
                 if (items.Length) {
                     out.name := this._Prop(items[1], "name", "")
                     out.ratio := this.ToText(this._Prop(items[1], "ratio", ""))
-                    if (CmdEnumZh(data.ActionType, this.Actions) != "无动作")
+                    if (CurrentCommandChoice(data.ActionType, this.Actions) != "无动作")
                         this.ClickTarget(items[1], data, resolve)
                 }
                 out.result := JSON.stringify(raw, 0)
@@ -503,10 +520,22 @@ class Yolo {
                 items := this.PrepareItems(raw, data, resolve, region, false)
                 out.count := items.Length
                 out.result := JSON.stringify(raw, 0)
-                if (items.Length && CmdEnumZh(data.ActionType, this.Actions) != "无动作")
+                if (items.Length && CurrentCommandChoice(data.ActionType, this.Actions) != "无动作")
                     this.ClickTarget(items[1], data, resolve)
         }
         return out
+    }
+
+    static OutputFields(task) {
+        switch task {
+            case "detect", "segment", "pose", "obb": fields := ["CountVar"]
+            case "classify": fields := ["ClassVar", "ConfVar"]
+            case "semantic": fields := ["ClassVar", "RatioVar"]
+            case "depth": fields := ["DepthVar"]
+            default: fields := ["CountVar", "ClassVar", "ConfVar", "RatioVar", "DepthVar"]
+        }
+        fields.Push("ResultVar", "ErrorVar")
+        return fields
     }
 
     ; JSON 里的双精度直接转字符串会变成 0.67720000000000002，写进变量很难看。
@@ -533,7 +562,7 @@ class Yolo {
         if (byRatio) {
             items := this._SortBy(items, "ratio", true)
         } else {
-            switch CmdEnumZh(data.TargetMode, this.Targets) {
+            switch CurrentCommandChoice(data.TargetMode, this.Targets) {
                 case "最左": items := this._SortBy(items, "cx", false)
                 case "最上": items := this._SortBy(items, "cy", false)
                 case "面积最大": items := this._SortBy(items, "_area", true)
@@ -651,7 +680,7 @@ class Yolo {
         offsetX := this._IntOr(resolve(data.OffsetX), 0)
         offsetY := this._IntOr(resolve(data.OffsetY), 0)
         MouseMove(Round(x) + offsetX, Round(y) + offsetY, 0)
-        switch CmdEnumZh(data.ActionType, this.Actions) {
+        switch CurrentCommandChoice(data.ActionType, this.Actions) {
             case "左键单击": Click
             case "左键双击": Click 2
             case "右键单击": Click "Right"
@@ -753,17 +782,6 @@ class Yolo {
 
     ; ---------- 杂项 ----------
 
-    ; 旧配置里没有任务专属字段，补齐后再用，避免读属性时抛错。
-    static Normalize(data) {
-        if (!IsObject(data))
-            return YoloData()
-        template := YoloData()
-        for name in this.Fields
-            if (!data.HasProp(name))
-                data.%name% := template.%name%
-        return data
-    }
-
     static _Prop(obj, name, default := "") {
         if (!IsObject(obj))
             return default
@@ -789,7 +807,7 @@ class Yolo {
 }
 
 OnYolo(tableItem, cmd, index) {
-    data := Yolo.Normalize(GetMacroCMDData(StrSplit(cmd, "_")[1]))
+    data := GetMacroCMDData(StrSplit(cmd, "_")[1])
     cancelled := () => tableItem.Items[index].Killed
     if (cancelled())
         return
@@ -804,11 +822,11 @@ OnYolo(tableItem, cmd, index) {
 }
 
 RegisterYoloVars(data) {
-    data := Yolo.Normalize(data)
-    for name in [data.CountVar, data.ClassVar, data.ConfVar, data.RatioVar, data.DepthVar,
-        data.ResultVar, data.ErrorVar]
+    for field in Yolo.OutputFields(CommandYoloTask(data)) {
+        name := data.%field%
         if (name != "")
             MySoftData.GlobalVariMap[name] := true
+    }
 }
 
 SaveYoloResult(data, out, failure) {
@@ -817,13 +835,13 @@ SaveYoloResult(data, out, failure) {
 
     names := []
     values := []
-    for pair in [[data.CountVar, out.count], [data.ClassVar, out.name], [data.ConfVar, out.conf],
-        [data.RatioVar, out.ratio], [data.DepthVar, out.depth],
-        [data.ResultVar, out.result], [data.ErrorVar, failure]] {
-        if (pair[1] == "")
+    task := out.HasOwnProp("task") ? out.task : CommandYoloTask(data)
+    resultFields := Map("CountVar", "count", "ClassVar", "name", "ConfVar", "conf", "RatioVar", "ratio", "DepthVar", "depth", "ResultVar", "result")
+    for field in Yolo.OutputFields(task) {
+        if (data.%field% == "")
             continue
-        names.Push(pair[1])
-        values.Push(pair[2])
+        names.Push(data.%field%)
+        values.Push(field == "ErrorVar" ? failure : out.%resultFields[field]%)
     }
     if (names.Length)
         MySetGlobalVariable(names, values, false)

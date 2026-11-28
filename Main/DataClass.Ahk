@@ -256,6 +256,8 @@ class MainConfig {
         this.AiModel := ""
         this.AiModelList := ""          ; 逗号分隔的候选模型 id
         this.AiAccessMode := 2          ; 1=只读 2=工作区 3=完全访问
+        this.AiMcpEnabled := false      ; 旧MCP暂停期间默认停用，修复后可启用
+        this.AiMcpServerPath := ""      ; 空=软件自带RMTMcps.exe
         this.AiApprovalMode := 2        ; 1=手动审批 2=自动审批 3=完全访问
         this.AiPanelWidth := 380        ; 扩展面板宽度（应用保存后记住）
         this.LogicTreeBranchSplit := false  ; 逻辑树真假分支左右分栏
@@ -418,8 +420,16 @@ class SoftData {
         this.GlobalArrMap := Map()      ;UI下拉显示数组
         this.ArrayMap := Map()          ;真正的全局数组
         this.GlobalVariMap := Map()     ;UI下拉显示变量
-        this.VariableMap := ShmVariableMap("RMT_Shared_Variables")       ;真正的全局变量（跨进程纯共享内存）
-        this.TimeVarMap := Map()        ;记录时间变量（包含获取时间变量指令生成的变量）
+        ; 共享内存组件缺失或初始化失败时退回本进程 Map：主界面仍能起来，
+        ; 全局变量在补齐 Plugins\ShmVar\ShmVar.dll 并重启前不与 Worker 共享。
+        try {
+            this.VariableMap := ShmVariableMap("RMT_Shared_Variables")
+        } catch as e {
+            this.VariableMap := Map()
+            try RMTLogSys(RMT_LV_ERROR, "Startup", "ShmVariableMap | " e.Message "。全局变量仅在本进程有效，主界面继续启动")
+            try FlushRMTLogAsync()
+        }
+        this.TimeVarMap := Map()        ;记录时间变量
         this.HandleVarMap := Map()      ;窗口信息指令生成的句柄变量
         this.ControlVarMap := Map()     ;检测控件指令生成的控件变量
         this.DataFileMap := Map()       ;配置命令对应的文件路径
@@ -1122,6 +1132,16 @@ class SearchData {
 
 }
 
+class SearchComboData extends SearchData {
+    __New() {
+        super.__New()
+        target := {}
+        for name, value in SearchData().OwnProps()
+            target.%name% := value
+        this.SearchTargetArr := [target]
+    }
+}
+
 class SearchAllData extends SearchData {
     __New() {
         super.__New()
@@ -1140,11 +1160,9 @@ class ScreenShotData {
         this.StartPosY := 0
         this.EndPosX := A_ScreenWidth
         this.EndPosY := A_ScreenHeight
-        this.NameType := "固定名称"              ;默认（指令名+序号） 固定名称
-        this.FixedName := "Shot"            ;固定名称（NameType=1时使用）
-        this.SavePath := ""             ;保存路径（默认为Temp_ScreenShot）
-        this.ResultToggle := 0          ;是否保存结果到变量
-        this.ResultSaveName := GetLang("图片路径")  ;结果变量名
+        this.NameType := "固定名称"      ;固定=Shot加指令序号，默认=序号自增
+        this.ToClipboard := 0          ;同时将截图复制到剪切板
+        this.ResultSaveName := "ImgPath"  ;结果变量名
     }
 
 }
@@ -1425,7 +1443,7 @@ class TimingData {
 class TimeData {
     __New() {
         this.SerialStr := ""
-        ; SubMode 中文：等待 / 区间判断 / 倒计时（旧数字 1~5、获取时间* 由 TimeNormSubMode 兼容）
+        ; SubMode：等待 / 区间判断
         this.SubMode := "等待"
         this.Param1 := ""  ; 等待:目标时间/时长; 区间判断:开始时间
         this.Param2 := ""  ; 等待:时刻/时长/时间戳; 区间判断:结束时间
@@ -1447,28 +1465,23 @@ class TimeData {
 }
 
 class WaitData {
-    __New(legacy := false) {
+    __New() {
         this.ConditionOperandsVersion := 1
         this.SerialStr := ""
         ; 等待变量值 等待按键按下 等待按键松开 等待屏幕变化 等待鼠标移动 等待鼠标停止移动 等待剪切板变化
         ; 等待进程存在 等待进程关闭 等待窗口存在 等待窗口激活 等待窗口屏幕变化 等待窗口大小变化
-        ; 等待窗口关闭 等待窗口最小化 等待文件存在 等待文件删除 等待文件变化 等待日期
+        ; 等待窗口关闭 等待窗口最小化 等待文件存在 等待文件删除 等待文件变化 等待时间 等待时间区间
         this.WaitType := "等待时间"
-        this.Conditions := []       ; {Variable, Operator, Value}，空数组兼容旧等值判断
+        this.Conditions := []       ; {Variable, Operator, Value}
         this.ConditionLogic := "且"
         this.KeyDevice := "键盘"
         this.KeyOptions := {KeyArr: [], CheckType: "同时按下", StateType: "物理状态"}
         this.TimeConfig := {SubMode: "等待", Param1: "", Param2: "毫秒", Param4: "等待", Param5: "时刻", CheckInterval: 500, Timeout: 0}
         this.ConfirmConfig := WaitConfirmData.DefaultOptions()
         this.Interval := 500        ; 检测间隔（毫秒）
-        this.TimeoutMs := legacy ? 0 : TimeoutPolicy.DefaultMs
-        if (!legacy) {
-            this.TimeoutAction := TimeoutPolicy.DefaultAction
-            this.TimeoutStatusVar := TimeoutPolicy.DefaultStatusVar
-        }
-        this.ResultSaveName := ""
-        this.WaitCompletedValue := 0
-        this.WaitTimedOutValue := 1
+        this.TimeoutMs := TimeoutPolicy.DefaultMs
+        this.TimeoutAction := TimeoutPolicy.DefaultAction
+        this.TimeoutStatusVar := TimeoutPolicy.DefaultStatusVar
         this.ProcessTargetType := "进程名"
         this.Param1 := ""           ; 主参数：变量名/按键名/进程名/窗口信息/文件路径/日期值
         this.Param2 := ""           ; 次参数：期望值 / 日期单位（分钟|小时|天|具体时间|时间变量）
@@ -1573,7 +1586,6 @@ class HttpRequestData {
         this.TimeoutMs := TimeoutPolicy.DefaultMs
         this.TimeoutAction := TimeoutPolicy.DefaultAction
         this.TimeoutStatusVar := TimeoutPolicy.DefaultStatusVar
-        this.Retries := 0
         this.StatusVar := "HTTP状态码"
         this.ResponseVar := "HTTP响应体"
         this.ErrorVar := "HTTP错误信息"
@@ -1584,18 +1596,32 @@ class BrowserData {
     __New() {
         this.SerialStr := ""
         this.ActionType := "打开网址"
-        this.BrowserType := "系统默认浏览器" ; 系统默认浏览器/Chrome/Edge/Chromium/自定义路径
-        this.CloseScope := "所有页签"
+        this.BrowserType := "默认浏览器" ; 默认浏览器/Chrome/Edge/Brave/Vivaldi/Opera/Chromium/自定义路径
+        this.CurrentTabAction := "刷新"
+        this.TabMatchMode := "标签页ID"
+        this.TabCloseMode := "匹配标签页"
         this.Url := "https://www.google.com"
-        this.TargetRef := "" ; 留空操作当前分页，否则按索引、ID或关键词定位
+        this.TargetRef := "" ; 留空操作当前标签页，否则按索引、ID或关键词定位
         this.Selector := ""
         this.SelectorType := "CSS" ; CSS / XPath
+        this.ElementExistsVar := "Res"
+        this.ElementValueVar := "ElValue"
+        this.ElementRefVar := "TargetEl"
+        this.ElementTabIdVar := ""
+        this.ElementStateVar := ""
+        this.ElementHtmlVar := ""
+        this.ElementXVar := "ElX"
+        this.ElementYVar := "ElY"
+        this.ElementPageXVar := "PageX"
+        this.ElementPageYVar := "PageY"
+        this.ElementWidthVar := "ElWidth"
+        this.ElementHeightVar := "ElHeight"
         this.Condition := "出现" ; 出现(appear) / 消失(disappear) / 可见(visible)
         this.LoadState := "完全加载" ; 完全加载(load) / DOM加载(domcontentloaded) / 网络空闲(networkidle)
         this.Text := ""
         this.ClearBefore := 1
         this.Checked := 1
-        this.OuterHtml := 1
+        this.FullPage := false
         this.JsCode := ""
         this.AttrName := "href"
         this.MouseBtn := "左键" ; 左键 / 右键 / 中键
@@ -1610,16 +1636,16 @@ class BrowserData {
         this.TimeoutAction := TimeoutPolicy.DefaultAction
         this.TimeoutStatusVar := TimeoutPolicy.DefaultStatusVar
         this.Headless := 0
-        this.OpenMode := "默认" ; 默认/新窗口/无痕模式，兼容旧 Incognito 配置
-        this.UseCDP := false
-        this.PageSource := "当前页签"
-        this.PageField := "网址"
-        this.WinInfo := "{宏设置窗口绑定}"
+        this.OpenMode := "默认" ; 默认/新窗口/无痕模式
+        this.UseCDP := true
+        this.PageSource := "当前标签页"
+        this.PageIdVar := "PageId"
+        this.PageUrlVar := ""
+        this.PageTitleVar := ""
+        this.PageStateVar := ""
         this.BrowserPort := 9222
         this.BrowserPath := ""
         this.UserDataDir := ""
-        this.OnError := "停止" ; 停止 / 忽略 / 重试
-        this.RetryCount := 3
     }
 }
 
@@ -1764,8 +1790,6 @@ class WindowManageData {
         this.PosY := 0                      ;移动窗口Y坐标（移动窗口时使用）
         this.Width := 0                     ;窗口宽度（调整宽高时使用）
         this.Height := 0                    ;窗口高度（调整宽高时使用）
-        this.WidthVarName := "WinWidth"         ;获取窗口宽高的宽度变量
-        this.HeightVarName := "WinHeight"        ;获取窗口宽高的高度变量
         this.NewTitle := ""                 ;新标题（修改标题时使用）
         this.Transparency := "80%"           ;透明度值 0-100（修改透明度时使用，80表示80%不透明度）
     }

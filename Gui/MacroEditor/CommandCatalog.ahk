@@ -26,7 +26,7 @@
         GetLang("RMT指令"), "Icon16", GetLang("后台鼠标"), "Icon17", GetLang("后台按键"), "Icon18", GetLang("真"), "Icon19",
         GetLang("假"), "Icon20", GetLang("循环次数"), "Icon21", GetLang("条件"), "Icon22", GetLang("循环体"), "Icon23",
         GetLang("文本处理"), "Icon24", GetLang("数组"), "Icon25", GetLang("输入"), "Icon26", GetLang("文件读写"), "Icon27", GetLang("Excel"), "Icon41", GetLang("网络请求"), "IconHttpRequest", GetLang("浏览器"), "IconBrowser",
-        GetLang("流程控制"), "Icon28", GetLang("窗口管理"), "Icon29", GetLang("窗口信息"), "Icon29", GetLang("窗口操作"), "IconWindowAdjust", GetLang("窗口控件"), "Icon29", GetLang("控件信息"), "IconControlInfo", GetLang("控件操作"), "IconControlOperation", GetLang("AI判断"), "IconAiDecision", GetLang("YOLO检测"), "IconYolo", GetLang("进程管理"), "IconProcessManage", GetLang("按键检测"), "Icon30", GetLang("手柄检测"), "Icon42", GetLang("跳转"), "Icon43", GetLang("注释"), "Icon31",
+        GetLang("流程控制"), "Icon28", GetLang("窗口管理"), "Icon29", GetLang("窗口信息"), "Icon29", GetLang("窗口操作"), "IconWindowAdjust", GetLang("控件信息"), "IconControlInfo", GetLang("控件操作"), "IconControlOperation", GetLang("AI判断"), "IconAiDecision", GetLang("YOLO检测"), "IconYolo", GetLang("进程管理"), "IconProcessManage", GetLang("按键检测"), "Icon30", GetLang("手柄检测"), "Icon42", GetLang("跳转"), "Icon43", GetLang("注释"), "Icon31",
         GetLang("抓图"), "Icon32", GetLang("等待"), "Icon33", GetLang("等待确定"), "Icon36", GetLang("时间"), "Icon35", GetLang("倒计时"), "Icon37", GetLang("提示"), "IconPrompt", GetLang("翻译"), "IconTranslate")
 
         ; IconN → 图标文件（顺序与原 IL_Add 一致）
@@ -103,7 +103,6 @@
             {class: WindowManageGui, name: "窗口操作", icon: "Images\Soft\WindowAdjustGear32.png", propName: "WindowAdjustGui"},
             {class: ControlInfoGui, name: "控件信息", icon: "Images\Soft\ControlInfo.png", propName: "ControlInfoGui"},
             {class: ControlOperationGui, name: "控件操作", icon: "Images\Soft\ControlOperation.png", propName: "ControlOperationGui"},
-            {class: WindowControlGui, name: "窗口控件", icon: "Images\Soft\WindowManage.png", propName: "WindowControlGui"},
             {class: AiDecisionGui, name: "AI判断", icon: "Images\Soft\AiDecision.png", propName: "AiDecisionGui"},
             {class: ProcessManageGui, name: "进程管理", icon: "Images\Soft\ProcessManage.png", propName: "ProcessManageGui"},
             {class: YoloGui, name: "YOLO检测", icon: "Images\Soft\Yolo.png", propName: "YoloGui"},

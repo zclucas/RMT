@@ -159,6 +159,7 @@ class VarListenGui {
 
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)
         this.ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", "")
+        this.ui.xaml := StrReplace(this.ui.xaml, "</Window.Resources>", '<sys:Boolean x:Key="RmtPreserveWindowSize">True</sys:Boolean></Window.Resources>')
         this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"',
             'Title="' title '" ShowInTaskbar="True" Width="' winW '" Height="' winH '" MinWidth="' minW '" MinHeight="' minH '"')
         ; 有保存坐标时建窗即定位，避免先 CenterScreen 再跳转闪烁
@@ -357,7 +358,7 @@ class VarListenGui {
             . ' FontSize="12" VerticalAlignment="Center" Margin="8,0,4,0" TextTrimming="CharacterEllipsis"/>'
             . '<TextBlock Grid.Column="2" Text="' this._XmlEsc(typeText) '" Foreground="{DynamicResource TextSub}"'
             . ' FontSize="12" VerticalAlignment="Center" HorizontalAlignment="Center"/>'
-            . '<TextBlock Grid.Column="4" Text="' this._XmlEsc(valueText) '" Foreground="{DynamicResource TextMain}"'
+            . '<TextBlock Grid.Column="4" Text="' this._XmlEsc(valueText) '" ToolTip="' this._XmlEsc(valueText) '" Foreground="{DynamicResource TextMain}"'
             . ' FontSize="12" VerticalAlignment="Center" Margin="8,0,8,0" TextTrimming="CharacterEllipsis"/>'
             . '</Grid>'
             . '</ListBoxItem>'
@@ -412,5 +413,5 @@ class VarListenGui {
         }
     }
 
-    _XmlEsc(s) => EscapeXamlXml(String(s))
+    _XmlEsc(s) => "{}" EscapeXamlXml(RegExReplace(String(s), "[\x00-\x08\x0B\x0C\x0E-\x1F]", ""))
 }

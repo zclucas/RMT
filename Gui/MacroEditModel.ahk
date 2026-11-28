@@ -505,8 +505,11 @@ class MacroTreeAdapter {
         return false
     }
 
-    ; 仅最内层搜索/如果用左右分栏；上级一律树形，避免套娃分栏过窄
+    ; 仅最内层搜索用左右分栏（如果指令真假不使用单行分栏，保持树形层级展示）；上级一律树形，避免套娃分栏过窄
     _ShouldUseSplit(node) {
+        cmd := GetCommandKey(GetCmdOnlyText(this._CleanNodeText(node)))
+        if (cmd == "如果")
+            return false
         pair := this._FindTrueFalsePair(node)
         if (!IsObject(pair))
             return false
@@ -635,7 +638,7 @@ class MacroTreeAdapter {
             . '</Border>'
             . '<ControlTemplate.Triggers>'
             . '<Trigger Property="IsMouseOver" Value="True">'
-            . '<Setter TargetName="Bd" Property="Background" Value="{DynamicResource ControlBgHover}"/>'
+            . '<Setter TargetName="Bd" Property="Background" Value="{DynamicResource EditHoverBg}"/>'
             . '</Trigger>'
             . '</ControlTemplate.Triggers>'
             . '</ControlTemplate></Button.Template></Button>'
@@ -791,7 +794,7 @@ class MacroTreeAdapter {
             . '</Border>'
             . '<ControlTemplate.Triggers>'
             . '<Trigger Property="IsMouseOver" Value="True">'
-            . '<Setter TargetName="Bd" Property="Background" Value="{DynamicResource ControlBgHover}"/>'
+            . '<Setter TargetName="Bd" Property="Background" Value="{DynamicResource EditHoverBg}"/>'
             . '</Trigger>'
             . '</ControlTemplate.Triggers>'
             . '</ControlTemplate></Button.Template></Button>'

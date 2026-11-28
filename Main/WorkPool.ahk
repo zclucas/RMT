@@ -1230,7 +1230,7 @@ class WorkPool {
                         ; 输出→指令窗口：强制显示，不经 CMDTip 门控
                         CmdTipForceShow(args[1])
                     case "RC":
-                        ExcuteRMTCMDAction(args[1])
+                        ExcuteRMTCMDAction(args[1], args.Length >= 2 ? args[2] : "", args.Length >= 3 ? args[3] : "")
                     case "PS":
                         tableItem := GetTableByID(args[1])
                         if (tableItem)
@@ -1255,7 +1255,7 @@ class WorkPool {
                             , args.Length >= 2 ? args[2] : ""
                             , args.Length >= 3 ? args[3] : ""
                             , args.Length >= 4 ? args[4] : "")
-                    case "IP", "IB", "IF":
+                    case "IP", "IB", "IF", "IS":
                         this._QueueWorkerInput(wd, Integer(args.RemoveAt(1)), opcode, args*)
                     case "IC":
                         this._CancelWorkerInput(wd, Integer(args[1]))
@@ -1277,6 +1277,7 @@ class WorkPool {
                                     erContext := {mode: parsed["mode"], location: parsed["location"], command: parsed["command"]}
                                 }
                             }
+                            AiInstructionBuilder.RecordError(wd.tableID,wd.itemID,erMsg,erLevel,erContext)
                             RMTErrorShow("宏执行异常: " erMsg, erLevel, erSrc, erContext)
                         } catch {
                             RMTLogSys(RMT_LV_ERROR, "Worker#" wd.idx, "ER解析失败: " args[1])
@@ -1400,6 +1401,20 @@ class WorkPool {
         pack := SplitInputReqArgs(args)
         real := pack.args
         try {
+            if (opcode == "IS") {
+                if (MainSoftData.SelectAreaAction != "") {
+                    SetTimer((*) => this._ShowInputDialogReq(req, opcode, args*), -100)
+                    return
+                }
+                selector := RuntimeScreenShotArea()
+                req.gui := selector
+                cancelCheck := () => req.local && IsObject(req.item) && req.item.Killed && this._CancelInput(req)
+                SetTimer(cancelCheck, 50)
+                try area := selector.Select()
+                finally SetTimer(cancelCheck, 0)
+                this._SendInputResult(req, "IR", area*)
+                return
+            }
             if (opcode == "IF") {
                 req.nativeFile := true
                 this._nativeFileQueue.Push({req: req, timeoutMs: pack.timeoutMs,

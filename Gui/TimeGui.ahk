@@ -2,7 +2,7 @@
 
 ; =====================================================================
 ; 时间编辑器 —— XAML 界面（独立实现）
-; 兼容旧时间指令，倒计时交给提示编辑器。
+; 时间等待与区间判断，倒计时交给提示编辑器。
 ; =====================================================================
 
 class TimeGui {
@@ -60,7 +60,7 @@ class TimeGui {
         if (width == "")
             width := this._labW
         return parent.Add("TextBlock").Text(GetLang(text)).Width(String(width)).VerticalAlignment("Center")
-            .Foreground("{DynamicResource TextMain}").FontSize("12").Margin(margin)
+            .Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize()).Margin(margin)
     }
 
     _Edit(parent, name, width := "") {
@@ -75,7 +75,7 @@ class TimeGui {
 
     _Combo(parent, name, editable := true, width := "") {
         el := parent.Add("ComboBox").Name(name).Height(26).MinHeight(26).VerticalAlignment("Center").HorizontalAlignment("Left")
-            .VerticalContentAlignment("Center").FontSize("11")
+            .VerticalContentAlignment("Center").FontSize(CmdEditorForm.FontSize())
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
         if (editable)
@@ -108,7 +108,7 @@ class TimeGui {
         this._title := title
         titleHeight := XAMLHost.CmdTitleBarHeight()
 
-        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(XAMLHost.FontSize())
+        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(CmdEditorForm.FontSize())
         main.Rows(titleHeight, "Auto")
 
         ; === 标题栏 ===
@@ -245,7 +245,7 @@ class TimeGui {
 
     static WaitUnitKeys := ["时刻", "时长", "时间戳"]
     static WindowKindKeys := ["时刻", "时间戳"]
-    static MismatchActionKeys := ["跳过", "等待", "终止", "不满足时跳过", "不满足时等待", "不满足时终止"]
+    static MismatchActionKeys := ["跳过", "等待", "终止"]
 
     _GetSelectedKey(comboName, keysArray) {
         if (!IsObject(this.ui))
@@ -281,11 +281,11 @@ class TimeGui {
 
         vars := GetGuiVarArr()
         timestampVars := GetGuiVarArr("timeVars", "timestamp")
-        param1 := ObjHasOwnProp(this.Data, "Param1") ? this.Data.Param1 : ""
-        param2 := ObjHasOwnProp(this.Data, "Param2") ? this.Data.Param2 : ""
-        param4 := ObjHasOwnProp(this.Data, "Param4") ? this.Data.Param4 : ""
+        param1 := this.Data.Param1
+        param2 := this.Data.Param2
+        param4 := this.Data.Param4
         subMode := TimeNormSubMode(this.Data)
-        waitType := TimeNormWaitType(param2 != "" ? param2 : "时刻")
+        waitType := subMode == "等待" ? TimeNormWaitType(param2 != "" ? param2 : "时刻") : "时刻"
         this._SetSelectedByKey("WaitUnitCon", waitType, TimeGui.WaitUnitKeys)
         this._SetCombo("WaitVarCon", timestampVars, GetLang(waitType == "时间戳" ? param1 : ""))
         wh := 14, wm := 30, ws := 0
@@ -294,12 +294,13 @@ class TimeGui {
         this._SetCombo("WaitMinCon", GetGuiVarArr("minute"), GetLang(wm))
         this._SetCombo("WaitSecCon", GetGuiVarArr("second"), GetLang(ws))
         h := 0, m := 0, s := 10
-        this._ParseDurationToHMS(param1, param2, &h, &m, &s)
+        if (subMode == "等待" && waitType == "时长")
+            this._ParseDurationToHMS(param1, param2, &h, &m, &s)
         this._SetCombo("HourCon", vars, h)
         this._SetCombo("MinCon", vars, m)
         this._SetCombo("SecCon", vars, s)
 
-        param5 := ObjHasOwnProp(this.Data, "Param5") ? this.Data.Param5 : ""
+        param5 := this.Data.Param5
         winKind := (subMode == "区间判断") ? TimeNormWindowType(param5) : "时刻"
         this._SetSelectedByKey("WinKindCon", winKind, TimeGui.WindowKindKeys)
         sh := 9, sm := 0, ss := 0
@@ -422,28 +423,6 @@ class TimeGui {
         raw := Trim(String(param1))
         if (u != "时长")
             return
-        nu := GetLangKey(unit)
-        if (nu == "Minutes" || nu == "分钟") {
-            if (IsNumber(raw)) {
-                tot := Integer(raw) * 60
-                h := Floor(tot / 3600), m := Floor(Mod(tot, 3600) / 60), s := Mod(tot, 60)
-            }
-            return
-        }
-        if (nu == "Hours" || nu == "小时") {
-            if (IsNumber(raw)) {
-                tot := Integer(raw) * 3600
-                h := Floor(tot / 3600), m := Floor(Mod(tot, 3600) / 60), s := Mod(tot, 60)
-            }
-            return
-        }
-        if (nu == "Days" || nu == "天") {
-            if (IsNumber(raw)) {
-                tot := Integer(raw) * 86400
-                h := Floor(tot / 3600), m := Floor(Mod(tot, 3600) / 60), s := Mod(tot, 60)
-            }
-            return
-        }
         if (RegExMatch(raw, "^(\d+):(\d+):(\d+)$", &mt)) {
             h := Integer(mt[1]), m := Integer(mt[2]), s := Integer(mt[3])
             return
@@ -506,7 +485,6 @@ class TimeGui {
                     this.Data.Param1 := GetVarName(this.ui.Query("WaitVarCon"))
                 else
                     this.Data.Param1 := this._ReadHms("WaitHourCon", "WaitMinCon", "WaitSecCon")
-                ; 不再展示高级轮询选项；保留已加载的兼容参数，新指令沿用 TimeData 默认值。
             case 2:
                 wt := TimeNormWindowType(this._GetSelectedKey("WinKindCon", TimeGui.WindowKindKeys))
                 this.Data.Param5 := wt

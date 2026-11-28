@@ -1,3 +1,5 @@
+#Include %A_LineFile%\..\CommandDataDefaults.ahk
+
 SplitMacro(macroStr) {
     cmdArr := StrSplit(macroStr, [",", "，", "`n", "⫶"])
     resultArr := []
@@ -95,13 +97,22 @@ TryParseCommandData(val) {
     if (FirstChar != "{" || LastChar != "}")
         return ""
 
-    try
-        return JSON.parse(SaveStr, , false)
+    try {
+        data := JSON.parse(SaveStr, , false)
+        if (IsObject(data) && data.HasOwnProp("SerialStr")) {
+            SplitSerialTextAndNumbers(data.SerialStr, &name, &number)
+            RestoreCommandDefaults(GetCommandKey(name), data)
+        }
+        return data
+    }
     catch
         return ""
 }
 
 GetMacroCMDData(serialStr) {
+    direct := DirectCommandScope()
+    if (IsObject(direct) && serialStr == direct.token)
+        return direct.data
     SplitSerialTextAndNumbers(serialStr, &textOnly, &numbersOnly)
     cmd := GetCommandKey(textOnly)
     normalizedSerialStr := cmd numbersOnly
@@ -110,7 +121,10 @@ GetMacroCMDData(serialStr) {
 
     DataFile := MySoftData.DataFileMap[cmd]
     DataClass := MySoftData.DataClassMap[cmd]
-    saveStr := ReadCommandConfig(DataFile, serialStr, cmd)
+    ; 新增指令只读取规范键；译名资源键回退仅用于1.2.2已有指令。
+    saveStr := !CommandHas122Resource(cmd)
+        ? CfgRead(DataFile, SettingSection, normalizedSerialStr, "")
+        : ReadCommandConfig(DataFile, serialStr, cmd)
     Data := saveStr == "" ? DataClass() : JSON.parse(saveStr, , false)
     Data.SerialStr := normalizedSerialStr
     NormalizeCommandData(cmd, Data)
@@ -120,12 +134,29 @@ GetMacroCMDData(serialStr) {
     return Data
 }
 
+; 一次直接调用的参数通道。仅精确令牌命中，不读写配置或指令缓存。
+DirectCommandScope(value := unset) {
+    static current := ""
+    if (IsSet(value))
+        current := value
+    return current
+}
+
+CommandHas122Resource(cmd) {
+    static commands := Map("搜索",true,"搜索Pro",true,"移动Pro",true,"鼠标移动Pro",true,
+        "输出",true,"运行",true,"循环",true,"宏操作",true,"变量",true,"变量提取",true,
+        "如果",true,"如果Pro",true,"运算",true,"后台鼠标",true,"后台按键",true,
+        "文本处理",true,"Timing",true,"数组",true,"输入",true,"文件读写",true,
+        "窗口管理",true,"按键检测",true,"注释",true,"抓图",true,"图形节点",true,"图形开始节点",true)
+    return commands.Has(cmd)
+}
+
 ; 旧配置可能把当前译名写到了配置键。无论界面语言如何，先找中文键，再找旧键。
 ReadCommandConfig(path, serial, cmd) {
     SplitSerialTextAndNumbers(serial, &name, &number)
     canonical := cmd number
     value := CfgRead(path, SettingSection, canonical, "")
-    if (value != "")
+    if (value != "" || !CommandHas122Resource(cmd))
         return value
     if (serial != canonical) {
         value := CfgRead(path, SettingSection, serial, "")
@@ -139,19 +170,35 @@ ReadCommandConfig(path, serial, cmd) {
         if (value != "")
             return value
     }
-    ; 旧英文版把三个组合搜索指令显示成同一个 Search Combo。
-    if (cmd == "搜索Combo") {
-        for alias in ["组合搜索", "搜索Multi"] {
-            value := CfgRead(path, SettingSection, alias number, "")
-            if (value != "")
-                return value
-        }
-    }
     return ""
 }
 
 NormalizeCommandData(cmd, Data) {
+    RestoreCommandDefaults(cmd, Data)
     CmdEnumNorm(cmd, Data)
+    if (cmd == "浏览器")
+        Data.ActionType := BrowserActions.Action(Data.ActionType)
+    switch cmd {
+        case "AI判断": Data.Source := AiDecision.SourceName(Data.Source)
+        case "YOLO检测":
+            Data.Device := CurrentCommandChoice(Data.Device, Yolo.Devices)
+            task := CommandYoloTask(Data)
+            if (task == "detect" || task == "segment" || task == "pose" || task == "obb")
+                Data.TargetMode := CurrentCommandChoice(Data.TargetMode, Yolo.Targets)
+            if (task != "" && task != "classify" && task != "depth")
+                Data.ActionType := CurrentCommandChoice(Data.ActionType, Yolo.Actions)
+        case "翻译":
+            Data.Source := CurrentCommandChoice(Data.Source, TranslateCommand.Sources)
+            Data.Target := CurrentCommandChoice(Data.Target, TranslateCommand.Targets)
+            Data.Engine := CurrentCommandChoice(Data.Engine, TranslateCommand.Engines)
+            if (TranslateCommand.IsLocal(Data.Engine))
+                Data.Device := CurrentCommandChoice(Data.Device, TranslateCommand.Devices)
+        case "进程管理":
+            Data.Action := ProcessManage.ActionKey(Data.Action)
+            Data.MatchBy := CurrentCommandChoice(Data.MatchBy, ProcessManage.MatchModes)
+            if (Data.Action == "进程信息")
+                Data.PickMatch := CurrentCommandChoice(Data.PickMatch, ProcessManage.MatchPicks)
+    }
     if (cmd == "变量")
         NormalizeVariableAssignmentRows(Data)
     for field in ["CurCMD", "LoopBody", "TrueMacro", "FalseMacro", "DefaultMacro", "SubMacro"] {
@@ -193,11 +240,11 @@ ExpandNumberedMoveCommand(cmd) {
 SaveMacroCMDData(Data) {
     SplitSerialTextAndNumbers(Data.SerialStr, &cmd, &number)
     cmdKey := GetCommandKey(cmd)
-    ValidateCommandVariableNames(cmdKey, Data)
     DataFile := MySoftData.DataFileMap[cmdKey]
     Data.SerialStr := cmdKey number
     NormalizeCommandData(cmdKey, Data)
-    saveStr := JSON.stringify(Data, 0)
+    ValidateCommandVariableNames(cmdKey, Data)
+    saveStr := SerializeCommandData(Data, cmdKey)
     CfgWrite(saveStr, DataFile, SettingSection, Data.SerialStr)
     RegisterVariableIconTypes(cmdKey, Data)
     if (cmdKey == "变量")
@@ -208,21 +255,21 @@ SaveMacroCMDData(Data) {
 
 ; 统一拦截普通编辑器、图形节点与其他直接保存入口，读取参数不按保存名称校验。
 ValidateCommandVariableNames(cmd, data) {
+    rules := MySoftData.HasProp("DataClassMap") && MySoftData.DataClassMap.Has(cmd)
+        ? CommandDefaultRules(cmd, data, CommandDefaultValues(cmd, data)) : Map()
     fields := ["SaveName", "SaveVar", "VarName", "ResultSaveName", "CoordXName", "CoordYName", "AllSaveName",
-        "TimeoutStatusVar", "ResultVar", "ErrorVar", "ControlVar", "TypeVar", "ClassVar", "HwndVar",
+        "TimeoutStatusVar", "ResultVar", "ErrorVar", "ControlVar", "ValueVar", "StateVar", "ClassVar", "HwndVar",
         "XVar", "YVar", "WindowXVar", "WindowYVar", "WidthVar", "HeightVar", "CountVar", "NameVar",
         "PidVar", "PathVar", "ExistVar", "StatusVar", "StartTimeVar", "UptimeVar", "CpuVar", "GpuVar",
-        "ResultArray", "WidthVarName", "HeightVarName", "ResponseVar", "ConfVar", "RatioVar", "DepthVar"]
+        "ResultArray", "ResponseVar", "ConfVar", "RatioVar", "DepthVar",
+        "PageIdVar", "PageUrlVar", "PageTitleVar", "PageStateVar",
+        "ElementExistsVar", "ElementValueVar", "ElementRefVar", "ElementTabIdVar", "ElementStateVar", "ElementHtmlVar",
+        "ElementXVar", "ElementYVar", "ElementPageXVar", "ElementPageYVar", "ElementWidthVar", "ElementHeightVar"]
     Loop 12
         fields.Push("ResultVar" A_Index)
-    if (cmd == "时间") {
-        mode := TimeNormSubMode(data)
-        if (mode == "获取时间变量" || mode == "获取时间字符串")
-            fields.Push("Param1")
-        else if (mode == "时间计算")
-            fields.Push("Param4")
-    }
     for field in fields {
+        if (!rules.Get(field, true))
+            continue
         if (data.HasOwnProp(field) && data.%field% != "") {
             error := CustomVariableNameError(data.%field%)
             if (error != "")

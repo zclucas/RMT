@@ -16,6 +16,8 @@
         this._BindLive("AiInputHost_" t, "Drop", ObjBindMethod(this, "OnAiInputFileDrop", t))
         this._BindLive("AiSend_" t, "Click", ObjBindMethod(this, "OnAiSendClick", t))
         this._BindLive("AiMic_" t, "Click", ObjBindMethod(this, "OnAiMicClick", t))
+        this._BindLive("AiAttach_" t, "Click", ObjBindMethod(this, "OnAiAttachClick", t))
+        this._BindLive("AiAccess_" t, "SelectionChanged", ObjBindMethod(this, "OnAiAccessChanged", t))
         this._BindLive("SideAiToolHistory_" t, "Click", ObjBindMethod(this, "OnSideAiToolHistory", t))
         this._BindLive("SideAiToolValidate_" t, "Click", ObjBindMethod(this, "OnSideAiToolValidate", t))
         this._BindLive("SideAiToolSettings_" t, "Click", ObjBindMethod(this, "OnSideAiToolSettings", t))

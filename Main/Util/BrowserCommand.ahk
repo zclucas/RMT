@@ -1,5 +1,16 @@
 #Requires AutoHotkey v2.0
 #Include BrowserPageInfo.ahk
+#Include BrowserElementInfo.ahk
+
+BrowserResultVariable(data, action) {
+    if (data.SaveVar != "")
+        return data.SaveVar
+    if (action == "获取标题")
+        return data.PageTitleVar
+    if (action == "获取网址")
+        return data.PageUrlVar
+    return ""
+}
 
 OnBrowser(tableItem, cmd, index) {
     parts := StrSplit(cmd, "_")
@@ -10,32 +21,14 @@ OnBrowser(tableItem, cmd, index) {
 
     resolve := (text) => GetReplaceVarText(tableItem, index, text)
 
-    actionType := CmdEnumZh(data.ActionType, BrowserActions.Names)
-    if (BrowserActions.IsCloseAction(actionType)) {
-        if (actionType == "关闭浏览器") {
-            try BrowserUtil.CloseBrowser() ; 保留旧宏关闭受控会话的行为
-        } else {
-            browser := BrowserActions.GetCloseBrowserType(data.HasOwnProp("BrowserType") ? data.BrowserType : "Chrome")
-            scope := data.HasOwnProp("CloseScope") ? GetLangKey(data.CloseScope) : "所有页签"
-            path := ""
-            try {
-                if (browser == "自定义" && data.HasOwnProp("BrowserPath"))
-                    path := resolve(data.BrowserPath)
-                BrowserUtil.CloseWindows(browser, scope, path, () => item.Killed)
-            }
-        }
-        return
+    actionType := BrowserActions.Action(data.ActionType)
+    if (data.SaveVar == "" && BrowserResultVariable(data, actionType) != "") {
+        data := data.Clone()
+        data.SaveVar := BrowserResultVariable(data, actionType)
     }
-
-    selType := data.HasOwnProp("SelectorType") ? data.SelectorType : "CSS"
-    onError := data.HasOwnProp("OnError") ? data.OnError : "停止"
+    selType := data.SelectorType
     usesTimeout := BrowserActions.UsesTimeout(actionType)
-    legacy := !data.HasOwnProp("TimeoutStatusVar")
-    timeoutAction := usesTimeout || legacy ? TimeoutPolicy.Get(data) : ""
-    attempts := 1
-    if (timeoutAction == "" && (usesTimeout || legacy) && onError == "重试")
-        attempts := data.HasOwnProp("RetryCount") ? Max(1, Integer(data.RetryCount)) : 3
-
+    timeoutAction := usesTimeout ? data.TimeoutAction : "停止"
     startTime := A_TickCount
     success := false
     lastErrMsg := ""
@@ -52,8 +45,7 @@ OnBrowser(tableItem, cmd, index) {
         } catch as err {
             lastError := err
             lastErrMsg := err.Message
-            retry := timeoutAction == "" ? A_Index < attempts
-                : (err is BrowserTimeoutError) && TimeoutPolicy.CanRetry(timeoutAction, A_Index)
+            retry := usesTimeout && (err is BrowserTimeoutError) && TimeoutPolicy.CanRetry(timeoutAction, A_Index)
             if (!retry)
                 break
             if (!TimeoutPolicy.WaitBeforeRetry(() => item.Killed))
@@ -64,7 +56,17 @@ OnBrowser(tableItem, cmd, index) {
     elapsed := A_TickCount - startTime
 
     ; 保存结果变量与元数据 (res, res_Success, res_Error, res_ElapsedMs)
-    if (data.SaveVar != "" && !item.Killed) {
+    if (actionType == "标签页信息" && success && !item.Killed) {
+        for field, name in BrowserPageInfo.OutputVariables(data)
+            if (name != "")
+                MySetGlobalVariable([name], [val[field]], false)
+    }
+    if (BrowserElementInfo.IsRead(actionType) && success && !item.Killed) {
+        for label, name in BrowserElementInfo.Outputs(actionType)
+            if (data.%name% != "")
+                MySetGlobalVariable([data.%name%], [val[name]], false)
+    }
+    if (data.SaveVar != "" && !item.Killed && !BrowserElementInfo.IsRead(actionType) && actionType != "标签页信息") {
         saveVar := data.SaveVar
         MySetGlobalVariable([saveVar], [val], false)
         MySetGlobalVariable([saveVar "_Success"], [success ? "1" : "0"], false)
@@ -75,26 +77,96 @@ OnBrowser(tableItem, cmd, index) {
     timedOut := !success && (lastError is BrowserTimeoutError)
     if (!item.Killed && usesTimeout)
         TimeoutPolicy.WriteStatus(data, timedOut)
-    stop := timeoutAction == "" ? (!(usesTimeout || legacy) || onError == "停止")
-        : (!timedOut || TimeoutPolicy.Stops(timeoutAction))
+    stop := !timedOut || !usesTimeout || TimeoutPolicy.Stops(timeoutAction)
     if (!success && !item.Killed && stop)
         throw Error("浏览器操作失败 [" actionType "]: " lastErrMsg)
 }
 
-BrowserTargetRef(tableItem, index, data, resolve) {
-    raw := data.HasOwnProp("TargetRef") ? Trim(data.TargetRef) : ""
-    if (raw != "" && !InStr(raw, "{") && TryGetTabVarValue(&value, tableItem, index, raw, true))
-        return value
-    return resolve(raw)
+BrowserTargetRef(tableItem, index, data, resolve) => resolve(Trim(data.TargetRef))
+
+BrowserMatchingIds(targets, mode, value, currentId := "") {
+    if (mode != "当前标签页" && value == "")
+        throw ValueError(GetLang("请填写标签页匹配值。"))
+    if (BrowserPageInfo.IsRegex(mode))
+        RegExMatch("", value)
+    matches := []
+    for target in targets {
+        id := target.Has("targetId") ? target["targetId"] : target["id"]
+        matched := false
+        switch mode {
+            case "当前标签页": matched := id == currentId
+            case "标签页ID": matched := StrCompare(id, value, true) == 0
+            case "网址": matched := StrCompare(target["url"], value, true) == 0
+            case "标题": matched := StrCompare(target["title"], value, true) == 0
+            case "正则表达式-网址": matched := RegExMatch(target["url"], value) != 0
+            case "正则表达式-标题": matched := RegExMatch(target["title"], value) != 0
+        }
+        if (matched)
+            matches.Push(id)
+    }
+    return matches
+}
+
+BrowserMatchedTarget(tableItem, index, data, resolve) {
+    mode := BrowserActions.MatchMode(data.TabMatchMode, data.ActionType)
+    if (mode == "元素匹配") {
+        matches := BrowserElementInfo.MatchTabs(resolve(data.Selector), BrowserActions._Choice(data.SelectorType, ["CSS", "XPath"]), () => tableItem.Items[index].Killed)
+        if (matches.Length != 1)
+            throw TargetError(GetLang(matches.Length ? "匹配到多个标签页，请缩小匹配范围。" : "未找到匹配的标签页。"))
+        return matches[1]
+    }
+    raw := data.TargetRef
+    value := Trim(BrowserPageInfo.IsRegex(mode) ? BrowserResolveRegex(raw, resolve) : resolve(raw))
+    matches := BrowserMatchingIds(JSON.parse(BrowserUtil.GetTabs()), mode, value)
+    if (matches.Length != 1)
+        throw TargetError(GetLang(matches.Length ? "匹配到多个标签页，请缩小匹配范围。" : "未找到匹配的标签页。"))
+    return matches[1]
+}
+
+BrowserCloseTargets(targets, matches, inverse := false) {
+    if (!matches.Length)
+        throw TargetError(GetLang("未找到匹配的标签页。"))
+    selected := Map(), result := []
+    for id in matches
+        selected[id] := true
+    for target in targets {
+        id := target.Has("targetId") ? target["targetId"] : target["id"]
+        if (inverse ? !selected.Has(id) : selected.Has(id))
+            result.Push(id)
+    }
+    return result
+}
+
+BrowserResolveRegex(text, resolve) {
+    ; {2}、{1,3} 是正则量词，不能交给通用变量替换当作 {变量名} 处理。
+    prefix := Chr(0xE000) "RMT_REGEX_"
+    while (InStr(text, prefix))
+        prefix .= "_"
+    protected := "", quantifiers := [], position := 1
+    while (found := RegExMatch(text, "\{\d+(?:,\d*)?\}", &match, position)) {
+        quantifiers.Push(match[0])
+        protected .= SubStr(text, position, found - position) prefix quantifiers.Length Chr(0xE001)
+        position := found + match.Len
+    }
+    protected .= SubStr(text, position)
+    result := resolve(protected)
+    for index, quantifier in quantifiers
+        result := StrReplace(result, prefix index Chr(0xE001), quantifier)
+    return result
 }
 
 _ExecuteBrowserAction(tableItem, index, data, actionType, resolve, selType) {
+    actionType := BrowserActions.Action(actionType)
+    if (actionType == "当前标签页")
+        return BrowserUtil.CurrentTabAction(BrowserActions._Choice(data.CurrentTabAction, BrowserActions.CurrentTabActions), () => tableItem.Items[index].Killed, data.BrowserPort)
+    if (actionType == "关闭标签页" && BrowserActions.ClosesCurrentTabOnly(data.TabMatchMode, data.TabCloseMode))
+        return BrowserUtil.CurrentTabAction("关闭", () => tableItem.Items[index].Killed)
     if (BrowserActions.UsesTimeout(actionType)) {
         data := data.Clone()
         data.TimeoutMs := TimeoutPolicy.ResolveMs(data.TimeoutMs, resolve, 2147483647)
     }
-    if (actionType != "打开网址" && actionType != "页签信息")
-        BrowserUtil.EnsureConnection(InputField(data, "BrowserPort", 9222))
+    if (actionType != "打开网址" && actionType != "标签页信息")
+        BrowserUtil.EnsureConnection(data.BrowserPort)
     if (BrowserActions.UsesTarget(actionType)) {
         targetRef := BrowserTargetRef(tableItem, index, data, resolve)
         if (targetRef != "")
@@ -102,64 +174,68 @@ _ExecuteBrowserAction(tableItem, index, data, actionType, resolve, selType) {
     }
 
     switch actionType {
-        case "页签信息":
-            source := CmdEnumZh(InputField(data, "PageSource", "当前页签"), BrowserPageInfo.Sources)
-            field := CmdEnumZh(InputField(data, "PageField", "网址"), BrowserPageInfo.Fields)
-            binding := source == "窗口绑定" ? resolve(ResolveBindWindow(tableItem, index, InputField(data, "WinInfo", ""))) : ""
-            return BrowserPageInfo.Read(source, field, source == "目标网址" ? resolve(data.Url) : "", binding,
-                InputField(data, "BrowserPort", 9222), () => tableItem.Items[index].Killed)
+        case "元素信息", "元素位置/宽高":
+            if (BrowserTargetRef(tableItem, index, data, resolve) != "")
+                return BrowserElementInfo.Read(data, resolve(data.Selector), selType)
+            return BrowserElementInfo.ReadMatched(data, resolve(data.Selector), selType, () => tableItem.Items[index].Killed)
+        case "标签页信息":
+            source := BrowserPageInfo.NormalizeSource(data.PageSource)
+            fields := []
+            for field, name in BrowserPageInfo.OutputVariables(data)
+                if (name != "")
+                    fields.Push(field)
+            if (!fields.Length)
+                throw ValueError(GetLang("请至少填写一个信息变量。"))
+            if (source == "元素匹配")
+                return BrowserElementInfo.ReadPageFields(resolve(data.Selector), selType, fields, data.BrowserPort, () => tableItem.Items[index].Killed)
+            url := !BrowserPageInfo.UsesMatchValue(source) ? "" : BrowserPageInfo.IsRegex(source) ? BrowserResolveRegex(data.Url, resolve) : resolve(data.Url)
+            return BrowserPageInfo.ReadFields(source, fields, url,
+                data.BrowserPort, () => tableItem.Items[index].Killed)
 
         case "打开网址":
             url := resolve(data.Url)
             if (url == "")
                 throw Error("URL 不能为空")
-            bType := data.HasOwnProp("BrowserType") ? data.BrowserType : "Chrome"
-            bPath := data.HasOwnProp("BrowserPath") ? resolve(data.BrowserPath) : ""
-            uDir := data.HasOwnProp("UserDataDir") ? resolve(data.UserDataDir) : ""
-            hPort := data.HasOwnProp("BrowserPort") ? Integer(data.BrowserPort) : 9222
-            hLess := data.HasOwnProp("Headless") ? Integer(data.Headless) : 0
+            bType := data.BrowserType
+            bPath := bType == "自定义路径" ? resolve(data.BrowserPath) : ""
+            uDir := resolve(data.UserDataDir)
+            hPort := Integer(data.BrowserPort)
+            hLess := Integer(data.Headless)
             timeoutMs := Integer(data.TimeoutMs)
 
             mode := BrowserActions.GetOpenMode(data)
-            BrowserUtil.OpenUrl(url, bType, bPath, mode == "无痕模式", hLess, uDir, hPort, timeoutMs, mode == "新窗口", InputField(data, "UseCDP", false))
+            BrowserUtil.OpenUrl(url, bType, bPath, mode == "无痕模式", hLess, uDir, hPort, timeoutMs, mode == "新窗口", data.UseCDP)
             return url
 
-        case "当前页跳转":
-            url := resolve(data.Url)
-            if (url == "")
-                throw Error("URL 不能为空")
-            BrowserUtil.Navigate(url, Integer(data.TimeoutMs))
-            return url
-
-        case "新建分页":
-            url := resolve(data.Url)
-            if (url == "")
-                url := "about:blank"
-            return BrowserUtil.NewTab(url)
-
-        case "切换分页":
-            targetRef := BrowserTargetRef(tableItem, index, data, resolve)
-            if (targetRef == "")
-                targetRef := "1"
+        case "切换标签页":
+            targetRef := BrowserMatchedTarget(tableItem, index, data, resolve)
             BrowserUtil.SwitchTab(targetRef)
             return targetRef
 
-        case "关闭分页", "关闭标签":
-            targetRef := BrowserTargetRef(tableItem, index, data, resolve)
-            BrowserUtil.CloseTabByRef(targetRef)
+        case "关闭标签页":
+            mode := BrowserActions.MatchMode(data.TabMatchMode, data.ActionType)
+            raw := data.TargetRef
+            value := (mode == "元素匹配" || mode == "当前标签页") ? "" : Trim(BrowserPageInfo.IsRegex(mode) ? BrowserResolveRegex(raw, resolve) : resolve(raw))
+            currentId := mode == "当前标签页" ? BrowserPageInfo.Read("当前标签页", "标签页ID", "", data.BrowserPort, () => tableItem.Items[index].Killed) : ""
+            targets := JSON.parse(BrowserUtil.GetTabs())
+            matches := mode == "元素匹配" ? BrowserElementInfo.MatchTabs(resolve(data.Selector), selType, () => tableItem.Items[index].Killed, targets)
+                : BrowserMatchingIds(targets, mode, value, currentId)
+            ids := BrowserCloseTargets(targets, matches, BrowserActions.TabCloseMode(data.TabCloseMode) == "非匹配标签页")
+            for id in ids {
+                if (tableItem.Items[index].Killed)
+                    return false
+                BrowserUtil.CloseTabByRef(id)
+            }
             return true
 
-        case "获取分页列表":
+        case "获取标签页列表":
             return BrowserUtil.GetTabs()
-
-        case "获取当前分页ID":
-            return BrowserUtil.GetActiveTabId()
 
         case "等待元素":
             selector := resolve(data.Selector)
             if (selector == "")
                 throw Error("Selector 不能为空")
-            condZh := data.HasOwnProp("Condition") ? data.Condition : "出现"
+            condZh := data.Condition
             condMap := Map("出现", "appear", "消失", "disappear", "可见", "visible")
             cond := condMap.Has(condZh) ? condMap[condZh] : "appear"
             BrowserUtil.WaitElement(selector, selType, cond, Integer(data.TimeoutMs))
@@ -172,7 +248,7 @@ _ExecuteBrowserAction(tableItem, index, data, actionType, resolve, selType) {
             return true
 
         case "等待加载":
-            stateZh := data.HasOwnProp("LoadState") ? data.LoadState : "完全加载"
+            stateZh := data.LoadState
             stateMap := Map("完全加载", "load", "DOM加载", "domcontentloaded", "网络空闲", "networkidle")
             state := stateMap.Has(stateZh) ? stateMap[stateZh] : "load"
             BrowserUtil.WaitPageLoad(state, Integer(data.TimeoutMs))
@@ -226,7 +302,7 @@ _ExecuteBrowserAction(tableItem, index, data, actionType, resolve, selType) {
             selector := resolve(data.Selector)
             if (selector == "")
                 throw Error("Selector 不能为空")
-            chk := data.HasOwnProp("Checked") ? Integer(data.Checked) : 1
+            chk := Integer(data.Checked)
             BrowserUtil.Check(selector, selType, chk, Integer(data.TimeoutMs))
             return chk
 
@@ -266,7 +342,7 @@ _ExecuteBrowserAction(tableItem, index, data, actionType, resolve, selType) {
         case "鼠标点击":
             x := Float(resolve(data.CoordX))
             y := Float(resolve(data.CoordY))
-            btn := data.HasOwnProp("MouseBtn") ? data.MouseBtn : "左键"
+            btn := data.MouseBtn
             btnEn := (btn == "右键") ? "right" : ((btn == "中键") ? "middle" : "left")
             BrowserUtil.MouseClick(x, y, btnEn)
             return true
@@ -281,7 +357,7 @@ _ExecuteBrowserAction(tableItem, index, data, actionType, resolve, selType) {
             keyStr := resolve(data.Text)
             if (keyStr == "")
                 throw Error("按键不能为空")
-            mod := data.HasOwnProp("Modifiers") ? Integer(data.Modifiers) : 0
+            mod := Integer(data.Modifiers)
             for singleKey in StrSplit(keyStr, ["⎖", ","]) {
                 singleKey := Trim(singleKey)
                 if (singleKey != "")
@@ -297,8 +373,8 @@ _ExecuteBrowserAction(tableItem, index, data, actionType, resolve, selType) {
                 return true
             } else if (opt == "set" || opt == "设置") {
                 cVal := resolve(data.JsCode)
-                cDom := data.HasOwnProp("CookieDomain") ? resolve(data.CookieDomain) : ""
-                cPath := data.HasOwnProp("CookiePath") ? resolve(data.CookiePath) : "/"
+                cDom := resolve(data.CookieDomain)
+                cPath := resolve(data.CookiePath)
                 BrowserUtil.SetCookie(cName, cVal, cDom, cPath)
                 return true
             } else {
@@ -307,7 +383,7 @@ _ExecuteBrowserAction(tableItem, index, data, actionType, resolve, selType) {
 
         case "Storage操作":
             opt := resolve(data.Text) ; "get" / "set"
-            sType := data.HasOwnProp("StorageType") ? data.StorageType : "Local"
+            sType := data.StorageType
             sKey := resolve(data.AttrName)
             if (opt == "set" || opt == "设置") {
                 sVal := resolve(data.JsCode)
@@ -323,41 +399,6 @@ _ExecuteBrowserAction(tableItem, index, data, actionType, resolve, selType) {
                 throw Error("JS代码 不能为空")
             return BrowserUtil.Evaluate(js, Integer(data.TimeoutMs))
 
-        case "提取文本":
-            selector := resolve(data.Selector)
-            return BrowserUtil.GetText(selector, selType, Integer(data.TimeoutMs))
-
-        case "提取控件值":
-            selector := resolve(data.Selector)
-            BrowserUtil.WaitElement(selector, selType, "appear", Integer(data.TimeoutMs))
-            args := JSON.stringify([selector, selType], 0)
-            result := BrowserUtil.Evaluate("
-            (
-                (([selector, type]) => {
-                    const el = type.toLowerCase() === 'xpath'
-                        ? document.evaluate(selector, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue
-                        : document.querySelector(selector);
-                    if (!el || !('value' in el)) return 'missing';
-                    if (el.type === 'checkbox' || el.type === 'radio') return el.checked ? 'value:1' : 'value:0';
-                    if (el.multiple && el.selectedOptions)
-                        return 'value:' + JSON.stringify(Array.from(el.selectedOptions, option => option.value));
-                    return 'value:' + el.value;
-                })
-            )" "(" args ")", Integer(data.TimeoutMs))
-            if (SubStr(result, 1, 6) != "value:")
-                throw Error(GetLang("找不到可读取值的控件。"))
-            return SubStr(result, 7)
-
-        case "提取属性":
-            selector := resolve(data.Selector)
-            attr := resolve(data.AttrName)
-            return BrowserUtil.GetAttribute(selector, selType, attr, Integer(data.TimeoutMs))
-
-        case "提取HTML":
-            selector := resolve(data.Selector)
-            outer := data.HasOwnProp("OuterHtml") ? Integer(data.OuterHtml) : 1
-            return BrowserUtil.GetHtml(selector, selType, outer, Integer(data.TimeoutMs))
-
         case "获取网址":
             return BrowserUtil.GetUrl()
 
@@ -372,21 +413,11 @@ _ExecuteBrowserAction(tableItem, index, data, actionType, resolve, selType) {
                     DirCreate(ssDir)
                 path := ssDir "\Browser_" A_Now ".png"
             }
-            fullPage := data.HasOwnProp("OuterHtml") ? Integer(data.OuterHtml) : 0
+            fullPage := Integer(data.FullPage)
             BrowserUtil.CaptureScreenshot(path, fullPage)
             return path
 
-        case "刷新":
-            BrowserUtil.Reload(0)
-            return true
-
-        case "后退":
-            BrowserUtil.GoBack()
-            return true
-
-        case "前进":
-            BrowserUtil.GoForward()
-            return true
-
+        default:
+            throw ValueError(GetLang("不支持的浏览器操作：") actionType)
     }
 }

@@ -44,6 +44,11 @@ class CompareProGui {
 
     _EscapeXml(s) => EscapeXamlXml(s)
 
+    _EscapeAttr(s) {
+        s := this._EscapeXml(s)
+        return SubStr(s, 1, 1) == "{" ? "{}" s : s
+    }
+
     ShowGui(cmd) {
         global MySoftData
         if (IsObject(this.ui) && !this._closed)   ; XAML 窗口不支持隐藏复用：关旧重建
@@ -65,7 +70,7 @@ class CompareProGui {
         this._title := title
         titleHeight := XAMLHost.CmdTitleBarHeight()
 
-        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(XAMLHost.FontSize())
+        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(CmdEditorForm.FontSize())
         main.Rows(titleHeight, "*")
 
         XAMLHost.AddCmdTitleBar(main, title, titleHeight)
@@ -84,7 +89,7 @@ class CompareProGui {
         meta := inner.Add("Grid").Grid_Row(0).Margin("0,0,0,8")
         meta.Cols("48", "*")
         meta.Add("TextBlock").Grid_Column(0).Text(GetLang("备注：")).VerticalAlignment("Center")
-            .Foreground("{DynamicResource TextMain}").FontSize("12")
+            .Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
         ; TextBox 默认模板会裁掉上下边，用外层 Border 画四边
         remarkBd := meta.Add("Border").Grid_Column(1).Height("28").MinHeight("28").VerticalAlignment("Center")
             .Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource ControlBorder}")
@@ -104,7 +109,7 @@ class CompareProGui {
 
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)
         this.ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", this.OwnerHwnd)
-        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="660" Height="540"')
+        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="620" Height="540"')
         this.ui.xaml := StrReplace(this.ui.xaml, 'FontFamily="Segoe UI Variable Display, Segoe UI, sans-serif"', 'FontFamily="' MainSoftData.FontType '"')
         this.ui.xaml := StrReplace(this.ui.xaml, '%resources%', '')
 
@@ -167,7 +172,7 @@ class CompareProGui {
             . '<Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource Accent}"/>'
             . '</Trigger>'
             . '<Trigger Property="IsPressed" Value="True">'
-            . '<Setter TargetName="Bd" Property="Background" Value="{DynamicResource ControlBorder}"/>'
+            . '<Setter TargetName="Bd" Property="Background" Value="{DynamicResource BtnPressBg}"/>'
             . '</Trigger>'
             . '<Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.4"/></Trigger>'
             . '</ControlTemplate.Triggers>'
@@ -179,20 +184,20 @@ class CompareProGui {
             . ' BorderBrush="{DynamicResource ControlBorder}" Background="{DynamicResource InputBg}"'
             . ' SnapsToDevicePixels="True" UseLayoutRounding="True">'
             . '<StackPanel Orientation="Horizontal">'
-            . '<TextBlock Text="' this._EscapeXml(name) '"'
+            . '<TextBlock Text="' this._EscapeAttr(name) '"'
             . ' Foreground="{DynamicResource TextMain}" VerticalAlignment="Center"/>'
         if (op != "")
-            xml .= '<TextBlock Text="' this._EscapeXml(op) '" Foreground="{DynamicResource Accent}"'
+            xml .= '<TextBlock Text="' this._EscapeAttr(op) '" Foreground="{DynamicResource Accent}"'
                 . ' Margin="4,0,0,0" VerticalAlignment="Center"/>'
         if (!hideVal && val != "")
-            xml .= '<TextBlock Text="' this._EscapeXml(val) '"'
+            xml .= '<TextBlock Text="' this._EscapeAttr(val) '"'
                 . ' Foreground="{DynamicResource TextMain}" Margin="4,0,0,0" VerticalAlignment="Center"/>'
         xml .= '</StackPanel></Border>'
         return xml
     }
 
     _JoinXml(i, j, logicStr) {
-        return '<Button Name="BtnJoin' i '_' j '" Content="' this._EscapeXml(logicStr) '"'
+        return '<Button Name="BtnJoin' i '_' j '" Content="' this._EscapeAttr(logicStr) '"'
             . ' Height="20" MinHeight="20" Padding="6,0" Margin="0,0,4,2" Cursor="Hand"'
             . ' FontWeight="Bold" Foreground="{DynamicResource Accent}"'
             . ' Background="{DynamicResource ControlBg}" BorderBrush="{DynamicResource ControlBorder}" BorderThickness="1">'
@@ -282,8 +287,8 @@ class CompareProGui {
             . ' Foreground="{DynamicResource TextMain}" VerticalAlignment="Center"/>'
             . '<Border Grid.Column="1" MinHeight="26" MaxHeight="40" Padding="6,4" CornerRadius="3"'
             . ' Background="{DynamicResource InputBg}" BorderBrush="{DynamicResource ControlBorder}" BorderThickness="1"'
-            . ' SnapsToDevicePixels="True" UseLayoutRounding="True" ToolTip="' this._EscapeXml(actionText) '">'
-            . '<TextBlock Text="' this._EscapeXml(actionText) '" TextWrapping="Wrap" TextTrimming="CharacterEllipsis"'
+            . ' SnapsToDevicePixels="True" UseLayoutRounding="True" ToolTip="' this._EscapeAttr(actionText) '">'
+            . '<TextBlock Text="' this._EscapeAttr(actionText) '" TextWrapping="Wrap" TextTrimming="CharacterEllipsis"'
             . ' Foreground="{DynamicResource InputText}" TextAlignment="Left" VerticalAlignment="Center"/>'
             . '</Border>'
             . '<StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="6,0,0,0">'

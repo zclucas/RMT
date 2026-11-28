@@ -38,7 +38,6 @@ class MacroGraphFormalMixin {
             GetLang("运行Pro"), this.RunProGui,
             GetLang("网络请求"), this.HttpRequestGui,
             GetLang("浏览器"), this.BrowserGui,
-            GetLang("窗口控件"), this.WindowControlGui,
             GetLang("控件信息"), this.ControlInfoGui,
             GetLang("控件操作"), this.ControlOperationGui,
             GetLang("AI判断"), this.AiDecisionGui,
@@ -72,7 +71,7 @@ class MacroGraphFormalMixin {
     _RmtOpList() {
         return GetLangArr(["截图", "截图提取文本", "启用鼠标", "启用键盘", "启用键鼠",
             "禁用鼠标", "禁用键盘", "禁用键鼠", "显示菜单", "关闭菜单",
-            "暂停所有宏", "恢复所有宏", "终止所有宏", "开启变量监视", "关闭变量监视", "开启指令显示",
+            "暂停其他宏", "恢复所有宏", "终止所有宏", "开启变量监视", "关闭变量监视", "开启指令显示",
             "关闭指令显示", "关闭软件", "休眠", "重载"])
     }
 
@@ -344,7 +343,7 @@ class MacroGraphFormalMixin {
     }
 
     _IsFullEditorCommand(type) {
-        return type == GetLang("浏览器") || type == GetLang("窗口控件") || type == GetLang("控件信息") || type == GetLang("控件操作") || type == GetLang("AI判断") || type == GetLang("YOLO检测")
+        return type == GetLang("浏览器") || type == GetLang("控件信息") || type == GetLang("控件操作") || type == GetLang("AI判断") || type == GetLang("YOLO检测")
             || type == GetLang("翻译") || type == GetLang("进程管理")
     }
 
@@ -395,7 +394,7 @@ class MacroGraphFormalMixin {
         lw := this._FormalLW(), cw := this._FormalCW()
         kindItems := GetLangArr(TimeGui.WaitUnitKeys)
         kind := d.HasOwnProp("cdKind") ? d.cdKind : (d.HasOwnProp("timeParam2") ? d.timeParam2 : "时长")
-        kindKey := TimeNormWaitType(GetLangKey(kind))
+        kindKey := visible ? TimeNormWaitType(GetLangKey(kind)) : "时长"
         hour := d.HasOwnProp("cdHour") ? d.cdHour : 0
         minv := d.HasOwnProp("cdMin") ? d.cdMin : 0
         sec := d.HasOwnProp("cdSecPart") ? d.cdSecPart : (d.HasOwnProp("cdSec") ? d.cdSec : 10)
@@ -430,16 +429,17 @@ class MacroGraphFormalMixin {
         timeout := d.HasOwnProp("timeTimeout") ? d.timeTimeout : 0
         interval := d.HasOwnProp("timeInterval") ? d.timeInterval : 500
         unitItems := GetLangArr(TimeGui.WaitUnitKeys)
-        unitKey := TimeNormWaitType(p2)
+        unitKey := showWait ? TimeNormWaitType(p2) : "时刻"
         this._AddComboRow(body, "TimeUnitRow_" id, GetLang("模式："), "TimeUnitCmb_" id, unitItems, this._IndexInLangArr(unitItems, GetLang(unitKey)), showWait, true, lw, cw)
         this._AddFieldRow(body, "TimeTargetRow_" id, GetLang(unitKey == "时长" ? "时长：" : (unitKey == "时间戳" ? "时间戳：" : "目标时间：")), "TimeTarget_" id, p1, showWait, true, "", "", "", lw, cw, , CmdEditorForm.TimeValueTip(unitKey))
         this._AddFieldRow(body, "TimeTimeoutRow_" id, GetLang("超时(ms)："), "TimeTimeout_" id, timeout, showWait, true, "", "", "", lw, cw, , GetLang("本次操作最多等待的毫秒数。"))
         this._AddFieldRow(body, "TimeIntervalRow_" id, GetLang("轮询间隔(ms)："), "TimeInterval_" id, interval, showWait, true, "", "", "", lw, cw, , GetLang("两次操作之间等待的毫秒数。"))
         winKinds := GetLangArr(TimeGui.WindowKindKeys)
         acts := GetLangArr(TimeGui.MismatchActionKeys)
-        this._AddComboRow(body, "TimeWinKindRow_" id, GetLang("模式："), "TimeWinKindCmb_" id, winKinds, this._IndexInLangArr(winKinds, GetLang(TimeNormWindowType(p5))), showWin, true, lw, cw)
-        this._AddFieldRow(body, "TimeStartRow_" id, GetLang("开始时间："), "TimeStart_" id, p1, showWin, true, "", "", "", lw, cw, , CmdEditorForm.TimeValueTip(TimeNormWindowType(p5)))
-        this._AddFieldRow(body, "TimeEndRow_" id, GetLang("结束时间："), "TimeEnd_" id, p2, showWin, true, "", "", "", lw, cw, , CmdEditorForm.TimeValueTip(TimeNormWindowType(p5)))
+        winKind := showWin ? TimeNormWindowType(p5) : "时刻"
+        this._AddComboRow(body, "TimeWinKindRow_" id, GetLang("模式："), "TimeWinKindCmb_" id, winKinds, this._IndexInLangArr(winKinds, GetLang(winKind)), showWin, true, lw, cw)
+        this._AddFieldRow(body, "TimeStartRow_" id, GetLang("开始时间："), "TimeStart_" id, p1, showWin, true, "", "", "", lw, cw, , CmdEditorForm.TimeValueTip(winKind))
+        this._AddFieldRow(body, "TimeEndRow_" id, GetLang("结束时间："), "TimeEnd_" id, p2, showWin, true, "", "", "", lw, cw, , CmdEditorForm.TimeValueTip(winKind))
         this._AddComboRow(body, "TimeActRow_" id, GetLang("动作："), "TimeActCmb_" id, acts, this._IndexInLangArr(acts, GetLang(p4)), showWin, true, lw, cw)
         this._FillCountDownBody(id, d, body, showCd)
     }
@@ -1056,7 +1056,7 @@ class MacroGraphFormalMixin {
         currentOp := GetLang(d.HasOwnProp("rmtOp") ? RmtCommandActionKey(d.rmtOp) : "截图")
         currentCategory := GetLang(d.HasOwnProp("rmtCategory") ? RmtCommandCategoryKey(d.rmtCategory) : "全部")
         ; 根据类别获取指令列表，如果当前指令不在列表中则使用全部
-        ops := this._RmtCategoryOps(currentCategory)
+        ops := this._RmtCategoryOps(currentCategory, currentOp)
         if (!this._ArrayContains(ops, currentOp)) {
             ops := this._RmtCategoryOps(GetLang("全部"))
             currentCategory := GetLang("全部")
@@ -1139,7 +1139,6 @@ class MacroGraphFormalMixin {
         atKey := GetLangKey(at)
         isMove := atKey == "移动窗口" || atKey == "相对移动" || atKey == "位置和宽高"
         isSize := atKey == "调整宽高" || atKey == "位置和宽高"
-        isGetSize := atKey == "获取窗口宽高"
         isTitle := atKey == "修改标题"
         isTrans := atKey == "修改透明度"
         this._AddComboRow(body, "WmActRow_" id, GetLang("操作："), "WmActCmb_" id, actions, this._IndexInLangArr(actions, GetLang(WindowActionGroup(atKey))), true, true, lw, cw)
@@ -1153,8 +1152,6 @@ class MacroGraphFormalMixin {
         this._AddEditableComboRow(body, "WmYRow_" id, GetLang(atKey == "相对移动" ? "偏移Y：" : "坐标Y："), "WmY_" id, atKey == "相对移动" ? varList : GetGuiVarArr("y"), GetLang(d.HasOwnProp("wmPosY") ? d.wmPosY : 0), isMove, lw, cw, "WmYLabel_" id)
         this._AddEditableComboRow(body, "WmWRow_" id, GetLang("宽度："), "WmW_" id, varList, d.HasOwnProp("wmWidth") ? d.wmWidth : 0, isSize, lw, cw)
         this._AddEditableComboRow(body, "WmHRow_" id, GetLang("高度："), "WmH_" id, varList, d.HasOwnProp("wmHeight") ? d.wmHeight : 0, isSize, lw, cw)
-        this._AddEditableComboRow(body, "WmWidthVarRow_" id, GetLang("宽度变量："), "WmWidthVar_" id, varList, d.HasOwnProp("wmWidthVarName") ? d.wmWidthVarName : "WinWidth", isGetSize, lw, cw)
-        this._AddEditableComboRow(body, "WmHeightVarRow_" id, GetLang("高度变量："), "WmHeightVar_" id, varList, d.HasOwnProp("wmHeightVarName") ? d.wmHeightVarName : "WinHeight", isGetSize, lw, cw)
         body.Add("TextBlock").Name("WmHint_" id).Text(GetLang(WindowEditorHint(atKey))).TextWrapping("Wrap").Margin("0,6,0,4").Opacity(0.75).FontSize(this._MGFontSize(11))
         fields := WindowInfoFields(atKey)
         Loop 7 {
@@ -1197,30 +1194,25 @@ class MacroGraphFormalMixin {
     _FillScreenShotBody(id, d, body) {
         lw := this._FormalLW(), cw := this._FormalCW()
         varList := GetGuiVarArr()
-        typeNames := GetLangArr(["屏幕抓图", "窗口抓图"])
+        typeNames := GetLangArr(CmdEnumShotNames())
         st := CmdEnumZh(d.HasOwnProp("ssType") ? d.ssType : "屏幕抓图", CmdEnumShotNames())
         isWin := st == "窗口抓图"
         nt := CmdEnumNameType(d.HasOwnProp("ssNameType") ? d.ssNameType : "固定名称")
-        showFixed := nt == "固定名称"
-        fixed := d.HasOwnProp("ssFixedName") ? d.ssFixedName : "Shot"
         wi := d.HasOwnProp("ssWinInfo") ? d.ssWinInfo : ""
-        toggle := d.HasOwnProp("ssResultToggle") ? d.ssResultToggle : 0
-        on := toggle == 1 || toggle == "1"
-        rn := d.HasOwnProp("ssResultSaveName") ? d.ssResultSaveName : GetLang("图片路径")
-        this._AddComboRow(body, "SsTypeRow_" id, GetLang("类型："), "SsTypeCmb_" id, typeNames, CmdEnumIndex(st, CmdEnumShotNames()), true, true, lw, cw)
+        rn := d.HasOwnProp("ssResultSaveName") ? d.ssResultSaveName : "ImgPath"
+        this._AddComboRow(body, "SsTypeRow_" id, GetLang("类型："), "SsTypeCmb_" id, typeNames, CmdEnumIndex(st, CmdEnumShotNames()), true, true, lw, cw, "SsTypeLabel_" id, st == "自定义截图" ? GetLang("该类型只进入截图状态，需要运行时手动框选范围。") : "")
         winRow := body.Add("StackPanel").Name("SsWinRow_" id).Orientation("Horizontal").Margin("0,5,0,0")
         if (!isWin)
             winRow.Visibility("Collapsed")
         this._MakeWindowBindingCombo(winRow, "SsWin_" id, wi, "130")
         winRow.Add("Button").Name("SsWinEdit_" id).Content(GetLang("编辑")).FontSize(this._MGFontSize(11)).Height("20").Margin("4,0,0,0").Padding("8,0").Cursor("Hand")
-        this._AddEditableComboRow(body, "SsSXRow_" id, GetLang("起始X："), "SsSX_" id, isWin ? GetGuiVarReferences() : GetGuiVarReferences("x"), TranslateBuiltinVarReferences(d.HasOwnProp("ssStartX") ? d.ssStartX : 0, true), true, lw, cw)
-        this._AddEditableComboRow(body, "SsSYRow_" id, GetLang("起始Y："), "SsSY_" id, isWin ? GetGuiVarReferences() : GetGuiVarReferences("y"), TranslateBuiltinVarReferences(d.HasOwnProp("ssStartY") ? d.ssStartY : 0, true), true, lw, cw)
-        this._AddEditableComboRow(body, "SsEXRow_" id, GetLang("终止X："), "SsEX_" id, isWin ? GetGuiVarReferences() : GetGuiVarReferences("x"), TranslateBuiltinVarReferences(d.HasOwnProp("ssEndX") ? d.ssEndX : A_ScreenWidth, true), true, lw, cw)
-        this._AddEditableComboRow(body, "SsEYRow_" id, GetLang("终止Y："), "SsEY_" id, isWin ? GetGuiVarReferences() : GetGuiVarReferences("y"), TranslateBuiltinVarReferences(d.HasOwnProp("ssEndY") ? d.ssEndY : A_ScreenHeight, true), true, lw, cw)
-        this._AddCheckRow(body, "SsNameTogRow_" id, "SsNameTog_" id, GetLang("固定名称："), showFixed, true)
-        this._AddFieldRow(body, "SsFixedRow_" id, GetLang("名称："), "SsFixed_" id, fixed, showFixed, true, "", "", "", lw, cw)
-        this._AddCheckRow(body, "SsResTogRow_" id, "SsResTog_" id, GetLang("保存到变量"), on, true)
-        this._AddEditableComboRow(body, "SsResNameRow_" id, GetLang("变量名："), "SsResName_" id, varList, rn, on, lw, cw)
+        this._AddEditableComboRow(body, "SsSXRow_" id, GetLang("起始X："), "SsSX_" id, isWin ? GetGuiVarReferences() : GetGuiVarReferences("x"), TranslateBuiltinVarReferences(d.HasOwnProp("ssStartX") ? d.ssStartX : 0, true), st != "自定义截图", lw, cw)
+        this._AddEditableComboRow(body, "SsSYRow_" id, GetLang("起始Y："), "SsSY_" id, isWin ? GetGuiVarReferences() : GetGuiVarReferences("y"), TranslateBuiltinVarReferences(d.HasOwnProp("ssStartY") ? d.ssStartY : 0, true), st != "自定义截图", lw, cw)
+        this._AddEditableComboRow(body, "SsEXRow_" id, GetLang("终止X："), "SsEX_" id, isWin ? GetGuiVarReferences() : GetGuiVarReferences("x"), TranslateBuiltinVarReferences(d.HasOwnProp("ssEndX") ? d.ssEndX : A_ScreenWidth, true), st != "自定义截图", lw, cw)
+        this._AddEditableComboRow(body, "SsEYRow_" id, GetLang("终止Y："), "SsEY_" id, isWin ? GetGuiVarReferences() : GetGuiVarReferences("y"), TranslateBuiltinVarReferences(d.HasOwnProp("ssEndY") ? d.ssEndY : A_ScreenHeight, true), st != "自定义截图", lw, cw)
+        this._AddComboRow(body, "SsNameRow_" id, GetLang("命名方式："), "SsNameCmb_" id, GetLangArr(["固定", "序号自增"]), nt == "固定名称" ? 0 : 1, true, true, lw, cw)
+        this._AddCheckRow(body, "SsClipRow_" id, "SsClipTog_" id, GetLang("截图保存到剪切板"), d.HasOwnProp("ssToClipboard") && d.ssToClipboard, true)
+        this._AddEditableComboRow(body, "SsResNameRow_" id, GetLang("结果变量："), "SsResName_" id, varList, rn, true, lw, cw, "SsResultLabel_" id, GetLang("截图保存路径，留空时只保存截图，不写入变量。"))
     }
 
     _LoopCondiTypes() {
@@ -1760,7 +1752,7 @@ class MacroGraphFormalMixin {
             this._BindCtrl("WmWinEdit_" id, "Click", this._OnFormalWmWinEdit.Bind(this, id), runtime)
             Loop 7
                 this._FormalTrackEditCombo(id, "WmResult" A_Index, h, runtime)
-            for nm in ["WmX", "WmY", "WmW", "WmH", "WmWidthVar", "WmHeightVar", "WmTitle", "WmTrans"]
+            for nm in ["WmX", "WmY", "WmW", "WmH", "WmTitle", "WmTrans"]
                 this._FormalTrackEditCombo(id, nm, h, runtime)
         } else if (t == GetLang("按键检测") || t == GetLang("手柄检测")) {
             h := this._OnFormalKeyCheck.Bind(this, id)
@@ -1774,9 +1766,8 @@ class MacroGraphFormalMixin {
             this._BindCtrl("SsWinEdit_" id, "Click", this._OnFormalSsWinEdit.Bind(this, id), runtime)
             for nm in ["SsSX", "SsSY", "SsEX", "SsEY"]
                 this._FormalTrackEditCombo(id, nm, h, runtime)
-            this._FormalTrackCheck(id, "SsNameTog", h, runtime)
-            this._FormalTrackField(id, "SsFixed", h, runtime)
-            this._FormalTrackCheck(id, "SsResTog", h, runtime)
+            this._FormalTrackCombo(id, "SsNameCmb", h, runtime)
+            this._FormalTrackCheck(id, "SsClipTog", h, runtime)
             this._FormalTrackEditCombo(id, "SsResName", h, runtime)
         } else if (t == GetLang("注释")) {
             h := this._OnFormalComment.Bind(this, id)

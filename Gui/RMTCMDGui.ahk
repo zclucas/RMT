@@ -35,7 +35,7 @@ class RMTCMDGui {
             },
             {
                 name: "宏控制",
-                cmds: ["显示菜单", "关闭菜单", "打开界面窗口", "关闭界面窗口", "禁用模块", "取消禁用模块", "暂停所有宏", "恢复所有宏", "终止所有宏"]
+                cmds: ["显示菜单", "关闭菜单", "打开界面窗口", "关闭界面窗口", "禁用模块", "取消禁用模块", "暂停其他宏", "恢复所有宏", "终止所有宏"]
             },
             {
                 name: "调试",
@@ -136,7 +136,7 @@ class RMTCMDGui {
         title := this.ParentTile GetLang("RMT指令编辑器")
         this._title := title
         titleHeight := XAMLHost.CmdTitleBarHeight()
-        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(XAMLHost.FontSize())
+        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(CmdEditorForm.FontSize())
         main.Rows(titleHeight, "Auto")
         XAMLHost.AddCmdTitleBar(main, title, titleHeight)
         this._BuildForm(main).Grid_Row(1)
@@ -144,7 +144,7 @@ class RMTCMDGui {
         template := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)
         this.ui := XAMLHost(StrReplace(template, "%app%", main.ToString()), "", this.OwnerHwnd)
         this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"',
-            'Title="' this._EscapeXml(title) '" Width="400" SizeToContent="Height"')
+            'Title="' this._EscapeXml(title) '" Width="360" SizeToContent="Height"')
         this.ui.xaml := StrReplace(this.ui.xaml, 'FontFamily="Segoe UI Variable Display, Segoe UI, sans-serif"',
             'FontFamily="' MainSoftData.FontType '"')
         this.ui.xaml := StrReplace(this.ui.xaml, '%resources%', '')
@@ -226,7 +226,7 @@ class RMTCMDGui {
             "显示菜单", 0xE700, "关闭菜单", 0xE700,
             "打开界面窗口", 0xE737, "关闭界面窗口", 0xE737,
             "禁用模块", 0xE8A9, "取消禁用模块", 0xE8A9,
-            "暂停所有宏", 0xE769, "恢复所有宏", 0xE768, "终止所有宏", 0xE71A,
+            "暂停所有宏", 0xE769, "暂停其他宏", 0xE769, "恢复所有宏", 0xE768, "终止所有宏", 0xE71A,
             "开启变量监视", 0xE890, "关闭变量监视", 0xE890,
             "开启指令显示", 0xE756, "关闭指令显示", 0xE756,
             "关闭软件", 0xE7E8, "休眠", 0xE708, "重载", 0xE72C)
@@ -246,6 +246,8 @@ class RMTCMDGui {
     }
 
     _CommandCategory(command) {
+        if (command == "暂停所有宏")
+            return "宏控制" ; 仅回显旧配置，不进入新增指令列表。
         for category in this.CategoryDefs
             for key in category.cmds
                 if (key == command)
@@ -262,6 +264,10 @@ class RMTCMDGui {
                 commands.Push(command)
                 labels.Push(GetLang(command))
             }
+        }
+        if (preferredCommand == "暂停所有宏" && (categoryKey == "全部" || categoryKey == "宏控制")) {
+            commands.Push(preferredCommand)
+            labels.Push(GetLang(preferredCommand))
         }
         selectedCommand := commands[1]
         for command in commands

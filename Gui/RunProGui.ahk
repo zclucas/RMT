@@ -70,7 +70,7 @@ class RunProGui {
         this._title := title
         titleHeight := XAMLHost.CmdTitleBarHeight()
 
-        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(XAMLHost.FontSize())
+        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(CmdEditorForm.FontSize())
         main.Rows(titleHeight, "*")
 
         ; === 标题栏 ===
@@ -82,34 +82,34 @@ class RunProGui {
         body.Cols("88", "*", "16", "80", "*", "12", "80", "*")
 
         ; 行0：备注
-        body.Add("TextBlock").Grid_Row(0).Grid_Column(0).Text(GetLang("备注：")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
+        body.Add("TextBlock").Grid_Row(0).Grid_Column(0).Text(GetLang("备注：")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
         body.Add("TextBox").Grid_Row(0).Grid_Column(1).Grid_ColumnSpan(3).Name("RemarkCon").Height(26).MinHeight(26).VerticalAlignment("Center")
-            .VerticalContentAlignment("Center").FontSize("11").Padding("2,0")
+            .VerticalContentAlignment("Center").FontSize(CmdEditorForm.FontSize()).Padding("2,0")
             .Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
 
         ; 行1：模式 + 选项
-        body.Add("TextBlock").Grid_Row(1).Grid_Column(0).Text(GetLang("模式：")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
+        body.Add("TextBlock").Grid_Row(1).Grid_Column(0).Text(GetLang("模式：")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
         rm := body.Add("ComboBox").Grid_Row(1).Grid_Column(1).Name("RunModeCombo").Height(26).MinHeight(26).VerticalAlignment("Center")
-            .VerticalContentAlignment("Center").FontSize("11").Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
+            .VerticalContentAlignment("Center").FontSize(CmdEditorForm.FontSize()).Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
         for m in [GetLang("不等待"), GetLang("等待+返回值"), GetLang("不等待+输入"), GetLang("等待+输入输出")]
             rm.Add("ComboBoxItem").Content(m)
-        body.Add("TextBlock").Grid_Row(1).Grid_Column(3).Text(GetLang("选项：")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
+        body.Add("TextBlock").Grid_Row(1).Grid_Column(3).Text(GetLang("选项：")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
         opt := body.Add("ComboBox").Grid_Row(1).Grid_Column(4).Name("OptionCombo").Height(26).MinHeight(26).VerticalAlignment("Center")
-            .VerticalContentAlignment("Center").FontSize("11").Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
+            .VerticalContentAlignment("Center").FontSize(CmdEditorForm.FontSize()).Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
         for o in GetLangArr(["后台", "默认", "最小化", "最大化"])
             opt.Add("ComboBoxItem").Content(o)
 
         ; 行2：变量
-        body.Add("TextBlock").Grid_Row(2).Grid_Column(0).Text(GetLang("变量：")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
+        body.Add("TextBlock").Grid_Row(2).Grid_Column(0).Text(GetLang("变量：")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
         body.Add("ComboBox").Grid_Row(2).Grid_Column(1).Name("VariCombo").Height(26).MinHeight(26).VerticalAlignment("Center").IsEditable("True")
-            .VerticalContentAlignment("Center").FontSize("11").Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
+            .VerticalContentAlignment("Center").FontSize(CmdEditorForm.FontSize()).Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
         varBtns := body.Add("StackPanel").Grid_Row(2).Grid_Column(3).Grid_ColumnSpan(5).Orientation("Horizontal").VerticalAlignment("Center")
         varBtns.Add("Button").Name("BtnAddName").Content(GetLang("追加名")).Height(26).MinHeight(26).Cursor("Hand")
         varBtns.Add("Button").Name("BtnAddValue").Content(GetLang("追加值")).Height(26).MinHeight(26).Margin("6,0,0,0").Cursor("Hand")
 
         ; 行3：目标
-        body.Add("TextBlock").Grid_Row(3).Grid_Column(0).Name("TargetLabel").Text(GetLang("目标：")).ToolTip(GetLang("支持启动程序（如.exe、.bat）、打开文件（如.txt、.mp4）或网址等等") "`n" GetLang("倒计时结束时会强制关闭应用")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
+        body.Add("TextBlock").Grid_Row(3).Grid_Column(0).Name("TargetLabel").Text(GetLang("目标：")).ToolTip(GetLang("支持启动程序（如.exe、.bat）、打开文件（如.txt、.mp4）或网址等等") "`n" GetLang("倒计时结束时会强制关闭应用")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
         targetHost := body.Add("Grid").Grid_Row(3).Grid_Column(1).Grid_ColumnSpan(6).Name("RunTargetHost").Margin("0,0,8,0")
         RunGui.AddTargetCombo(targetHost)
         body.Add("Button").Grid_Row(3).Grid_Column(7).Name("BtnSelectFile").Content(GetLang("选择文件")).Height(26).MinHeight(26).VerticalAlignment("Center").HorizontalAlignment("Stretch").Cursor("Hand")
@@ -117,45 +117,45 @@ class RunProGui {
         ; 行4：返回值 / 输出 / 错误
         sn1 := body.Add("Grid").Name("SaveName1Row").Grid_Row(4).Grid_Column(0).Grid_ColumnSpan(2)
         sn1.Cols("88", "*")
-        sn1.Add("TextBlock").Name("SaveNameTip1").Grid_Column(0).Text(GetLang("返回值：")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
+        sn1.Add("TextBlock").Name("SaveNameTip1").Grid_Column(0).Text(GetLang("返回值：")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
         sn1.Add("ComboBox").Name("SaveName1").Grid_Column(1).Height(26).MinHeight(26).VerticalAlignment("Center").IsEditable("True")
-            .VerticalContentAlignment("Center").FontSize("11").Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
+            .VerticalContentAlignment("Center").FontSize(CmdEditorForm.FontSize()).Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
         sn2 := body.Add("Grid").Name("SaveName2Row").Grid_Row(4).Grid_Column(3).Grid_ColumnSpan(2)
         sn2.Cols("80", "*")
-        sn2.Add("TextBlock").Name("SaveNameTip2").Grid_Column(0).Text(GetLang("输出：")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
+        sn2.Add("TextBlock").Name("SaveNameTip2").Grid_Column(0).Text(GetLang("输出：")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
         sn2.Add("ComboBox").Name("SaveName2").Grid_Column(1).Height(26).MinHeight(26).VerticalAlignment("Center").IsEditable("True")
-            .VerticalContentAlignment("Center").FontSize("11").Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
+            .VerticalContentAlignment("Center").FontSize(CmdEditorForm.FontSize()).Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
         sn3 := body.Add("Grid").Name("SaveName3Row").Grid_Row(4).Grid_Column(6).Grid_ColumnSpan(2)
         sn3.Cols("80", "*")
-        sn3.Add("TextBlock").Name("SaveNameTip3").Grid_Column(0).Text(GetLang("错误：")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
+        sn3.Add("TextBlock").Name("SaveNameTip3").Grid_Column(0).Text(GetLang("错误：")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
         sn3.Add("ComboBox").Name("SaveName3").Grid_Column(1).Height(26).MinHeight(26).VerticalAlignment("Center").IsEditable("True")
-            .VerticalContentAlignment("Center").FontSize("11").Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
+            .VerticalContentAlignment("Center").FontSize(CmdEditorForm.FontSize()).Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
 
         ; 行5：输入编码 / 输出编码 / 错误编码
         ei := body.Add("Grid").Name("EncInRow").Grid_Row(5).Grid_Column(0).Grid_ColumnSpan(2)
         ei.Cols("88", "*")
-        ei.Add("TextBlock").Name("EncInTip").Grid_Column(0).Text(GetLang("输入编码：")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
+        ei.Add("TextBlock").Name("EncInTip").Grid_Column(0).Text(GetLang("输入编码：")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
         ei.Add("ComboBox").Name("EncIn").Grid_Column(1).Height(26).MinHeight(26).VerticalAlignment("Center").IsEditable("True")
-            .VerticalContentAlignment("Center").FontSize("11").Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
+            .VerticalContentAlignment("Center").FontSize(CmdEditorForm.FontSize()).Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
         eo := body.Add("Grid").Name("EncOutRow").Grid_Row(5).Grid_Column(3).Grid_ColumnSpan(2)
         eo.Cols("80", "*")
-        eo.Add("TextBlock").Name("EncOutTip").Grid_Column(0).Text(GetLang("输出编码：")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
+        eo.Add("TextBlock").Name("EncOutTip").Grid_Column(0).Text(GetLang("输出编码：")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
         eo.Add("ComboBox").Name("EncOut").Grid_Column(1).Height(26).MinHeight(26).VerticalAlignment("Center").IsEditable("True")
-            .VerticalContentAlignment("Center").FontSize("11").Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
+            .VerticalContentAlignment("Center").FontSize(CmdEditorForm.FontSize()).Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
         ee := body.Add("Grid").Name("EncErrRow").Grid_Row(5).Grid_Column(6).Grid_ColumnSpan(2)
         ee.Cols("80", "*")
-        ee.Add("TextBlock").Name("EncErrTip").Grid_Column(0).Text(GetLang("错误编码：")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
+        ee.Add("TextBlock").Name("EncErrTip").Grid_Column(0).Text(GetLang("错误编码：")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
         ee.Add("ComboBox").Name("EncErr").Grid_Column(1).Height(26).MinHeight(26).VerticalAlignment("Center").IsEditable("True")
-            .VerticalContentAlignment("Center").FontSize("11").Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
+            .VerticalContentAlignment("Center").FontSize(CmdEditorForm.FontSize()).Foreground("{DynamicResource InputText}").Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
 
         ; 行6：输入（白底框 + 右上角悬浮编辑，打开文本构造）
         stdRow := body.Add("Grid").Name("StdInRow").Grid_Row(6).Grid_ColumnSpan(8)
         stdRow.Cols("88", "*")
-        stdRow.Add("TextBlock").Grid_Column(0).Text(GetLang("输入：")).VerticalAlignment("Top").Margin("0,6,0,0").Foreground("{DynamicResource TextMain}").FontSize("12")
+        stdRow.Add("TextBlock").Grid_Column(0).Text(GetLang("输入：")).VerticalAlignment("Top").Margin("0,6,0,0").Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
         stdHost := stdRow.Add("Grid").Grid_Column(1)
         stdHost.Add("TextBox").Name("StdInCon").AcceptsReturn("True").TextWrapping("Wrap")
             .HorizontalAlignment("Stretch").VerticalAlignment("Stretch").MinHeight("44")
-            .VerticalContentAlignment("Top").FontSize("11").Padding("4,3,26,3")
+            .VerticalContentAlignment("Top").FontSize(CmdEditorForm.FontSize()).Padding("4,3,26,3")
             .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
             .ScrollViewer_VerticalScrollBarVisibility("Auto")
@@ -166,7 +166,7 @@ class RunProGui {
             .Background("{DynamicResource ControlBg}").BorderBrush("{DynamicResource ControlBorder}").BorderThickness("1")
 
         ; 行7：提示
-        body.Add("TextBlock").Grid_Row(7).Grid_ColumnSpan(8).Text(GetLang("支持启动程序（如.exe、.bat）、打开文件（如.txt、.mp4）或网址等等")).VerticalAlignment("Center").Foreground("{DynamicResource TextSub}").FontSize("11").TextWrapping("NoWrap")
+        body.Add("TextBlock").Grid_Row(7).Grid_ColumnSpan(8).Text(GetLang("支持启动程序（如.exe、.bat）、打开文件（如.txt、.mp4）或网址等等")).VerticalAlignment("Center").Foreground("{DynamicResource TextSub}").FontSize(CmdEditorForm.FontSize()).TextWrapping("NoWrap")
 
         ; 行8：确定
         btnRow := body.Add("StackPanel").Grid_Row(8).Grid_ColumnSpan(8).Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center")
@@ -348,7 +348,7 @@ class RunProGui {
         title := this.ParentTile GetLang("文本构造")
         titleHeight := "30"
 
-        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(XAMLHost.FontSize())
+        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(CmdEditorForm.FontSize())
         main.Rows(titleHeight, "*")
 
         ; === 标题栏 ===
@@ -360,7 +360,7 @@ class RunProGui {
 
         ; 行0：内容框
         body.Add("TextBox").Grid_Row(0).Name("StdInEditCon").AcceptsReturn("True").TextWrapping("Wrap")
-            .VerticalContentAlignment("Top").Padding("2,3").FontSize("11")
+            .VerticalContentAlignment("Top").Padding("2,3").FontSize(CmdEditorForm.FontSize())
             .Height("95").MinHeight("95")
             .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
@@ -370,7 +370,7 @@ class RunProGui {
         row1 := body.Add("Grid").Grid_Row(2).VerticalAlignment("Center")
         row1.Cols("88", "80", "8", "200", "8", "70", "8", "70")
         row1.Add("TextBlock").Grid_Column(0).Text(GetLang("变量数组：")).ToolTip(GetLang("追加名插入名称，追加值在执行时取值。")).VerticalAlignment("Center")
-            .Foreground("{DynamicResource TextMain}").FontSize("12")
+            .Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
         vt := row1.Add("ComboBox").Grid_Column(1).Name("StdInEditVarTypeCombo").Height(26).MinHeight(26).VerticalAlignment("Center").SelectedIndex("0")
         vt.Add("ComboBoxItem").Content(GetLang("变量"))
         vt.Add("ComboBoxItem").Content(GetLang("数组"))

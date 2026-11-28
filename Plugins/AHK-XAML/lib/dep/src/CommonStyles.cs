@@ -21,6 +21,10 @@ using System.Xml;
 
 internal static class RmtCommonStyles
 {
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct ClientRect { public int Left, Top, Right, Bottom; }
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool GetClientRect(IntPtr hwnd, out ClientRect rect);
     internal sealed class Entry
     {
         public WeakReference Element;
@@ -667,15 +671,18 @@ internal static class RmtCommonStyles
         chromeW = 0;
         chromeH = 0;
         if (window == null) return;
-        var hostBox = window.Content as Viewbox;
-        if (hostBox == null) return;
-        window.UpdateLayout();
-        // Width/Height retain the requested value even when Min/Max constrain the HWND.
-        // Comparing that request with the viewport mistakes the size constraint for chrome.
-        if (window.ActualWidth > 1 && hostBox.ActualWidth > 1)
-            chromeW = Math.Max(0, window.ActualWidth - hostBox.ActualWidth);
-        if (window.ActualHeight > 1 && hostBox.ActualHeight > 1)
-            chromeH = Math.Max(0, window.ActualHeight - hostBox.ActualHeight);
+        // A uniform Viewbox can be narrower than the client area while tall temporary
+        // content is height-limited. That empty space is not native window chrome.
+        var source = PresentationSource.FromVisual(window);
+        if (source == null || source.CompositionTarget == null) return;
+        IntPtr hwnd = new System.Windows.Interop.WindowInteropHelper(window).Handle;
+        ClientRect rect;
+        if (hwnd == IntPtr.Zero || !GetClientRect(hwnd, out rect)) return;
+        Matrix fromDevice = source.CompositionTarget.TransformFromDevice;
+        double clientW = (rect.Right - rect.Left) * fromDevice.M11;
+        double clientH = (rect.Bottom - rect.Top) * fromDevice.M22;
+        if (window.ActualWidth > 1) chromeW = Math.Max(0, window.ActualWidth - clientW);
+        if (window.ActualHeight > 1) chromeH = Math.Max(0, window.ActualHeight - clientH);
     }
 
     internal static void NormalizeWindowContentForResize(Window window, double visualScale = double.NaN, double chromeW = 0, double chromeH = 0, bool preserveAutoHeight = false)
@@ -742,11 +749,6 @@ internal static class RmtCommonStyles
         {
             viewportW = window.ActualWidth;
             viewportH = window.ActualHeight;
-        }
-        else if (window.IsLoaded && hostBox.ActualWidth > 1 && hostBox.ActualHeight > 1)
-        {
-            viewportW = hostBox.ActualWidth;
-            viewportH = hostBox.ActualHeight;
         }
         else
         {
@@ -1504,7 +1506,7 @@ internal static class RmtCommonStyles
     internal static Brush FallbackButtonChrome(string name, params FrameworkElement[] roots)
     {
         string[] keys = name == "HoverBackground"
-            ? new[] { "ActionHoverBg", "ControlBorder" }
+            ? new[] { "ActionHoverBg", "EditHoverBg" }
             : new[] { "ActionPressBg", "BtnPressBg", "ActionHoverBg", "ActionBg" };
         foreach (string key in keys)
         {
@@ -2368,7 +2370,7 @@ internal sealed class RmtStyleEditor : Window
                 <Condition Property='IsMouseOver' Value='True'/>
                 <Condition Property='IsSelected' Value='False'/>
               </MultiTrigger.Conditions>
-                <Setter TargetName='Bd' Property='Background' Value='{DynamicResource ControlBorder}'/>
+                <Setter TargetName='Bd' Property='Background' Value='{DynamicResource EditHoverBg}'/>
                 <Setter TargetName='Bd' Property='BorderBrush' Value='{DynamicResource Accent}'/>
               </MultiTrigger>
               <Trigger Property='IsSelected' Value='True'>
@@ -4825,7 +4827,7 @@ internal sealed class RmtStyleEditor : Window
         button.SetResourceReference(Control.BackgroundProperty, "ControlBg");
         button.SetResourceReference(Control.ForegroundProperty, "TextMain");
         button.SetResourceReference(Control.BorderBrushProperty, "OutlineStroke");
-        BindButtonChrome(button, "ControlBorder", "BtnPressBg");
+        BindButtonChrome(button, "EditHoverBg", "BtnPressBg");
         button.BorderThickness = new Thickness(1.5);
         button.Padding = new Thickness(10, 0, 10, 0);
         button.Cursor = Cursors.Hand;

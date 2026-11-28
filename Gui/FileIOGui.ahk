@@ -87,7 +87,7 @@ class FileIOGui {
         this._title := title
         titleHeight := XAMLHost.CmdTitleBarHeight()
 
-        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(XAMLHost.FontSize())
+        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(CmdEditorForm.FontSize())
         main.Rows(titleHeight, "Auto")
 
         ; === 标题栏 ===
@@ -96,7 +96,7 @@ class FileIOGui {
         ; === 内容 ===
         body := main.Add("Grid").Grid_Row(1).Margin("16,8,16,33")
         body.Rows("36", "36", "36", "36", "Auto", "Auto", "Auto", "Auto", "48")
-        body.Cols("96", "*", "16", "96", "*")
+        body.Cols(CmdEditorForm.PairColumns()*)
 
         ; 行0：备注（白底，内边距与下拉框一致）
         body.Add("TextBlock").Grid_Row(0).Grid_Column(0).Text(GetLang("备注：")).VerticalAlignment("Center")
@@ -111,7 +111,7 @@ class FileIOGui {
         for t in this._OperTypes()
             ot.Add("ComboBoxItem").Content(t)
         encRow := body.Add("Grid").Name("EncodingRow").Grid_Row(1).Grid_Column(3).Grid_ColumnSpan(2).Visibility("Collapsed")
-        encRow.Cols("96", "*")
+        encRow.Cols(CmdEditorForm.LabelWidth(), "*")
         encRow.Add("TextBlock").Grid_Column(0).Text(GetLang("文件编码:")).VerticalAlignment("Center")
         encRow.Add("ComboBox").Grid_Column(1).Name("EncodingCombo").Height(26).MinHeight(26).VerticalAlignment("Center")
 
@@ -124,14 +124,14 @@ class FileIOGui {
         body.Add("TextBlock").Grid_Row(3).Grid_Column(0).Text(GetLang("操作模式:")).VerticalAlignment("Center")
         body.Add("ComboBox").Grid_Row(3).Grid_Column(1).Name("OperModeCombo").Height(26).MinHeight(26).VerticalAlignment("Center")
         textRow := body.Add("Grid").Name("TextRowRow").Grid_Row(3).Grid_Column(3).Grid_ColumnSpan(2).Visibility("Collapsed")
-        textRow.Cols("96", "*")
+        textRow.Cols(CmdEditorForm.LabelWidth(), "*")
         textRow.Add("TextBlock").Grid_Column(0).Text(GetLang("行号:")).VerticalAlignment("Center")
         textRow.Add("ComboBox").Grid_Column(1).Name("TextRowCombo").Height(26).MinHeight(26).IsEditable("True").VerticalAlignment("Center")
 
         ; 行4：表名或序号 / 表格行号 / 表格列号（两行，避免裁切）
         excelRow := body.Add("Grid").Name("ExcelRow").Grid_Row(4).Grid_ColumnSpan(5)
         excelRow.Rows("36", "36")
-        excelRow.Cols("96", "*", "16", "96", "*")
+        excelRow.Cols(CmdEditorForm.PairColumns()*)
         excelRow.Add("TextBlock").Grid_Row(0).Grid_Column(0).Text(GetLang("表名或序号:")).ToolTip(GetLang("填工作表名称，或从 1 开始的工作表序号。")).VerticalAlignment("Center")
         excelRow.Add("TextBox").Grid_Row(0).Grid_Column(1).Name("NameOrSerialCon").Height(26).MinHeight(26).VerticalAlignment("Center")
         excelRow.Add("TextBlock").Grid_Row(0).Grid_Column(3).Text(GetLang("表格行号:")).VerticalAlignment("Center")
@@ -142,7 +142,7 @@ class FileIOGui {
         ; 行5：终止行号 + 终止列号
         regionRow := body.Add("Grid").Name("RegionRow").Grid_Row(5).Grid_ColumnSpan(5).Visibility("Collapsed")
         regionRow.Rows("36")
-        regionRow.Cols("96", "*", "16", "96", "*")
+        regionRow.Cols(CmdEditorForm.PairColumns()*)
         regionRow.Add("TextBlock").Grid_Column(0).Text(GetLang("终止行号:")).VerticalAlignment("Center")
         regionRow.Add("ComboBox").Grid_Column(1).Name("RowEndCombo").Height(26).MinHeight(26).IsEditable("True").VerticalAlignment("Center")
         regionRow.Add("TextBlock").Grid_Column(3).Text(GetLang("终止列号:")).VerticalAlignment("Center")
@@ -151,7 +151,7 @@ class FileIOGui {
         ; 行6：结果（去掉结果保存标题和边框）
         resultRow := body.Add("Grid").Name("ResultRow").Grid_Row(6).Grid_ColumnSpan(5)
         resultRow.Rows("36")
-        resultRow.Cols("96", "80", "16", "150", "*")
+        resultRow.Cols(CmdEditorForm.LabelWidth(), 80, 16, "*", 0)
         resultRow.Add("TextBlock").Grid_Column(0).Text(GetLang("结果：")).VerticalAlignment("Center")
         st := resultRow.Add("ComboBox").Grid_Column(1).Name("SaveTypeCombo").Height(26).MinHeight(26).VerticalAlignment("Center")
         st.Add("ComboBoxItem").Content(GetLang("变量"))
@@ -163,7 +163,7 @@ class FileIOGui {
         writeRow.Rows("64")
         writeRow.Add("TextBox").Name("ContentCon").AcceptsReturn("True").TextWrapping("Wrap")
             .HorizontalAlignment("Stretch").VerticalAlignment("Stretch").MinHeight("64")
-            .VerticalContentAlignment("Top").Padding("4,3,26,3").FontSize("11")
+            .VerticalContentAlignment("Top").Padding("4,3,26,3").FontSize(CmdEditorForm.FontSize())
             .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
             .ScrollViewer_VerticalScrollBarVisibility("Auto")
@@ -175,7 +175,7 @@ class FileIOGui {
 
         writeArrRow := body.Add("Grid").Name("WriteArrRow").Grid_Row(7).Grid_ColumnSpan(5).Visibility("Collapsed")
         writeArrRow.Rows("36")
-        writeArrRow.Cols("96", "*", "16", "96", "*")
+        writeArrRow.Cols(CmdEditorForm.PairColumns()*)
         writeArrRow.Add("TextBlock").Grid_Column(0).Text(GetLang("写入数组：")).VerticalAlignment("Center")
         writeArrRow.Add("ComboBox").Grid_Column(1).Name("WriteArrCombo").Height(26).MinHeight(26).IsEditable("True").VerticalAlignment("Center")
 
@@ -186,7 +186,7 @@ class FileIOGui {
         ; === 创建 XAMLHost ===
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)
         this.ui := XAMLHost(StrReplace(tmp, "%app%", main.ToString()), "", this.OwnerHwnd)
-        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="580" SizeToContent="Height"')
+        this.ui.xaml := StrReplace(this.ui.xaml, 'Width="940" Height="700"', 'Title="' this._EscapeXml(title) '" Width="' CmdEditorForm.Width '" SizeToContent="Height"')
         this.ui.xaml := StrReplace(this.ui.xaml, 'FontFamily="Segoe UI Variable Display, Segoe UI, sans-serif"', 'FontFamily="' MainSoftData.FontType '"')
         this.ui.xaml := StrReplace(this.ui.xaml, '%resources%', '')
 
@@ -429,7 +429,7 @@ class FileIOGui {
         title := this.ParentTile GetLang("文本构造")
         titleHeight := "30"
 
-        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(XAMLHost.FontSize())
+        main := XAML_Generator("Grid").Background("{DynamicResource BgColor}").TextElement_FontSize(CmdEditorForm.FontSize())
         main.Rows(titleHeight, "*")
         chrome := XAMLHost.AddTitleBar(main, title, titleHeight)
 
@@ -437,7 +437,7 @@ class FileIOGui {
         body.Rows("Auto", "6", "32", "48")
 
         body.Add("TextBox").Grid_Row(0).Name("ContentEditCon").AcceptsReturn("True").TextWrapping("Wrap")
-            .VerticalContentAlignment("Top").Padding("2,3").FontSize("11")
+            .VerticalContentAlignment("Top").Padding("2,3").FontSize(CmdEditorForm.FontSize())
             .Height("95").MinHeight("95")
             .Background("{DynamicResource InputBg}").Foreground("{DynamicResource InputText}")
             .BorderBrush("{DynamicResource InputStroke}").BorderThickness("1")
@@ -446,7 +446,7 @@ class FileIOGui {
         row1 := body.Add("Grid").Grid_Row(2).VerticalAlignment("Center")
         row1.Cols("88", "80", "8", "200", "8", "70", "8", "70")
         row1.Add("TextBlock").Grid_Column(0).Text(GetLang("变量数组：")).ToolTip(GetLang("追加名插入名称，追加值在执行时取值。")).VerticalAlignment("Center")
-            .Foreground("{DynamicResource TextMain}").FontSize("12")
+            .Foreground("{DynamicResource TextMain}").FontSize(CmdEditorForm.FontSize())
         vt := row1.Add("ComboBox").Grid_Column(1).Name("ContentEditVarTypeCombo").Height(26).MinHeight(26).VerticalAlignment("Center").SelectedIndex("0")
         vt.Add("ComboBoxItem").Content(GetLang("变量"))
         vt.Add("ComboBoxItem").Content(GetLang("数组"))

@@ -78,9 +78,9 @@ SetGlobalData(macroStr, visitMap) {
             case "输入":
                 if (Data.Type == "弹窗" || Data.Type == "状态" || Data.Type == "选择" || Data.Type == "多选")
                     VariableMap[Data.SaveName] := true
-            case "窗口控件", "控件信息", "控件操作", "AI判断":
+            case "控件信息", "控件操作", "AI判断":
                 RegisterCommandResultVars(Data)
-                if (baseCmd == "AI判断" || WindowControl.UsesTimeout(CmdEnumZh(Data.ActionType, WindowControl.Actions)))
+                if (baseCmd == "AI判断" || WindowControl.UsesTimeout(Data.ActionType))
                     TimeoutPolicy.RegisterStatus(Data)
             case "YOLO检测":
                 RegisterYoloVars(Data)
@@ -92,19 +92,23 @@ SetGlobalData(macroStr, visitMap) {
                 WindowEnsureResults(Data)
                 WindowRegisterResults(Data)
             case "浏览器":
-                if (BrowserActions.UsesTimeout(CmdEnumZh(Data.ActionType, BrowserActions.Names)))
+                if (BrowserActions.Action(Data.ActionType) == "标签页信息")
+                    for field, name in BrowserPageInfo.OutputVariables(Data)
+                        if (name != "")
+                            VariableMap[name] := true
+                if (BrowserElementInfo.IsRead(BrowserActions.Action(Data.ActionType)))
+                    for label, field in BrowserElementInfo.Outputs(BrowserActions.Action(Data.ActionType))
+                        if (InputField(Data, field, "") != "")
+                            VariableMap[Data.%field%] := true
+                if (BrowserActions.UsesTimeout(BrowserActions.Action(Data.ActionType)))
                     TimeoutPolicy.RegisterStatus(Data)
-                if (Data.HasOwnProp("SaveVar") && Data.SaveVar != ""
-                    && !BrowserActions.IsCloseAction(CmdEnumZh(Data.ActionType, BrowserActions.Names)))
+                if (Data.SaveVar != "")
                     for suffix in ["", "_Success", "_Error", "_ElapsedMs"]
                         VariableMap[Data.SaveVar suffix] := true
             case "网络请求":
                 HttpRequestRegisterResults(Data)
             case "等待":
-                if (Data.HasOwnProp("TimeoutStatusVar"))
-                    TimeoutPolicy.RegisterStatus(Data)
-                else if (Data.HasOwnProp("ResultSaveName") && Data.ResultSaveName != "")
-                    VariableMap[Data.ResultSaveName] := true
+                TimeoutPolicy.RegisterStatus(Data)
             case "文件读写", "Excel":
                 SetFileIOGlobalData(Data)
             case "运行", "运行Pro":
@@ -126,7 +130,7 @@ SetGlobalData(macroStr, visitMap) {
                     SetGlobalData(value, visitMap)
                 }
                 SetGlobalData(Data.DefaultMacro, visitMap)
-            case "搜索", "搜索Pro", "搜索All", "搜索Combo", "组合搜索", "搜索Multi":
+            case "搜索", "搜索Pro", "搜索All", "搜索Combo":
                 if (baseCmd == "搜索All")
                     MySoftData.GlobalArrMap[Data.AllSaveName] := true
                 if (Data.ResultToggle)
@@ -137,18 +141,6 @@ SetGlobalData(macroStr, visitMap) {
                 }
                 SetGlobalData(Data.TrueMacro, visitMap)
                 SetGlobalData(Data.FalseMacro, visitMap)
-            case "时间":
-                subMode := TimeNormSubMode(Data)
-                if (subMode == "获取时间变量" || subMode == "获取时间字符串") {
-                    if (Data.Param1 != "") {
-                        VariableMap[Data.Param1] := true
-                        if (subMode == "获取时间变量")
-                            MySoftData.TimeVarMap[Data.Param1] := true
-                    }
-                } else if (subMode == "时间计算") {
-                    if (Data.Param4 != "")
-                        VariableMap[Data.Param4] := true
-                }
         }
     }
 }
@@ -300,7 +292,7 @@ RegisterVariableIconTypes(cmd, data) {
     outputs := Map()
     number := Chr(0xE8EF), text := Chr(0xE8D2), coord := Chr(0xE962), clock := Chr(0xE823)
     switch cmd {
-        case "搜索", "搜索Pro", "搜索All", "搜索Combo", "组合搜索", "搜索Multi":
+        case "搜索", "搜索Pro", "搜索All", "搜索Combo":
             if (data.ResultToggle) {
                 yes := VariableValueIcon(data.TrueValue), no := VariableValueIcon(data.FalseValue)
                 VariableIconOutput(outputs, data.ResultSaveName, yes == no ? yes : "")
@@ -330,12 +322,6 @@ RegisterVariableIconTypes(cmd, data) {
                 }
                 VariableIconOutput(outputs, name, glyph)
             }
-        case "时间":
-            mode := TimeNormSubMode(data)
-            if (mode == "获取时间变量" || mode == "获取时间字符串")
-                VariableIconOutput(outputs, data.Param1, clock)
-            else if (mode == "时间计算")
-                VariableIconOutput(outputs, data.Param4, clock)
         case "窗口信息", "窗口操作", "窗口管理":
             for i, label in WindowInfoFields(data.ActionType) {
                 field := "ResultVar" i
@@ -345,11 +331,22 @@ RegisterVariableIconTypes(cmd, data) {
                     VariableIconOutput(outputs, data.%field%, glyph)
                 }
             }
+        case "浏览器":
+            if (BrowserActions.Action(data.ActionType) == "标签页信息") {
+                for field, name in BrowserPageInfo.OutputVariables(data)
+                    VariableIconOutput(outputs, name, text)
+            } else if (BrowserElementInfo.IsRead(BrowserActions.Action(data.ActionType))) {
+                for label, field in BrowserElementInfo.Outputs(BrowserActions.Action(data.ActionType))
+                    VariableIconOutput(outputs, InputField(data, field, ""), field == "ElementStateVar" || field == "ElementRefVar" || field == "ElementTabIdVar" || field == "ElementHtmlVar" ? text : field == "ElementValueVar" ? "" : number)
+            } else if (data.HasOwnProp("SaveVar"))
+                VariableIconOutput(outputs, data.SaveVar, "")
         default:
             ; 其他写入入口先登记为未知，避免同名变量保留另一条指令的类型。
+            rules := MySoftData.HasProp("DataClassMap") && MySoftData.DataClassMap.Has(cmd)
+                ? CommandDefaultRules(cmd, data, CommandDefaultValues(cmd, data)) : Map()
             for field in ["SaveName", "SaveVar", "VarName", "ResultSaveName", "ResultVar", "ErrorVar", "ControlVar",
-                "TypeVar", "ClassVar", "HwndVar", "XVar", "YVar", "WindowXVar", "WindowYVar", "WidthVar", "HeightVar"] {
-                if (!data.HasOwnProp(field))
+                "ClassVar", "HwndVar", "StateVar", "ValueVar", "XVar", "YVar", "WindowXVar", "WindowYVar", "WidthVar", "HeightVar"] {
+                if (!data.HasOwnProp(field) || !rules.Get(field, true))
                     continue
                 glyph := ""
                 if (cmd == "控件信息") {
@@ -359,7 +356,7 @@ RegisterVariableIconTypes(cmd, data) {
                         glyph := coord
                     else if (field == "WidthVar" || field == "HeightVar")
                         glyph := number
-                    else if (field == "TypeVar" || field == "ClassVar")
+                    else if (field == "StateVar")
                         glyph := text
                 } else if (cmd == "按键检测" || cmd == "手柄检测")
                     glyph := Chr(0xE73E)

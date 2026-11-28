@@ -1,4 +1,4 @@
-// =============================================================================
+﻿// =============================================================================
 // Event system: binding, throttling, AHK event reporting
 // =============================================================================
 using System;
@@ -49,6 +49,8 @@ public partial class AhkWpfEngine
 
     private void BindEvent(string ctrlName, string eventName, int fpsLimit = 0, bool queueLimited = false)
     {
+        // Engine notification after the positioned first frame is revealed.
+        if (ctrlName == "Window" && eventName == "PanelPositionReady") return;
         string eventKey = ctrlName + ":" + eventName;
         object ctrl = ctrlName == "Window" ? (object)win : FindControlByPath(ctrlName);
         if (ctrl == null)
@@ -212,6 +214,12 @@ public partial class AhkWpfEngine
             // 悬浮球在 WPF UI 线程内捕获鼠标并移动窗口，避免逐帧跨进程回调造成拖动滞后。
             // 移动/抬起同时挂到窗口上：球是 WS_EX_NOACTIVATE 的透明窗，捕获偶发失败时
             // 只挂元素的话会完全收不到 MouseMove，表现为「拖不动」。
+            if (eventName == "PanelTitleDrag")
+            {
+                var title = ctrl as FrameworkElement;
+                if (title != null) BindPanelTitleDrag(ctrlName, title);
+                return;
+            }
             if (eventName == "BallDrag")
             {
                 var ball = ctrl as FrameworkElement;
@@ -369,8 +377,9 @@ public partial class AhkWpfEngine
         POINT mouse;
         RECT window;
         IntPtr hwnd = new WindowInteropHelper(win).Handle;
-        if (hwnd == IntPtr.Zero || !GetCursorPos(out mouse) || !GetWindowRect(hwnd, out window))
-            return;
+        using (new PanelDpiScope())
+            if (hwnd == IntPtr.Zero || !GetCursorPos(out mouse) || !GetWindowRect(hwnd, out window))
+                return;
 
         _ballDragControl = ball;
         _ballDragControlName = ctrlName;
@@ -393,62 +402,65 @@ public partial class AhkWpfEngine
 
     private void UpdateBallDrag(FrameworkElement ball, System.Windows.Input.MouseEventArgs e)
     {
-        // 不能要求 IsMouseCaptured：NOACTIVATE 透明窗的捕获不可靠，一旦没捕获成功
-        // 这里就会静默返回，整只球拖不动。以「是否是当前拖动对象」为准即可。
-        if (!object.ReferenceEquals(_ballDragControl, ball))
-            return;
-
-        POINT mouse;
-        if (!GetCursorPos(out mouse))
-            return;
-
-        int dx = mouse.x - _ballDragStartMouseX;
-        int dy = mouse.y - _ballDragStartMouseY;
-
-        // 拖动心跳：窗口位置完全由这里接管，AHK 只需要知道「还在拖，别插手」。
-        // 以前是 AHK 自己用 GetKeyState("LButton") 推断，实测靠不住 —— 拖到一半就被判成
-        // 松手，跟随定时器 50ms 一次把窗口拽回起点，画面就在新旧两点之间来回闪。
-        // 放在拖动阈值判断之前：手指轻动但还没到拖动距离时也要报「我还按着」，
-        // 否则 AHK 那边超时解锁，真开始拖的头一帧会被拽回原位。
-        // 按 60ms 限频，一次拖动十几条短消息，开销可以忽略。
-        if (!string.IsNullOrEmpty(_ballDragControlName))
+        using (new PanelDpiScope())
         {
-            int now = Environment.TickCount;
-            if (now - _ballDragBeatAt >= 60)
-            {
-                _ballDragBeatAt = now;
-                SendToAhkAsync("EVENT|" + winId + "|" + _ballDragControlName + "|BallDrag|"
-                    + BridgeUtil.LengthPrefix("drag|" + (_ballDragStartWindowX + dx) + ","
-                        + (_ballDragStartWindowY + dy)) + "\n");
-            }
-        }
+            // 不能要求 IsMouseCaptured：NOACTIVATE 透明窗的捕获不可靠，一旦没捕获成功
+            // 这里就会静默返回，整只球拖不动。以「是否是当前拖动对象」为准即可。
+            if (!object.ReferenceEquals(_ballDragControl, ball))
+                return;
 
-        if (!_ballDragMoved)
-        {
-            double scaleX = 1;
-            double scaleY = 1;
-            try
+            POINT mouse;
+            if (!GetCursorPos(out mouse))
+                return;
+
+            int dx = mouse.x - _ballDragStartMouseX;
+            int dy = mouse.y - _ballDragStartMouseY;
+
+            // 拖动心跳：窗口位置完全由这里接管，AHK 只需要知道「还在拖，别插手」。
+            // 以前是 AHK 自己用 GetKeyState("LButton") 推断，实测靠不住 —— 拖到一半就被判成
+            // 松手，跟随定时器 50ms 一次把窗口拽回起点，画面就在新旧两点之间来回闪。
+            // 放在拖动阈值判断之前：手指轻动但还没到拖动距离时也要报「我还按着」，
+            // 否则 AHK 那边超时解锁，真开始拖的头一帧会被拽回原位。
+            // 按 60ms 限频，一次拖动十几条短消息，开销可以忽略。
+            if (!string.IsNullOrEmpty(_ballDragControlName))
             {
-                PresentationSource source = PresentationSource.FromVisual(ball);
-                if (source != null && source.CompositionTarget != null)
+                int now = Environment.TickCount;
+                if (now - _ballDragBeatAt >= 60)
                 {
-                    scaleX = source.CompositionTarget.TransformToDevice.M11;
-                    scaleY = source.CompositionTarget.TransformToDevice.M22;
+                    _ballDragBeatAt = now;
+                    SendToAhkAsync("EVENT|" + winId + "|" + _ballDragControlName + "|BallDrag|"
+                        + BridgeUtil.LengthPrefix("drag|" + (_ballDragStartWindowX + dx) + ","
+                            + (_ballDragStartWindowY + dy)) + "\n");
                 }
             }
-            catch { }
 
-            int thresholdX = Math.Max(1, (int)Math.Ceiling(SystemParameters.MinimumHorizontalDragDistance * scaleX));
-            int thresholdY = Math.Max(1, (int)Math.Ceiling(SystemParameters.MinimumVerticalDragDistance * scaleY));
-            if (Math.Abs(dx) <= thresholdX && Math.Abs(dy) <= thresholdY)
-                return;
-            _ballDragMoved = true;
+            if (!_ballDragMoved)
+            {
+                double scaleX = 1;
+                double scaleY = 1;
+                try
+                {
+                    PresentationSource source = PresentationSource.FromVisual(ball);
+                    if (source != null && source.CompositionTarget != null)
+                    {
+                        scaleX = source.CompositionTarget.TransformToDevice.M11;
+                        scaleY = source.CompositionTarget.TransformToDevice.M22;
+                    }
+                }
+                catch { }
+
+                int thresholdX = Math.Max(1, (int)Math.Ceiling(SystemParameters.MinimumHorizontalDragDistance * scaleX));
+                int thresholdY = Math.Max(1, (int)Math.Ceiling(SystemParameters.MinimumVerticalDragDistance * scaleY));
+                if (Math.Abs(dx) <= thresholdX && Math.Abs(dy) <= thresholdY)
+                    return;
+                _ballDragMoved = true;
+            }
+
+            SetWindowPos(_ballDragWindowHwnd, IntPtr.Zero,
+                _ballDragStartWindowX + dx, _ballDragStartWindowY + dy, 0, 0,
+                0x0001 | 0x0004 | 0x0010);
+            e.Handled = true;
         }
-
-        SetWindowPos(_ballDragWindowHwnd, IntPtr.Zero,
-            _ballDragStartWindowX + dx, _ballDragStartWindowY + dy, 0, 0,
-            0x0001 | 0x0004 | 0x0010);
-        e.Handled = true;
     }
 
     private void EndBallDrag(string ctrlName, FrameworkElement ball,
@@ -466,7 +478,10 @@ public partial class AhkWpfEngine
         if (moved)
         {
             RECT window;
-            if (GetWindowRect(hwnd, out window))
+            bool haveRect;
+            using (new PanelDpiScope())
+                haveRect = GetWindowRect(hwnd, out window);
+            if (haveRect)
             {
                 x = window.left;
                 y = window.top;
@@ -494,7 +509,9 @@ public partial class AhkWpfEngine
             return;
         IntPtr hwnd = _ballDragWindowHwnd;
         RECT window;
-        bool haveRect = GetWindowRect(hwnd, out window);
+        bool haveRect;
+        using (new PanelDpiScope())
+            haveRect = GetWindowRect(hwnd, out window);
         bool moved = _ballDragMoved && haveRect;
         _ballDragControl = null;
         _ballDragControlName = null;

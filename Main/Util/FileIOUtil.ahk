@@ -149,7 +149,8 @@ CheckExcelRegionBounds(rowStart, colStart, rowEnd, colEnd) {
 WriteExcel(Data, tableItem, index) {
     FilePath := GetReplaceVarText(tableItem, index, Data.FilePath)
     item := IsObject(tableItem) ? tableItem.Items[index] : ""
-    Content := GetReplaceVarText(tableItem, index, Data.Content)
+    range := Data.OperMode == "指定区域-行" || Data.OperMode == "指定区域-列"
+    Content := range ? "" : GetReplaceVarText(tableItem, index, Data.Content)
     hasRowValue := TryGetTabVarValue(&RowValue, tableItem, index, Data.RowVar)
     hasColValue := TryGetTabVarValue(&ColValue, tableItem, index, Data.ColVar)
     if (!hasRowValue || !hasColValue)

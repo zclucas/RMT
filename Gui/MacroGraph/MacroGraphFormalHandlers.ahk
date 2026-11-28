@@ -488,7 +488,8 @@ class MacroGraphFormalHandlersMixin {
         categories := this._RmtCategories()
         catTxt := this._ComboText("RmtCatCmb_" id, unset, categories)
         cat := RmtCommandCategoryKey(catTxt)
-        ops := this._RmtCategoryOps(catTxt != "" ? catTxt : GetLang("全部"))
+        d := this._FormalDFromId(id)
+        ops := this._RmtCategoryOps(catTxt != "" ? catTxt : GetLang("全部"), d.HasOwnProp("rmtOp") ? d.rmtOp : "")
         opTxt := this._ComboText("RmtOpCmb_" id, unset, ops)
         op := RmtCommandActionKey(opTxt)
         return { cat: cat, op: op }
@@ -500,21 +501,27 @@ class MacroGraphFormalHandlersMixin {
     }
 
     ; RMT 类别对应的指令列表（与 RMTCMDGui.CategoriesMap 保持一致）
-    _RmtCategoryOps(category) {
+    _RmtCategoryOps(category, currentOp := "") {
         category := GetLang(RmtCommandCategoryKey(category))
         allOps := GetLangArr(["截图", "截图提取文本", "启用鼠标", "启用键盘", "启用键鼠",
             "禁用鼠标", "禁用键盘", "禁用键鼠", "启用鼠标加速", "禁用鼠标加速", "显示菜单", "关闭菜单",
-            "暂停所有宏", "恢复所有宏", "终止所有宏", "开启变量监视", "关闭变量监视", "开启指令显示",
+            "暂停其他宏", "恢复所有宏", "终止所有宏", "开启变量监视", "关闭变量监视", "开启指令显示",
             "关闭指令显示", "关闭软件", "休眠", "重载"])
+        ; 旧节点保留原指令，新增节点不再提供“暂停所有宏”。
+        legacyPause := RmtCommandActionKey(currentOp) == "暂停所有宏"
+        if (legacyPause)
+            allOps.Push(GetLang("暂停所有宏"))
         if (category == GetLang("全部") || category == "")
             return allOps
         categoryOps := Map(
             GetLang("图文"), GetLangArr(["截图", "截图提取文本"]),
             GetLang("输入控制"), GetLangArr(["启用鼠标", "启用键盘", "启用键鼠", "禁用鼠标", "禁用键盘", "禁用键鼠", "启用鼠标加速", "禁用鼠标加速"]),
-            GetLang("宏控制"), GetLangArr(["显示菜单", "关闭菜单", "暂停所有宏", "恢复所有宏", "终止所有宏"]),
+            GetLang("宏控制"), GetLangArr(["显示菜单", "关闭菜单", "暂停其他宏", "恢复所有宏", "终止所有宏"]),
             GetLang("调试"), GetLangArr(["开启变量监视", "关闭变量监视", "开启指令显示", "关闭指令显示"]),
             GetLang("软件自身"), GetLangArr(["关闭软件", "休眠", "重载"])
         )
+        if (legacyPause && category == GetLang("宏控制"))
+            categoryOps[category].Push(GetLang("暂停所有宏"))
         return categoryOps.Has(category) ? categoryOps[category] : allOps
     }
 
@@ -565,7 +572,7 @@ class MacroGraphFormalHandlersMixin {
         cat := live.cat, op := live.op
         if (cat == "" || op == "")
             return
-        ops := this._RmtCategoryOps(cat)
+        ops := this._RmtCategoryOps(cat, op)
         if (this._RmtOpIdx(ops, op) < 0)
             return
         this._RefreshRmtOptions(id, cat, op)
@@ -1124,16 +1131,6 @@ class MacroGraphFormalHandlersMixin {
             data.Width := state["WmW_" id]
         if (state.Has("WmH_" id) && state["WmH_" id] != "")
             data.Height := state["WmH_" id]
-        if (state.Has("WmWidthVar_" id)) {
-            data.WidthVarName := GetVarName(state["WmWidthVar_" id])
-            if (data.WidthVarName != "")
-                MySoftData.GlobalVariMap[data.WidthVarName] := true
-        }
-        if (state.Has("WmHeightVar_" id)) {
-            data.HeightVarName := GetVarName(state["WmHeightVar_" id])
-            if (data.HeightVarName != "")
-                MySoftData.GlobalVariMap[data.HeightVarName] := true
-        }
         if (state.Has("WmTitle_" id) && state["WmTitle_" id] != "")
             data.NewTitle := TranslateBuiltinVarReferences(state["WmTitle_" id])
         if (state.Has("WmTrans_" id) && state["WmTrans_" id] != "")
@@ -1213,7 +1210,16 @@ class MacroGraphFormalHandlersMixin {
     }
 
     _OnFormalScreenShot(id, state, ctrl, event) {
-        typeNames := GetLangArr(["屏幕抓图", "窗口抓图"])
+        if (ctrl == "SsClipTog_" id) {
+            data := this._FormalIniData(id)
+            if (data == "")
+                return
+            data.ToClipboard := this._FormalReadToggle(state, ctrl, data.ToClipboard)
+            SaveMacroCMDData(data)
+            this._SaveGraphAndNotifyParent()
+            return
+        }
+        typeNames := GetLangArr(CmdEnumShotNames())
         if (!IsObject(state))
             state := Map()
         if (ctrl == "SsTypeCmb_" id) {
@@ -1223,28 +1229,21 @@ class MacroGraphFormalHandlersMixin {
             data := this._FormalIniData(id)
             if (data == "")
                 return
-            data.ScreenShotType := GetLangKey(ttTxt)
+            data.ScreenShotType := CmdEnumZh(ttTxt, CmdEnumShotNames())
             SaveMacroCMDData(data)
             this._RefreshFormalScreenShotVisibility(id, data.ScreenShotType)
             this._SaveGraphAndNotifyParent()
             return
         }
-        if (ctrl == "SsNameTog_" id || ctrl == "SsResTog_" id) {
+        if (ctrl == "SsNameCmb_" id) {
+            choice := this._ComboText(ctrl, state, GetLangArr(["固定", "序号自增"]))
+            if (choice == "")
+                return
             data := this._FormalIniData(id)
             if (data == "")
                 return
-            if (!IsObject(state))
-                state := Map()
-            if (ctrl == "SsNameTog_" id) {
-                checkedNow := data.NameType == "固定名称" || data.NameType == 1 || data.NameType == "1"
-                data.NameType := this._FormalReadToggle(state, "SsNameTog_" id, checkedNow) ? "固定名称" : "默认"
-            }
-            else
-                data.ResultToggle := this._FormalReadToggle(state, "SsResTog_" id, data.ResultToggle)
+            data.NameType := choice == GetLang("固定") ? "固定名称" : "默认"
             SaveMacroCMDData(data)
-            nt := data.NameType
-            resOn := data.ResultToggle == 1 || data.ResultToggle == "1"
-            this._RefreshFormalScreenShotVisibility(id, unset, nt, resOn)
             this._SaveGraphAndNotifyParent()
             return
         }
@@ -1261,10 +1260,8 @@ class MacroGraphFormalHandlersMixin {
             data.EndPosX := TranslateBuiltinVarReferences(state["SsEX_" id])
         if (state.Has("SsEY_" id) && state["SsEY_" id] != "")
             data.EndPosY := TranslateBuiltinVarReferences(state["SsEY_" id])
-        if (state.Has("SsFixed_" id))
-            data.FixedName := state["SsFixed_" id]
-        if (state.Has("SsResName_" id) && state["SsResName_" id] != "")
-            data.ResultSaveName := GetVarName(state["SsResName_" id])
+        if (state.Has("SsResName_" id))
+            data.ResultSaveName := GetVarName(Trim(state["SsResName_" id]))
         SaveMacroCMDData(data)
         this._SaveGraphAndNotifyParent()
     }
@@ -1934,8 +1931,6 @@ class MacroGraphFormalHandlersMixin {
         this._FormalSetVis(id, "WmYRow_" id, (at == "移动窗口" || at == "相对移动" || at == "位置和宽高"))
         this._FormalSetVis(id, "WmWRow_" id, (at == "调整宽高" || at == "位置和宽高"))
         this._FormalSetVis(id, "WmHRow_" id, (at == "调整宽高" || at == "位置和宽高"))
-        this._FormalSetVis(id, "WmWidthVarRow_" id, at == "获取窗口宽高")
-        this._FormalSetVis(id, "WmHeightVarRow_" id, at == "获取窗口宽高")
         this._FormalSetVis(id, "WmTitleRow_" id, at == "修改标题")
         this._FormalSetVis(id, "WmTransRow_" id, at == "修改透明度")
     }
@@ -1954,7 +1949,6 @@ class MacroGraphFormalHandlersMixin {
         this.ui.Update("WmCloseProcess_" id, "IsChecked", d.HasOwnProp("wmCloseProcess") && d.wmCloseProcess ? "True" : "False")
         for nm, val in Map("WmX", d.HasOwnProp("wmPosX") ? d.wmPosX : 0, "WmY", d.HasOwnProp("wmPosY") ? d.wmPosY : 0,
             "WmW", d.HasOwnProp("wmWidth") ? d.wmWidth : 0, "WmH", d.HasOwnProp("wmHeight") ? d.wmHeight : 0,
-            "WmWidthVar", d.HasOwnProp("wmWidthVarName") ? d.wmWidthVarName : "WinWidth", "WmHeightVar", d.HasOwnProp("wmHeightVarName") ? d.wmHeightVarName : "WinHeight",
             "WmTitle", d.HasOwnProp("wmNewTitle") ? d.wmNewTitle : "", "WmTrans", d.HasOwnProp("wmTransparency") ? d.wmTransparency : "80") {
             this._SetVariableComboItems(nm "_" id, nm == "WmTitle" ? GetGuiVarReferences("text") : varList,
                 nm == "WmTitle" ? TranslateBuiltinVarReferences(val, true) : GetLang(val))
@@ -1987,7 +1981,7 @@ class MacroGraphFormalHandlersMixin {
         this.ui.Update("KcVar_" id, "Text", GetLang(vn))
     }
 
-    _RefreshFormalScreenShotVisibility(id, st := unset, nt := unset, resOn := unset) {
+    _RefreshFormalScreenShotVisibility(id, st := unset) {
         if (this.ui == "" || !this.cmdNodes.Has(id))
             return
         d := this._FormalDFromId(id)
@@ -1995,20 +1989,13 @@ class MacroGraphFormalHandlersMixin {
             st := CmdEnumZh(d.HasOwnProp("ssType") ? d.ssType : "屏幕抓图", CmdEnumShotNames())
         else
             st := CmdEnumZh(st, CmdEnumShotNames())
-        if (!IsSet(nt))
-            nt := CmdEnumNameType(d.HasOwnProp("ssNameType") ? d.ssNameType : "固定名称")
-        else
-            nt := CmdEnumNameType(nt)
-        if (!IsSet(resOn)) {
-            rt := d.HasOwnProp("ssResultToggle") ? d.ssResultToggle : 0
-            resOn := rt == 1 || rt == "1"
-        }
         isWin := st == "窗口抓图"
+        this.ui.Update("SsTypeLabel_" id, "ToolTip", st == "自定义截图" ? GetLang("该类型只进入截图状态，需要运行时手动框选范围。") : "")
+        for name in ["SsSXRow", "SsSYRow", "SsEXRow", "SsEYRow"]
+            this._FormalSetVis(id, name "_" id, st != "自定义截图")
         for name in ["SsSX", "SsSY", "SsEX", "SsEY"]
             this._SetVariableComboItems(name "_" id, isWin ? GetGuiVarReferences() : GetGuiVarReferences(StrLower(SubStr(name, -1))))
         this._FormalSetVis(id, "SsWinRow_" id, isWin)
-        this._FormalSetVis(id, "SsFixedRow_" id, nt == "固定名称")
-        this._FormalSetVis(id, "SsResNameRow_" id, resOn)
     }
 
     ; 抓图节点：编辑器确定后就地刷新内联控件值（避免整窗 _Render 闪烁）。
@@ -2016,25 +2003,21 @@ class MacroGraphFormalHandlersMixin {
         varList := GetGuiVarArr()
         st := CmdEnumZh(d.HasOwnProp("ssType") ? d.ssType : "屏幕抓图", CmdEnumShotNames())
         nt := CmdEnumNameType(d.HasOwnProp("ssNameType") ? d.ssNameType : "固定名称")
-        showFixed := nt == "固定名称"
         wi := d.HasOwnProp("ssWinInfo") ? d.ssWinInfo : ""
-        fixed := d.HasOwnProp("ssFixedName") ? d.ssFixedName : "Shot"
-        on := d.HasOwnProp("ssResultToggle") && (d.ssResultToggle == 1 || d.ssResultToggle == "1")
-        rn := d.HasOwnProp("ssResultSaveName") ? d.ssResultSaveName : GetLang("图片路径")
+        rn := d.HasOwnProp("ssResultSaveName") ? d.ssResultSaveName : "ImgPath"
         this.ui.Update("SsTypeCmb_" id, "SelectedIndex", CmdEnumIndex(st, CmdEnumShotNames()))
         this.ui.Update("SsWin_" id, "Text", wi)
-        this.ui.Update("SsNameTog_" id, "IsChecked", showFixed ? "True" : "False")
-        this.ui.Update("SsFixed_" id, "Text", fixed)
+        this.ui.Update("SsNameCmb_" id, "SelectedIndex", nt == "固定名称" ? 0 : 1)
+        this.ui.Update("SsClipTog_" id, "IsChecked", d.HasOwnProp("ssToClipboard") && d.ssToClipboard ? "True" : "False")
         for nm, val in Map("SsSX", d.HasOwnProp("ssStartX") ? d.ssStartX : 0, "SsSY", d.HasOwnProp("ssStartY") ? d.ssStartY : 0,
             "SsEX", d.HasOwnProp("ssEndX") ? d.ssEndX : A_ScreenWidth, "SsEY", d.HasOwnProp("ssEndY") ? d.ssEndY : A_ScreenHeight) {
             this.ui.Update(nm "_" id, "Text", TranslateBuiltinVarReferences(val, true))
         }
-        this.ui.Update("SsResTog_" id, "IsChecked", on ? "True" : "False")
         this.ui.Update("SsResName_" id, "ClearItems", "")
         for item in varList
             this.ui.Update("SsResName_" id, "AddItem", item)
         this.ui.Update("SsResName_" id, "Text", GetLang(rn))
-        this._RefreshFormalScreenShotVisibility(id, st, nt, on)
+        this._RefreshFormalScreenShotVisibility(id, st)
     }
 
     ; 仅用于初始注册/显隐刷新：更新标题与各类型显隐。
@@ -2373,7 +2356,7 @@ class MacroGraphFormalHandlersMixin {
         showWait := !isCdCmd && sub == "等待"
         showWin := !isCdCmd && sub == "区间判断"
         showCd := isCdCmd || sub == "倒计时"
-        kind := TimeNormWaitType(d.HasOwnProp("cdKind") ? d.cdKind : (d.HasOwnProp("timeParam2") ? d.timeParam2 : "时长"))
+        kind := showCd ? TimeNormWaitType(d.HasOwnProp("cdKind") ? d.cdKind : (d.HasOwnProp("timeParam2") ? d.timeParam2 : "时长")) : "时长"
         if (!isCdCmd) {
             if (showWait)
                 this.ui.Update("TimeTargetRow_" id "Label", "ToolTip", CmdEditorForm.TimeValueTip(TimeNormWaitType(InputField(d, "timeParam2", ""))))
@@ -2452,10 +2435,10 @@ class MacroGraphFormalHandlersMixin {
         categories := this._RmtCategories()
         currentCategory := d.HasOwnProp("rmtCategory") ? d.rmtCategory : GetLang("全部")
         currentOp := d.HasOwnProp("rmtOp") ? d.rmtOp : GetLang("截图")
-        ops := this._RmtCategoryOps(currentCategory)
+        ops := this._RmtCategoryOps(currentCategory, currentOp)
         if (!this._ArrayContains(ops, GetLang(currentOp)) && !this._ArrayContains(ops, currentOp)) {
             currentCategory := GetLang("全部")
-            ops := this._RmtCategoryOps(currentCategory)
+            ops := this._RmtCategoryOps(currentCategory, currentOp)
         }
         catIdx := this._IndexInLangArr(categories, GetLang(currentCategory))
         if (catIdx < 0)

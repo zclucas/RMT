@@ -3,7 +3,7 @@ name: 版本发布
 # 由 tag 触发，tag 决定版本性质：
 #   v1.3    （无 F 后缀）= 正式版，PackRMT -Release both，本仓库 Release 为 latest
 #   v1.3F2  （带 F 后缀）= 测试版，同样双架构打包，本仓库 Release 标记 pre-release
-# 两种版本都产出 artifact，资源上传到 RMTAssets 由「资源上传」工作流消费完成。
+# 两种版本都产出 artifact；随后调用统一 GitCode 工作流发布两站资源。
 
 on:
   push:
@@ -182,7 +182,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "failed to publish release $env:GITHUB_REF_NAME" }
           Write-Host "Published $($zips.Count) zip(s) to release $env:GITHUB_REF_NAME"
 
-      - name: 上传打包产物（供资源上传工作流消费）
+      - name: 上传打包产物（供后续资源发布任务使用）
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -247,3 +247,14 @@ jobs:
           }
 
           $md | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+
+  upload:
+    name: 发布两站资源
+    needs: pack
+    permissions:
+      contents: read
+      actions: read
+    uses: ./.github/workflows/sync-gitcode.yml
+    with:
+      operation: publish
+    secrets: inherit

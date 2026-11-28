@@ -513,6 +513,9 @@ public partial class AhkWpfEngine
         {
             foreach (System.Collections.DictionaryEntry entry in win.Resources)
             {
+                // Per-window first-frame coordination must not become an application default.
+                if (Equals(entry.Key, "RmtPanelPositionPending"))
+                    continue;
                 if (entry.Key is Type)
                     continue;
                 if (entry.Value is Style || entry.Value is FrameworkTemplate)

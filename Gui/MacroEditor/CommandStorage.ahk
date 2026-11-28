@@ -2,8 +2,8 @@
     SaveCommandData(RealCommandStr, macroStr, nodeItemID) {
         paramArr := StrSplit(RealCommandStr, "_")
         cmd := GetCommandKey(GetCmdOnlyText(paramArr[1]))
-        static branchCommands := Map("搜索", true, "搜索Pro", true, "搜索All", true, "搜索Combo", true, "组合搜索", true,
-            "搜索Multi", true, "抓图", true, "如果", true, "如果Pro", true, "循环", true)
+        static branchCommands := Map("搜索", true, "搜索Pro", true, "搜索All", true, "搜索Combo", true,
+            "抓图", true, "如果", true, "如果Pro", true, "循环", true)
         if (!branchCommands.Has(cmd))
             return
 

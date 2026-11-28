@@ -19,10 +19,7 @@ class ProcessManageData {
     UptimeVar := ""
     CpuVar := ""
     GpuVar := ""
-    IntegrityVar := "" ; 兼容旧配置字段，不再提供权限级别输出。
     ResultArray := ""
-    ; 兼容已保存的宏，编辑器不再提供这个输出。
-    ErrorVar := ""
 }
 
 class ProcessManage {
@@ -30,7 +27,7 @@ class ProcessManage {
     static MatchModes := ["窗口绑定", "进程名", "完整路径匹配", "PID", "正则匹配"]
     static MatchPicks := ["首个", "最后"]
 
-    static ActionKey(action) => action == "获取进程信息" ? "进程信息" : action
+    static ActionKey(action) => CurrentCommandChoice(action, this.Actions)
 
     static OutputFields(action) {
         switch this.ActionKey(action) {
@@ -45,8 +42,6 @@ class ProcessManage {
             if (data.HasProp(field) && data.%field% != "")
                 MySoftData.GlobalVariMap[data.%field%] := true
         }
-        if (data.ErrorVar != "")
-            MySoftData.GlobalVariMap[data.ErrorVar] := true
         if (data.Action == "列出进程" && data.ResultArray != "")
             MySoftData.GlobalArrMap[data.ResultArray] := true
     }
@@ -116,10 +111,7 @@ class ProcessManage {
                     result.CountVar := matches.Length
                     result.ExistVar := matches.Length ? 1 : 0
                     if (matches.Length) {
-                        ; 旧版宏未保存选取方式，多项匹配时仍只写匹配数量。
-                        if (matches.Length > 1 && !data.HasProp("PickMatch"))
-                            return result
-                        process := this.PickProcess(matches, data.MatchBy, data.HasProp("PickMatch") && data.PickMatch == "最后")
+                        process := this.PickProcess(matches, data.MatchBy, data.PickMatch == "最后")
                         result.NameVar := process.Name
                         result.PidVar := process.Pid
                         result.PathVar := this.Path(process.Pid)
@@ -243,7 +235,6 @@ OnProcessManage(tableItem, cmd, index) {
         MySetGlobalArray(data.ResultArray, result.ResultArray)
     names := [], values := []
     fields := ProcessManage.OutputFields(data.Action)
-    fields.Push("ErrorVar")
     for field in fields {
         if (!data.HasProp(field) || data.%field% == "")
             continue
@@ -252,6 +243,6 @@ OnProcessManage(tableItem, cmd, index) {
     }
     if (names.Length)
         MySetGlobalVariable(names, values, false)
-    if (result.ErrorVar != "" && data.ErrorVar == "")
+    if (result.ErrorVar != "")
         throw Error(result.ErrorVar)
 }

@@ -862,7 +862,7 @@ class TimingGui {
         minimal.Duration := Data.Duration
         minimal.DurationUnit := Data.DurationUnit
 
-        saveStr := JSON.stringify(minimal, 0)
+        saveStr := SerializeCommandData(minimal, "Timing")
         CfgWrite(saveStr, TimingFile, SettingSection, Data.SerialStr)
         if (MySoftData.DataCacheMap.Has(Data.SerialStr))
             MySoftData.DataCacheMap.Delete(Data.SerialStr)
@@ -881,6 +881,7 @@ class TimingGui {
         }
         data := JSON.parse(saveStr, , false)
         data.SerialStr := SerialStr
+        RestoreCommandDefaults("Timing", data)
         return data
     }
 }

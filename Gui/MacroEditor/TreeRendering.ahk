@@ -65,21 +65,21 @@
 
         Data := GetMacroCMDData(GetCmdStr(cmdText))
 
-        ; 搜索无命中、未命中指令时不创建空分栏；有分支时保留真假对及其编辑入口。
-        if (IsSearch && SplitMacro(Data.TrueMacro).Length == 0 && SplitMacro(Data.FalseMacro).Length == 0)
-            return
 
         if (IsIf || IsSearch) {
-            TrueRoot := this.MacroTreeViewCon.Add(
-                GetLang("真"), root, this.GetCmdIconStr(GetLang("真")))
-            FalseRoot := this.MacroTreeViewCon.Add(
-                GetLang("假"), root, this.GetCmdIconStr(GetLang("假")))
-
-            this.TreeAddSubTree(TrueRoot, GetLangMacro(Data.TrueMacro, 1))
-            this.TreeAddSubTree(FalseRoot, GetLangMacro(Data.FalseMacro, 1))
-
-            this.TreeAddControl(TrueRoot, IsIf ? Data.TrueControlType : "无")
-            this.TreeAddControl(FalseRoot, IsIf ? Data.FalseControlType : "无")
+            ; 如果有真分支則創建真分支，有假分支則創建假分支
+            if (Data.TrueMacro != "") {
+                TrueRoot := this.MacroTreeViewCon.Add(
+                    GetLang("真"), root, this.GetCmdIconStr(GetLang("真")))
+                this.TreeAddSubTree(TrueRoot, GetLangMacro(Data.TrueMacro, 1))
+                this.TreeAddControl(TrueRoot, IsIf ? Data.TrueControlType : "无")
+            }
+            if (Data.FalseMacro != "") {
+                FalseRoot := this.MacroTreeViewCon.Add(
+                    GetLang("假"), root, this.GetCmdIconStr(GetLang("假")))
+                this.TreeAddSubTree(FalseRoot, GetLangMacro(Data.FalseMacro, 1))
+                this.TreeAddControl(FalseRoot, IsIf ? Data.FalseControlType : "无")
+            }
         }
         else if (IsLoop) {
             iconStr := this.GetCmdIconStr(GetLang("循环次数"))
@@ -114,11 +114,13 @@
                 this.TreeAddControl(CondiRoot, Data.ControlTypeArr[A_Index])
             }
 
-            CondiRoot := this.MacroTreeViewCon.Add(
-                GetLang("条件：以上都不是"), root, iconStr)
+            if (Data.DefaultMacro != "") {
+                CondiRoot := this.MacroTreeViewCon.Add(
+                    GetLang("条件：以上都不是"), root, iconStr)
 
-            this.TreeAddSubTree(CondiRoot, GetLangMacro(Data.DefaultMacro, 1))
-            this.TreeAddControl(CondiRoot, Data.DefaultControlType)
+                this.TreeAddSubTree(CondiRoot, GetLangMacro(Data.DefaultMacro, 1))
+                this.TreeAddControl(CondiRoot, Data.DefaultControlType)
+            }
         }
     }
 

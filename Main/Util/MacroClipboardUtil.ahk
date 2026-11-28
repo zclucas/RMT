@@ -256,7 +256,7 @@ CollectConfigForCmd(cmdStr, cmdConfigMap) {
             return false
         data.SerialStr := serialStr
         NormalizeCommandData("宏操作", data)
-        cmdConfigMap[serialStr] := Map("类型", "宏操作", "配置", JSON.stringify(data, 0))
+        cmdConfigMap[serialStr] := Map("类型", "宏操作", "配置", SerializeCommandData(data, "宏操作"))
         return true
     }
 
@@ -273,7 +273,7 @@ CollectConfigForCmd(cmdStr, cmdConfigMap) {
     try {
         Data := GetMacroCMDData(serialStr)
         if (IsObject(Data)) {
-            configJson := JSON.stringify(Data, 0)
+            configJson := SerializeCommandData(Data, cmdType)
             cmdConfigMap.Set(serialStr, Map("类型", cmdType, "配置", configJson))
             return true
         }

@@ -25,7 +25,6 @@ OnWait(tableItem, cmd, index) {
     Data := GetMacroCMDData(paramArr[1])
     if (!IsObject(Data))
         return
-    WaitEnsureData(Data)
     Data := Data.Clone()
     Data.TimeoutMs := TimeoutPolicy.ResolveMs(Data.TimeoutMs, (text) => GetReplaceVarText(tableItem, index, text), 4294967295, 0)
     t := WaitTypeNum(Data)
@@ -51,7 +50,7 @@ OnWait(tableItem, cmd, index) {
 }
 
 WaitRunOnce(tableItem, index, Data, t) {
-    cfg := Data.TimeConfig
+    cfg := (t == "等待时间" || t == "等待时间区间") ? Data.TimeConfig : ""
     targetMs := ""
     if (t == "等待时间") {
         kind := TimeNormWaitType(cfg.Param2)
@@ -125,6 +124,21 @@ WaitRunOnce(tableItem, index, Data, t) {
     return timedOut
 }
 
+; 非时间等待可以保留上次时间设置；无效的隐藏值不阻止其他类型开窗。
+WaitTimeEditorState(data) {
+    current := data.WaitType == "等待时间" || data.WaitType == "等待时间区间"
+    cfg := data.TimeConfig
+    range := current ? data.WaitType == "等待时间区间" : InputField(cfg, "SubMode", "等待") == "区间判断"
+    try kind := range ? TimeNormWindowType(cfg.Param5) : TimeNormWaitType(cfg.Param2 == "" ? "时长" : cfg.Param2)
+    catch as err {
+        if (current)
+            throw err
+        cfg := WaitData().TimeConfig
+        range := false, kind := "毫秒"
+    }
+    return {config: cfg, range: range, kind: kind}
+}
+
 WaitMilliseconds(tableItem, index, Data, useRandom := false) {
     cfg := Data.TimeConfig
     duration := WaitParseMilliseconds(TimeResolveValue(tableItem, index, cfg.Param1))
@@ -142,8 +156,7 @@ WaitMilliseconds(tableItem, index, Data, useRandom := false) {
     WaitIfPaused(tableItem, index)
     if (item.Killed)
         return
-    timedOut := Data.TimeoutMs > 0 && (duration > Data.TimeoutMs
-        || (duration == Data.TimeoutMs && !Data.HasOwnProp("TimeoutStatusVar")))
+    timedOut := Data.TimeoutMs > 0 && duration > Data.TimeoutMs
     InterruptibleSleep(tableItem, index, timedOut ? Data.TimeoutMs : duration)
     return timedOut
 }
@@ -155,23 +168,13 @@ WaitParseMilliseconds(value) {
     return Integer(text)
 }
 
-WaitWriteStatus(Data, timedOut) {
-    if (Data.HasOwnProp("TimeoutStatusVar"))
-        TimeoutPolicy.WriteStatus(Data, timedOut)
-    else if (Data.ResultSaveName != "") {
-        value := timedOut ? Data.WaitTimedOutValue : (Data.TimeoutMs > 0 ? Data.WaitCompletedValue : 0)
-        MySetGlobalVariable([Data.ResultSaveName], [value], false)
-    }
-}
+WaitWriteStatus(Data, timedOut) => TimeoutPolicy.WriteStatus(Data, timedOut)
 
 WaitStateKey(tableItem, index) {
     return tableItem.ID "|" tableItem.Items[index].ID
 }
 
-WaitTypeNum(Data) {
-    t := Data.HasProp("WaitType") ? Data.WaitType : "等待变量值"
-    return CmdEnumWait(t)
-}
+WaitTypeNum(Data) => CurrentCommandChoice(Data.WaitType, CmdEnumWaitNames())
 
 ; ---------- 一次性基准（变化类） ----------
 
@@ -200,8 +203,6 @@ WaitInitBaseline(tableItem, index, Data) {
                 WaitSelectedKeys(tableItem, index, Data, true)
         case "等待文件变化":
             WaitStateMap[key] := WaitFileStamp(WaitResolveText(tableItem, index, Data.Param1))
-        case "等待日期":
-            WaitStateMap[key] := WaitCalcTargetTime(tableItem, index, Data)
     }
 }
 
@@ -211,12 +212,7 @@ WaitCheckOnce(tableItem, index, Data) {
     key := WaitStateKey(tableItem, index)
     switch WaitTypeNum(Data) {
         case "等待变量值":
-            if (Data.HasProp("Conditions") && Data.Conditions.Length)
-                return WaitVariableConditions(tableItem, index, Data)
-            if (!TryGetTabVarValue(&v, tableItem, index, GetVarName(Data.Param1), false)
-                && !TryGetTabVarValue(&v, tableItem, index, Data.Param1, false))
-                return false
-            return Trim(String(v)) == WaitExpectedText(tableItem, index, Data.Param2)
+            return WaitVariableConditions(tableItem, index, Data)
         case "等待按键按下":
             return WaitSelectedKeys(tableItem, index, Data)
         case "等待按键松开":
@@ -265,14 +261,6 @@ WaitCheckOnce(tableItem, index, Data) {
             return path != "" && !WaitFileExists(path)
         case "等待文件变化":
             return WaitChanged(key, WaitFileStamp(WaitResolveText(tableItem, index, Data.Param1)))
-        case "等待日期":
-            target := WaitStateMap.Has(key) ? WaitStateMap[key] : ""
-            if (target == "") {
-                target := WaitCalcTargetTime(tableItem, index, Data)
-                if (target != "")
-                    WaitStateMap[key] := target
-            }
-            return target != "" && A_Now >= target
     }
     return false
 }
@@ -312,20 +300,6 @@ WaitResolveText(tableItem, index, raw) {
     if (keyed != raw && TryGetTabVarValue(&v, tableItem, index, keyed, false))
         return String(v)
     return raw
-}
-
-WaitExpectedText(tableItem, index, raw) {
-    raw := String(raw)
-    if (InStr(raw, "{"))
-        return Trim(GetReplaceVarText(tableItem, index, raw))
-    if (raw != "" && !IsNumber(raw)) {
-        if (TryGetTabVarValue(&v, tableItem, index, raw, false))
-            return Trim(String(v))
-        keyed := GetLangKey(raw)
-        if (keyed != raw && TryGetTabVarValue(&v, tableItem, index, keyed, false))
-            return Trim(String(v))
-    }
-    return Trim(raw)
 }
 
 WaitResolveNum(tableItem, index, raw, fallback := 0) {
@@ -689,64 +663,6 @@ WaitFileStamp(path) {
 
 ; ---------- 日期 ----------
 
-WaitNormDateUnit(unit) {
-    u := GetLangKey(Trim(String(unit)))
-    switch u {
-        case "分钟", "Minute", "Minutes":
-            return "分钟"
-        case "小时", "Hour", "Hours":
-            return "小时"
-        case "天", "Day", "Days":
-            return "天"
-        case "具体时间", "Specific Time":
-            return "具体时间"
-        case "时间变量", "Time Variable":
-            return "时间变量"
-        default:
-            return u == "" ? "分钟" : u
-    }
-}
-
-WaitCalcTargetTime(tableItem, index, Data) {
-    unit := WaitNormDateUnit(Data.Param2)
-    raw := WaitResolveText(tableItem, index, Data.Param1)
-    switch unit {
-        case "分钟", "小时", "天":
-            raw := Trim(String(raw))
-            if (!IsNumber(raw) || Number(raw) < 0)
-                return ""
-            seconds := Number(raw) * (unit == "分钟" ? 60 : (unit == "小时" ? 3600 : 86400))
-            try return DateAdd(A_Now, Round(seconds), "Seconds")
-            return ""
-        case "具体时间":
-            return WaitParseDateTime(raw)
-        case "时间变量":
-            v := ""
-            name := Trim(String(Data.Param1))
-            found := false
-            if (InStr(name, "{")) {
-                v := GetReplaceVarText(tableItem, index, name)
-                found := v != ""
-            } else if (TryGetTabVarValue(&v, tableItem, index, name, false)
-                || TryGetTabVarValue(&v, tableItem, index, GetVarName(name), false))
-                found := true
-            if (!found)
-                return ""
-            ; 时间指令产生的 YYYYMMDDHHMMSS 不能误当作毫秒 Unix 时间戳。
-            if (RegExMatch(String(v), "^\d{14}$") && WaitValidTimestamp(String(v)))
-                return String(v)
-            if (IsNumber(v)) {
-                n := Integer(v)
-                if (n > 9999999999)
-                    n := n // 1000
-                try return DateAdd("19700101000000", n, "Seconds")
-                return ""
-            }
-            return WaitParseDateTime(String(v))
-    }
-    return ""
-}
-
 ; 解析为 YYYYMMDDHH24MISS。仅时刻（8:00）且已过，则取下一天。
 WaitParseDateTime(s) {
     s := Trim(s)
@@ -802,25 +718,6 @@ WaitHintText(waitType) {
     return ""
 }
 
-
-; 新字段仅补默认值，旧宏的等值、按键与日期语义保持不变。
-WaitEnsureData(Data) {
-    defaults := WaitData(true)
-    if (!Data.HasOwnProp("WaitType"))
-        Data.WaitType := "等待变量值"
-    if (!Data.HasOwnProp("TimeoutMs") && WaitTypeNum(Data) == "等待时间"
-        && Data.HasProp("TimeConfig") && IsObject(Data.TimeConfig) && Data.TimeConfig.HasProp("Timeout"))
-        Data.TimeoutMs := Data.TimeConfig.Timeout
-    for name, value in defaults.OwnProps()
-        if (!Data.HasOwnProp(name))
-            Data.%name% := value
-    if (!IsObject(Data.TimeConfig))
-        Data.TimeConfig := defaults.TimeConfig
-    if (!IsObject(Data.ConfirmConfig))
-        Data.ConfirmConfig := defaults.ConfirmConfig
-    if (!IsObject(Data.KeyOptions))
-        Data.KeyOptions := defaults.KeyOptions
-}
 
 WaitVariableConditions(tableItem, index, Data) {
     any := CmdEnumLogic(Data.ConditionLogic) == "或"
@@ -886,7 +783,7 @@ WaitSelectedKeys(tableItem, index, Data, released := false) {
     joy := Data.HasProp("KeyDevice") && Data.KeyDevice == "手柄"
     analog := WaitKeysHaveAxis(keys)
     any := !analog && CmdEnumZh(options.CheckType, CmdEnumKeyCheckNames()) == "有一个按下"
-    cmp := analog ? CmdEnumJoyCheck(options.CheckType, true) : "大于等于"
+    cmp := analog ? CurrentJoyCheck(options.CheckType) : "大于等于"
     stateMode := CmdEnumZh(options.StateType, CmdEnumStateNames()) == "物理状态" ? "P" : ""
     stateKey := WaitStateKey(tableItem, index)
     if (!WaitStateMap.Has(stateKey))

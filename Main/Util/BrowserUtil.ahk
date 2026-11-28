@@ -84,6 +84,7 @@ class BrowserUtil {
 
         pf  := EnvGet("ProgramFiles")
         pfx := EnvGet("ProgramFiles(x86)")
+        pf64 := EnvGet("ProgramW6432")
         lad := EnvGet("LocalAppData")
 
         ; 1. Chrome
@@ -149,6 +150,23 @@ class BrowserUtil {
             checkAdd("Opera", p)
         }
 
+        ; 补全 Chromium 及其衍生浏览器的 App Paths 注册与常见安装位置。
+        for name, exe in Map("Brave", "brave.exe", "Vivaldi", "vivaldi.exe", "Opera", "opera.exe", "Chromium", "chromium.exe") {
+            for root in ["HKCU\SOFTWARE", "HKLM\SOFTWARE", "HKLM\SOFTWARE\WOW6432Node"]
+                try checkAdd(name, Trim(RegRead(root "\Microsoft\Windows\CurrentVersion\App Paths\" exe), '" '))
+        }
+        for root in [pf, pfx, pf64, lad] {
+            if (root == "")
+                continue
+            checkAdd("Chrome", root "\Google\Chrome\Application\chrome.exe")
+            checkAdd("Edge", root "\Microsoft\Edge\Application\msedge.exe")
+            checkAdd("Brave", root "\BraveSoftware\Brave-Browser\Application\brave.exe")
+            checkAdd("Chromium", root "\Chromium\Application\chrome.exe")
+            checkAdd("Chromium", root "\Chromium\Application\chromium.exe")
+            checkAdd("Vivaldi", root "\Vivaldi\Application\vivaldi.exe")
+            checkAdd("Opera", root "\Opera\opera.exe")
+            checkAdd("Opera", root "\Programs\Opera\opera.exe")
+        }
         return list
     }
 
@@ -167,7 +185,7 @@ class BrowserUtil {
     }
 
     static Launch(browserType := "Chrome", browserPath := "", headless := 0, userDataDir := "", port := 9222) {
-        if (GetLangKey(browserType) == "系统默认浏览器") {
+        if (BrowserActions.BrowserType(browserType) == "默认浏览器") {
             browserPath := this.GetDefaultBrowserPath()
             browserType := "自定义路径"
         }
@@ -186,7 +204,11 @@ class BrowserUtil {
             Run(command)
             return true
         }
-        if (!headless && userDataDir == "" && this.TryManagedConnection(browserPath, port)) {
+        if ((headless || userDataDir != "") && this.TryLaunchConnection(browserPath, userDataDir, headless, port)) {
+            this.OpenConnectedUrl(url, incognito ? 1 : (newWindow ? 2 : 0), timeoutMs)
+            return true
+        }
+        if (!headless && userDataDir == "" && this.TryManagedConnection(browserPath, port, true)) {
             this.OpenConnectedUrl(url, incognito ? 1 : (newWindow ? 2 : 0), timeoutMs)
             return true
         }
@@ -198,15 +220,15 @@ class BrowserUtil {
             "Int", headless, "Ptr", this._Utf8(userDataDir), "Int", port, "Ptr", this._Utf8(url),
             "Int", incognito ? 1 : (newWindow ? 2 : 0), "Int", timeoutMs, "Cdecl Int")
         if (this.ConnectionPort())
-            this.RegisterCDPSession(browserPath)
+            this.RegisterCDPSession(browserPath, userDataDir, headless)
         if (res != 0)
             this._ThrowLastError()
         return true
     }
 
     static ResolveBrowserPath(browserType, browserPath := "") {
-        browserType := GetLangKey(browserType)
-        if (browserType == "系统默认浏览器")
+        browserType := BrowserActions.BrowserType(browserType)
+        if (browserType == "默认浏览器")
             browserPath := this.GetDefaultBrowserPath()
         else if (browserType != "自定义路径" && browserType != "自定义") {
             browserPath := ""
@@ -296,7 +318,7 @@ class BrowserUtil {
         return 0
     }
 
-    static RegisterCDPSession(browserPath) {
+    static RegisterCDPSession(browserPath, userDataDir := "", headless := 0) {
         port := this.ConnectionPort(), pid := this.DebugPortPID(port)
         stamp := this.ProcessStamp(pid)
         if (!pid || stamp == "")
@@ -306,7 +328,8 @@ class BrowserUtil {
             throw BrowserConnectionError(GetLang("CDP 会话与所选浏览器不匹配，请重新打开网址。"))
         dir := this.CDPStateDir()
         DirCreate(dir)
-        record := Map("port", port, "pid", pid, "stamp", stamp, "path", actualPath)
+        record := Map("port", port, "pid", pid, "stamp", stamp, "path", actualPath,
+            "userDataDir", userDataDir == "" ? "" : ResolvePathNoDotDot(userDataDir), "headless", headless ? 1 : 0)
         temporary := dir "\" port "-" DllCall("GetCurrentProcessId", "UInt") "-" A_TickCount ".tmp"
         file := FileOpen(temporary, "w", "UTF-8-RAW")
         file.Write(JSON.stringify(record))
@@ -336,9 +359,11 @@ class BrowserUtil {
         return ""
     }
 
-    static TryManagedConnection(browserPath := "", preferredPort := 9222) {
+    static TryManagedConnection(browserPath := "", preferredPort := 9222, visibleOnly := false) {
         sessions := this.CDPSessions(), current := this.ConnectionPort()
         for session in sessions {
+            if (visibleOnly && session.Get("headless", 0))
+                continue
             if (browserPath != "" && StrCompare(session["path"], browserPath, false) != 0)
                 continue
             if (session["port"] == current)
@@ -346,6 +371,8 @@ class BrowserUtil {
         }
         for wanted in [preferredPort, 0] {
             for session in sessions {
+                if (visibleOnly && session.Get("headless", 0))
+                    continue
                 if ((wanted && session["port"] != wanted)
                     || (browserPath != "" && StrCompare(session["path"], browserPath, false) != 0))
                     continue
@@ -353,6 +380,25 @@ class BrowserUtil {
                     this.Connect("127.0.0.1", session["port"])
                     return true
                 }
+            }
+        }
+        return false
+    }
+
+    ; 显式指定的后台/独立配置目录只能复用完全匹配的会话。
+    ; 重启 Worker 后直接重新启动同一目录，浏览器单实例会把请求转发到旧进程，
+    ; 新分配的调试端口不会监听，最终一直等到超时。
+    static TryLaunchConnection(browserPath, userDataDir, headless, port) {
+        profile := userDataDir == "" ? "" : ResolvePathNoDotDot(userDataDir)
+        for session in this.CDPSessions() {
+            if (StrCompare(session["path"], browserPath, false) != 0
+                || !session.Has("headless") || session["headless"] != (headless ? 1 : 0)
+                || !session.Has("userDataDir") || StrCompare(session["userDataDir"], profile, false) != 0
+                || (profile == "" && session["port"] != port))
+                continue
+            try {
+                this.Connect("127.0.0.1", session["port"])
+                return true
             }
         }
         return false
@@ -416,7 +462,7 @@ class BrowserUtil {
         return true
     }
 
-    ; --- 分页管理 ---
+    ; --- 标签页管理 ---
 
     static GetTabs() {
         this.EnsureConnection()
@@ -729,6 +775,29 @@ class BrowserUtil {
         return StrGet(buf.Ptr, "UTF-8")
     }
 
+    ; 只读表达式允许重新求值扩容；操作脚本仍使用 Evaluate，避免重复执行操作。
+    static EvaluateRead(script, timeoutMs := 5000) {
+        if (!this.InitDll())
+            throw Error("RMT_Browser.dll 未找到或加载失败")
+        deadline := A_TickCount + Integer(timeoutMs), capacity := 65536
+        loop {
+            remaining := deadline - A_TickCount
+            if (remaining <= 0)
+                throw BrowserTimeoutError(GetLang("读取网页信息超时。"))
+            buf := Buffer(capacity, 0)
+            res := DllCall("RMT_Browser\Browser_Evaluate", "Ptr", this._Utf8(script), "Ptr", buf.Ptr,
+                "Int", capacity, "Int", remaining, "Cdecl Int")
+            if (res != 0)
+                this._ThrowLastError()
+            ; 在 UTF-8 解码前检查字节数，避免截断多字节字符后误判长度。
+            if (DllCall("lstrlenA", "Ptr", buf.Ptr, "Int") < capacity - 1)
+                return StrGet(buf.Ptr, "UTF-8")
+            if (capacity >= 64 * 1024 * 1024)
+                throw Error(GetLang("网页信息超过64MB，无法完整读取。"))
+            capacity *= 2
+        }
+    }
+
     static StartElementPicker(token, selectorType, preferControl := false) {
         args := JSON.stringify([token, selectorType, preferControl], 0)
         script := "
@@ -857,11 +926,11 @@ class BrowserUtil {
                     event.preventDefault();
                     event.stopImmediatePropagation();
                 }
-                function click(event) {
-                    if (event.button !== 0) return;
-                    suppress(event);
-                    const target = targetFor(event.target);
-                    if (target) finish('picked:' + selectorFor(target));
+                function confirm() {
+                    const target = targetFor(pointer ? document.elementFromPoint(...pointer)
+                        : Array.from(document.querySelectorAll(':hover')).pop());
+                    if (target && !target.matches('iframe,frame')) finish('picked:' + selectorFor(target));
+                    return picker.result;
                 }
                 function escape(event) {
                     if (event.key !== 'Escape') return;
@@ -880,6 +949,7 @@ class BrowserUtil {
                 }
                 const picker = {
                     result: 'pending',
+                    confirm,
                     stop() {
                         finish('cancelled');
                         delete window[token];
@@ -887,7 +957,7 @@ class BrowserUtil {
                     }
                 };
                 const listeners = {pointermove: hover, pointerout: leave, blur: leave,
-                    pointerdown: suppress, pointerup: suppress, click, keydown: escape};
+                    pointerdown: suppress, pointerup: suppress, click: suppress, keydown: escape};
                 const deadline = setTimeout(() => finish('cancelled'), 120000);
                 window[token] = window.__rmtActivePicker = picker;
                 for (const [type, listener] of Object.entries(listeners))
@@ -897,36 +967,6 @@ class BrowserUtil {
         )"
         if (this.Evaluate(script "(" args ")") != "ready")
             throw Error(GetLang("无法在当前网页启动元素拾取。"))
-    }
-
-    static GetText(selector, selectorType := "CSS", timeoutMs := 5000) {
-        if (!this.InitDll())
-            throw Error("RMT_Browser.dll 未找到或加载失败")
-        buf := Buffer(65536, 0)
-        res := DllCall("RMT_Browser\Browser_GetText", "Ptr", this._Utf8(selector), "Ptr", this._Utf8(StrLower(selectorType)), "Ptr", buf.Ptr, "Int", 65536, "Int", timeoutMs, "Cdecl Int")
-        if (res != 0)
-            this._ThrowLastError()
-        return StrGet(buf.Ptr, "UTF-8")
-    }
-
-    static GetAttribute(selector, selectorType := "CSS", attrName := "href", timeoutMs := 5000) {
-        if (!this.InitDll())
-            throw Error("RMT_Browser.dll 未找到或加载失败")
-        buf := Buffer(65536, 0)
-        res := DllCall("RMT_Browser\Browser_GetAttribute", "Ptr", this._Utf8(selector), "Ptr", this._Utf8(StrLower(selectorType)), "Ptr", this._Utf8(attrName), "Ptr", buf.Ptr, "Int", 65536, "Int", timeoutMs, "Cdecl Int")
-        if (res != 0)
-            this._ThrowLastError()
-        return StrGet(buf.Ptr, "UTF-8")
-    }
-
-    static GetHtml(selector := "", selectorType := "CSS", outerHtml := 1, timeoutMs := 5000) {
-        if (!this.InitDll())
-            throw Error("RMT_Browser.dll 未找到或加载失败")
-        buf := Buffer(131072, 0)
-        res := DllCall("RMT_Browser\Browser_GetHtml", "Ptr", this._Utf8(selector), "Ptr", this._Utf8(StrLower(selectorType)), "Int", outerHtml, "Ptr", buf.Ptr, "Int", 131072, "Int", timeoutMs, "Cdecl Int")
-        if (res != 0)
-            this._ThrowLastError()
-        return StrGet(buf.Ptr, "UTF-8")
     }
 
     static GetUrl() {
@@ -980,94 +1020,59 @@ class BrowserUtil {
         return true
     }
 
-    static CloseWindows(browser, scope, customPath, cancelled) {
-        static browsers := Map("chrome.exe", "Chrome", "msedge.exe", "Edge", "chromium.exe", "Chromium",
-            "brave.exe", "Brave", "vivaldi.exe", "Vivaldi", "opera.exe", "Opera")
-        customPath := Trim(customPath, ' "')
-        if (browser == "自定义" ? customPath == "" : (browser != "Chrome" && browser != "Edge" && browser != "所有浏览器"))
-            return
-        if (scope != "所有页签" && scope != "非当前页签" && scope != "当前页签")
-            return
-
-        for hwnd in WinGetList("ahk_class Chrome_WidgetWin_1") {
-            if (cancelled())
-                break
-            try {
-                if (DllCall("GetWindow", "Ptr", hwnd, "UInt", 4, "Ptr")) ; GW_OWNER
-                    continue
-                name := browsers.Get(StrLower(WinGetProcessName(hwnd)), "")
-                if (browser == "自定义" ? WinGetProcessPath(hwnd) != customPath
-                    : (name == "" || (browser != "所有浏览器" && name != browser)))
-                    continue
-                this._CloseWindow(hwnd, scope, cancelled)
-            }
-        }
+    static ClearCacheAndReload() {
+        if (!this.InitDll())
+            throw Error("RMT_Browser.dll 未找到或加载失败")
+        result := DllCall("RMT_Browser\Browser_ClearCacheAndReload", "Cdecl Int")
+        if (result != 0)
+            this._ThrowLastError()
+        return true
     }
 
-    static _CloseWindow(hwnd, scope, cancelled) {
-        if (scope == "所有页签") {
-            WinClose(hwnd)
-            return
-        }
-        automation := WindowControl._Automation()
-        root := WindowControl._Object(6, automation, "Ptr", hwnd)
-        walker := WindowControl._Object(14, automation)
-        tabs := []
-        this._CollectWindowTabs(root, walker, tabs)
-        current := 0
-        for index, tab in tabs {
-            if (WindowControl._Int(tab.selection, 6)) { ; get_CurrentIsSelected
-                current := index
+    static CurrentTabAction(operation, cancelled := "", port := 9222) {
+        snapshot := "", hwnd := 0
+        for candidate in WinGetList("ahk_class Chrome_WidgetWin_1") {
+            BrowserPageInfo.CheckCancelled(cancelled)
+            if (!BrowserPageInfo.IsBrowser(candidate) || !DllCall("IsWindowVisible", "Ptr", candidate))
+                continue
+            try info := BrowserPageInfo.Snapshot(candidate)
+            catch OSError
+                continue
+            if (info.tabs.Length) {
+                snapshot := info
+                hwnd := candidate
                 break
             }
         }
-        if (!current)
-            return
-
-        restore := false
-        try {
-            for index, tab in tabs {
-                if (cancelled())
-                    break
-                if ((index == current) != (scope == "当前页签"))
+        if (!IsObject(snapshot))
+            throw TargetError(GetLang("未找到带标签页的浏览器窗口。"))
+        BrowserPageInfo.CheckCancelled(cancelled)
+        if (operation == "清空缓存") {
+            id := BrowserPageInfo.TargetId(snapshot, port)
+            this.SwitchTab(id)
+            return this.ClearCacheAndReload()
+        }
+        if (operation == "关闭") {
+            walker := WindowControl._Object(14, WindowControl._Automation())
+            for tab in snapshot.tabs {
+                if (!tab.selected)
                     continue
-                try {
-                    if (this._InvokeTabClose(tab.element, walker))
-                        continue
-                    ; 紧凑页签可能只在选中时提供关闭按钮。
-                    if (index != current) {
-                        restore := true
-                        ComCall(3, tab.selection) ; Select
-                    }
-                    if (!cancelled() && WindowControl._Int(tab.selection, 6)
-                        && (index == current || !this._InvokeTabClose(tab.element, walker))
-                        && !this._MiddleClickTab(hwnd, tab, cancelled))
-                        break
-                }
+                BrowserPageInfo.CheckCancelled(cancelled)
+                if (this._InvokeTabClose(tab.element, walker))
+                    return true
+                tab.selection := WindowControl._Pattern(tab.element, "selection")
+                if (tab.selection && this._MiddleClickTab(hwnd, tab, cancelled))
+                    return true
+                throw Error(GetLang("无法关闭当前标签页。"))
             }
-        } finally {
-            if (restore)
-                try ComCall(3, tabs[current].selection)
+            throw TargetError(GetLang("未找到当前标签页。"))
         }
-    }
-
-    static _CollectWindowTabs(element, walker, tabs) {
-        if (!element)
-            return
-        type := WindowControl._Int(element, 21)
-        if (type == 50030) ; 跳过网页文档
-            return
-        if (type == 50019 && RegExMatch(WindowControl._String(element, 30), "^(?:Edge)?Tab$")) {
-            selection := WindowControl._Pattern(element, "selection")
-            if (selection)
-                tabs.Push({element: element, selection: selection})
-            return
-        }
-        child := WindowControl._Object(4, walker, "Ptr", element)
-        while (child) {
-            this._CollectWindowTabs(child, walker, tabs)
-            child := WindowControl._Object(6, walker, "Ptr", child)
-        }
+        commands := Map("后退", 1, "前进", 2, "刷新", 3)
+        if (!commands.Has(operation))
+            throw ValueError(GetLang("未知的标签页操作。"))
+        ; WM_APPCOMMAND 直接交给目标浏览器处理，无需 CDP 或切换前台焦点。
+        SendMessage(0x319, hwnd, commands[operation] << 16, , hwnd, , , , 1000)
+        return true
     }
 
     static _InvokeTabClose(tab, walker) {
@@ -1086,7 +1091,7 @@ class BrowserUtil {
     }
 
     static _MiddleClickTab(hwnd, tab, cancelled) {
-        ; 固定页签可能没有关闭按钮，中键只发送到当前匹配窗口的页签位置。
+        ; 固定标签页可能没有关闭按钮，中键只发送到当前匹配窗口的标签页位置。
         if (WindowControl._Int(tab.element, 38)) ; get_CurrentIsOffscreen
             return false
         rect := Buffer(16)
@@ -1100,7 +1105,7 @@ class BrowserUtil {
         if (!DllCall("ScreenToClient", "Ptr", hwnd, "Ptr", point))
             return false
         ControlClick("x" NumGet(point, 0, "Int") " y" NumGet(point, 4, "Int"), hwnd, , "Middle", 1, "NA Pos")
-        ; 等浏览器处理这次点击，再继续切换或关闭其他页签。
+        ; 等浏览器处理这次点击，再继续切换或关闭其他标签页。
         loop 10 {
             if (cancelled())
                 break

@@ -101,6 +101,8 @@ OnSaveSetting(*) {
     CheckAndAddDirty("AiModelList", MainSoftData.HasProp("AiModelList") ? MainSoftData.AiModelList : "")
     CheckAndAddDirty("AiAccessMode", MainSoftData.HasProp("AiAccessMode") ? MainSoftData.AiAccessMode : 2)
     CheckAndAddDirty("AiApprovalMode", MainSoftData.HasProp("AiApprovalMode") ? MainSoftData.AiApprovalMode : 2)
+    CheckAndAddDirty("AiMcpEnabled",MainSoftData.AiMcpEnabled)
+    CheckAndAddDirty("AiMcpServerPath",MainSoftData.AiMcpServerPath)
     aiPanelW := (IsSet(MyMainWin) && IsObject(MyMainWin) && MyMainWin.HasProp("aiPanelW")) ? MyMainWin.aiPanelW : (MainSoftData.HasProp("AiPanelWidth") ? MainSoftData.AiPanelWidth : 380)
     CheckAndAddDirty("AiPanelWidth", aiPanelW)
     CheckAndAddDirty("LogicTreeBranchSplit", (MainSoftData.HasProp("LogicTreeBranchSplit") && MainSoftData.LogicTreeBranchSplit) ? 1 : 0)
@@ -1082,10 +1084,14 @@ ViGJoySetState(JoyType, Key, Value) {
     try instEmpty := (ViGJoy.Instance == "")
     catch as e {
         JoyDebugLog(Format("ViGJoySetState Instance check failed: {}", e.Message), "vigem")
+        if (IsObject(DirectCommandScope()))
+            throw e
         return
     }
     if (instEmpty) {
         JoyDebugLog("ViGJoySetState ABORT: Instance empty (ViGEmBus 未就绪/创建失败)", "vigem")
+        if (IsObject(DirectCommandScope()))
+            throw Error("ViGEm手柄实例不可用，请检查驱动。")
         return
     }
 
@@ -1112,6 +1118,8 @@ ViGJoySetState(JoyType, Key, Value) {
         JoyDebugLog(Format("ViGJoySetState OK type={} key={} value={}", JoyType, Key, Value), "vigem")
     } catch as e {
         JoyDebugLog(Format("ViGJoySetState EXCEPTION: {} | {}", e.Message, e.What), "vigem")
+        if (IsObject(DirectCommandScope()))
+            throw e
     }
 }
 
@@ -1148,7 +1156,7 @@ ToolTipTimer() {
     }
 }
 
-ExcuteRMTCMDAction(Cmd) {
+ExcuteRMTCMDAction(Cmd, sourceTableID := "", sourceItemID := "") {
     ; 新格式: RMT指令⫶类别⫶指令 → paramArr[1]=RMT指令, paramArr[2]=类别, paramArr[3]=指令
     paramArr := StrSplit(Cmd, InStr(Cmd, "⫶") ? "⫶" : "_")
     if (paramArr.Length < 3 || ApplyRmtInputControl(paramArr[3]))
@@ -1206,6 +1214,10 @@ ExcuteRMTCMDAction(Cmd) {
             OnSuspendHotkey()
         case "暂停所有宏":
             SetPauseState(true)
+        case "暂停其他宏":
+            ; 必须携带调用者身份；缺少上下文时不能退化成暂停所有宏。
+            if (sourceTableID != "" && sourceItemID != "")
+                SetPauseState(true, sourceTableID, sourceItemID)
         case "恢复所有宏":
             SetPauseState(false)
         case "终止所有宏":
@@ -1334,6 +1346,31 @@ OnGetSelectAreaUp(*) {
 
 OnGetSelectAreaCancel(*) {
     TogGetSelectArea(false)
+}
+
+; 运行时截图共用主进程框选；输入请求取消时释放鼠标捕获。
+class RuntimeScreenShotArea {
+    __new() {
+        this.cancelled := false
+        this.active := false
+        this.area := []
+    }
+
+    Select() {
+        ; WorkPool 在已有框选时延后请求，避免覆盖全局回调。
+        if (this.cancelled)
+            return []
+        this.active := true
+        try TogSelectArea(true, (x1, y1, x2, y2) => this.area := [x1, y1, x2, y2])
+        finally this.active := false
+        return this.cancelled ? [] : this.area
+    }
+
+    _CloseWindow() {
+        this.cancelled := true
+        if (this.active)
+            TogSelectArea(false)
+    }
 }
 
 TogSelectArea(isEnable, action := "", showPrompt := true, pointOnly := false) {
@@ -2125,7 +2162,7 @@ GenerateCommandAutoRemark(data) {
             if (value("StateType") != "")
                 remark .= "（" GetLang(value("StateType")) "）"
             result := value("VarName")
-        case "控件信息", "控件操作", "窗口控件":
+        case "控件信息", "控件操作":
             action := WindowControl.NormalizeAction(value("ActionType"))
             remark := GetLang(action == "检测控件存在" ? "检测控件" : action == "写入控件值" ? "修改控件值" : action)
             if (action == "等待控件出现")

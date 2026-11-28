@@ -56,7 +56,7 @@ class MacroGraphDataMixin {
         isCombo := this._IsSearchComboName(srcSerial)
         isPro := this._IsSearchProName(srcSerial)
         newSerial := this._IsSearchAllName(srcSerial) ? AllocateCommandSerial("搜索All") : AllocateCommandSerial(isCombo ? "搜索Combo" : (isPro ? "搜索Pro" : "搜索"))
-        newData := this._IsSearchAllName(srcSerial) ? SearchAllData() : SearchData()
+        newData := this._IsSearchAllName(srcSerial) ? SearchAllData() : isCombo ? SearchComboData() : SearchData()
         newData.SerialStr := newSerial
         try {
             src := GetMacroCMDData(srcSerial)
@@ -245,7 +245,7 @@ class MacroGraphDataMixin {
 
     ; 形式化 INI 指令的 cmdKey 列表。普通移动为内联，不在此列。
     _FormalIniCmdKeys() {
-        return ["宏操作", "变量", "变量提取", "如果", "如果Pro", "运算", "运行", "运行Pro", "文件读写", "Excel", "网络请求", "浏览器", "窗口控件", "控件信息", "控件操作", "AI判断", "YOLO检测", "进程管理", "文本处理", "数组",
+        return ["宏操作", "变量", "变量提取", "如果", "如果Pro", "运算", "运行", "运行Pro", "文件读写", "Excel", "网络请求", "浏览器", "控件信息", "控件操作", "AI判断", "YOLO检测", "进程管理", "文本处理", "数组",
             "后台鼠标", "后台按键", "窗口管理", "窗口信息", "窗口操作", "按键检测", "手柄检测", "注释", "抓图", "循环",
             "间隔", "按键", "增量移动", "RMT指令", "等待", "等待确定", "倒计时", "时间", "提示"]
     }
@@ -276,7 +276,7 @@ class MacroGraphDataMixin {
                 "运行Pro", RunData,
                 "网络请求", HttpRequestData,
                 "浏览器", BrowserData,
-                "窗口控件", WindowControlData, "控件信息", ControlInfoData, "控件操作", WindowControlData,
+                "控件信息", ControlInfoData, "控件操作", WindowControlData,
                 "AI判断", AiDecisionData,
                 "YOLO检测", YoloData,
                 "翻译", TranslateData,
@@ -581,8 +581,6 @@ class MacroGraphDataMixin {
             d.wmPosY := data.PosY
             d.wmWidth := data.Width
             d.wmHeight := data.Height
-            d.wmWidthVarName := data.WidthVarName
-            d.wmHeightVarName := data.HeightVarName
             d.wmNewTitle := data.NewTitle
             d.wmTransparency := data.Transparency
         } else if (cmdKey == "按键检测" || cmdKey == "手柄检测") {
@@ -602,9 +600,7 @@ class MacroGraphDataMixin {
             d.ssEndX := data.EndPosX
             d.ssEndY := data.EndPosY
             d.ssNameType := data.NameType
-            d.ssFixedName := data.FixedName
-            d.ssSavePath := data.SavePath
-            d.ssResultToggle := data.ResultToggle
+            d.ssToClipboard := data.ToClipboard
             d.ssResultSaveName := data.ResultSaveName
         } else if (cmdKey == "循环") {
             d.loopCount := data.LoopCount
@@ -626,7 +622,7 @@ class MacroGraphDataMixin {
             d.time2 := data.Time2
         } else if (cmdKey == "按键") {
             d.key := data.KeyName
-            d.ktype := GetLangArr(["按下", "松开", "点击"])[data.KeyType]
+            d.ktype := GetLang(CmdEnumKeyAct(data.KeyType))
             d.hold := data.HoldTime
             d.count := data.Count
             d.inter := data.IntervalTime

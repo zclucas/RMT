@@ -275,7 +275,7 @@ class VoiceGui {
             . ' HorizontalAlignment="Center" VerticalAlignment="Center"/>'
             . '</Border>'
             . '<ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True">'
-            . '<Setter TargetName="Bd" Property="Background" Value="{DynamicResource ControlBorder}"/>'
+            . '<Setter TargetName="Bd" Property="Background" Value="{DynamicResource EditHoverBg}"/>'
             . '</Trigger></ControlTemplate.Triggers>'
             . '</ControlTemplate></Button.Template></Button>'
             . '</Grid>'

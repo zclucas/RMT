@@ -331,19 +331,26 @@ OnPauseHotKey(args*) {
         MySoftData.SpecialTableItem.Items[1].Pause := MainSoftData.IsPause
 }
 
-SetPauseState(state) {
+SetPauseState(state, excludeTableID := "", excludeItemID := "") {
+    excludeCurrent := excludeTableID != "" && excludeItemID != ""
     if (MainSoftData.IsPause != state)
-        FeedbackDiagnostics.Record((state ? "暂停" : "继续") "所有宏（" FeedbackDiagnostics.Source() "）")
+        FeedbackDiagnostics.Record((state ? "暂停" : "继续") (excludeCurrent ? "其他宏（" : "所有宏（") FeedbackDiagnostics.Source() "）")
     UIControls.PauseToggle.Value := state
     MainSoftData.IsPause := state
 
     for tableItem in MySoftData.TableInfo {
         for index, item in tableItem.Items {
+            if (excludeCurrent
+                && tableItem.ID == excludeTableID && item.ID == excludeItemID)
+                continue
             SetItemPauseState(tableItem, index, state)
         }
     }
 
-    if (MySoftData.SpecialTableItem.Items.Length >= 1)
+    if (MySoftData.SpecialTableItem.Items.Length >= 1
+        && !(excludeCurrent
+            && MySoftData.SpecialTableItem.ID == excludeTableID
+            && MySoftData.SpecialTableItem.Items[1].ID == excludeItemID))
         MySoftData.SpecialTableItem.Items[1].Pause := state
 }
 
