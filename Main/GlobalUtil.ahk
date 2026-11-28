@@ -1,4 +1,4 @@
-#Requires AutoHotkey v2.0
+﻿#Requires AutoHotkey v2.0
 ; §3 命令行：单实例由 EnsureSingleInstance() 自管理（命名互斥+文件命令队列 IPC），
 ; 二次启动携带参数时转发给运行实例执行，不再用 #SingleInstance Force 的替换语义（会终止运行中的宏）
 #SingleInstance Off
