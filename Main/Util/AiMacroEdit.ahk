@@ -7,8 +7,8 @@ class AiMacroEdit {
 
     static Tools() {
         return [
-            AiAssist._ToolDef("preview_macro_step_edit", "预览指定步骤的参数修改。changes 使用 read_macro_step 里的字段名，只传要改的字段。", '[{"name":"tab","type":"integer","desc":"页签序号","req":true},{"name":"index","type":"integer","desc":"宏序号"},{"name":"item_id","type":"string","desc":"宏 ID","req":true},{"name":"command_index","type":"integer","desc":"步骤序号","req":true},{"name":"phase","type":"string","desc":"body、pre 或 post"},{"name":"expected_command","type":"string","desc":"步骤原文","req":true},{"name":"target_index","type":"integer","desc":"搜索目标序号，多目标时修改目标参数必填"},{"name":"row_index","type":"integer","desc":"变量行或等待条件行，从 1 开始"},{"name":"changes","type":"object","desc":"搜索：Similar、SearchText、SearchColor、SearchImagePath、StartPosX/Y、EndPosX/Y、SearchCount、SearchInterval。变量：VariableArr、CopyVariableArr、MinVariableArr、MaxVariableArr、OperaTypeArr，值写单行标量。等待：TimeoutMs、Interval、TimeoutStatusVar、Param1、Param2、DurationMs、RandomMaxMs、ConditionValue。","req":true}]'),
-            AiAssist._ToolDef("apply_macro_step_edit", "显示预览差异，用户确认后应用该预览。", '[{"name":"preview_id","type":"integer","desc":"preview_macro_step_edit 返回的编号","req":true}]'),
+            AiAssist._ToolDef("preview_macro_step_edit", "预览现有指令步骤的参数修改，支持文件、文本、浏览器等原生类型。changes使用read_macro_step里的字段名，只传要改的字段。", '[{"name":"tab","type":"integer","desc":"页签序号","req":true},{"name":"index","type":"integer","desc":"宏序号"},{"name":"item_id","type":"string","desc":"宏 ID","req":true},{"name":"command_index","type":"integer","desc":"步骤序号","req":true},{"name":"phase","type":"string","desc":"body、pre 或 post"},{"name":"expected_command","type":"string","desc":"步骤原文","req":true},{"name":"target_index","type":"integer","desc":"搜索目标序号，多目标时修改目标参数必填"},{"name":"row_index","type":"integer","desc":"变量行或等待条件行，从 1 开始"},{"name":"changes","type":"object","desc":"搜索：Similar、SearchText、SearchColor、SearchImagePath、StartPosX/Y、EndPosX/Y、SearchCount、SearchInterval。变量：VariableArr、CopyVariableArr、MinVariableArr、MaxVariableArr、OperaTypeArr，值写单行标量。等待：TimeoutMs、Interval、TimeoutStatusVar、Param1、Param2、DurationMs、RandomMaxMs、ConditionValue。","req":true}]'),
+            AiAssist._ToolDef("apply_macro_step_edit", "按当前审批设置应用已预览的参数修改，自动审批时直接执行；返回该步骤的新指令引用。", '[{"name":"preview_id","type":"integer","desc":"preview_macro_step_edit 返回的编号","req":true}]'),
             AiAssist._ToolDef("undo_macro_step_edit", "确认后撤销当前配置中本次启动以来最近一次结构化参数修改。", "[]")
         ]
     }
@@ -79,6 +79,18 @@ class AiMacroEdit {
 
     static Patch(kind, data, changes, args) {
         diff := []
+        if (!AiMacroEdit.IsSearch(kind) && kind != "变量" && kind != "等待") {
+            typed := JSON.parse(JSON.stringify(data,0),,false)
+            AiInstructionBuilder.Patch(typed,changes)
+            NormalizeCommandData(kind,typed)
+            AiInstructionBuilder.Validate(kind,typed)
+            updated := JSON.parse(JSON.stringify(typed,0))
+            for field,value in changes {
+                if (JSON.stringify([data[field]],0) != JSON.stringify([updated[field]],0))
+                    AiMacroEdit.Set(data,field,updated[field],diff)
+            }
+            return diff
+        }
         target := data
         prefix := ""
         if (AiMacroEdit.IsSearch(kind)) {
@@ -110,6 +122,14 @@ class AiMacroEdit {
                         throw Error("请用 target_index 指定已有的搜索目标")
                     switch field {
                         case "Similar": value := AiMacroEdit.Int(value, 0, 100, field)
+                        case "ColorMatch": value := AiMacroEdit.Int(value,0,1,field)
+                        case "OCRType": value := AiMacroEdit.Int(value,1,2,field)
+                        case "OcrEngine":
+                            if (value != "" && value != "RapidOCR" && value != "Tesseract OCR")
+                                throw Error("OcrEngine 必须为RapidOCR、Tesseract OCR或空（跟随设置）")
+                        case "SearchType":
+                            if (!InStr("|屏幕图片|屏幕颜色|屏幕文本|窗口图片|窗口颜色|窗口文本|","|" value "|",true))
+                                throw Error("SearchType 必须是屏幕/窗口的图片、颜色或文本搜索。")
                         case "SearchColor":
                             value := String(value)
                             if (!RegExMatch(value, "i)^(?:0x|#)?[0-9a-f]{6}$"))
@@ -309,7 +329,7 @@ class AiMacroEdit {
             throw Error("预览已失效，请重新预览")
         step := edit.step
         AiMacroEdit.Current(edit, step.command)
-        if (!RmtDialog.Confirm(AiMacroEdit.DiffText(edit), "确认 AI 参数修改"))
+        if (!AiAssist._NeedApproval(AiMacroEdit.DiffText(edit)))
             throw Error("用户取消参数修改")
         wasCritical := A_IsCritical
         Critical("On")

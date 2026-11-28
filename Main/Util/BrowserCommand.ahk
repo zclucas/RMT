@@ -2,6 +2,16 @@
 #Include BrowserPageInfo.ahk
 #Include BrowserElementInfo.ahk
 
+BrowserResultVariable(data, action) {
+    if (data.SaveVar != "")
+        return data.SaveVar
+    if (action == "获取标题")
+        return data.PageTitleVar
+    if (action == "获取网址")
+        return data.PageUrlVar
+    return ""
+}
+
 OnBrowser(tableItem, cmd, index) {
     parts := StrSplit(cmd, "_")
     data := GetMacroCMDData(parts[1])
@@ -12,6 +22,10 @@ OnBrowser(tableItem, cmd, index) {
     resolve := (text) => GetReplaceVarText(tableItem, index, text)
 
     actionType := BrowserActions.Action(data.ActionType)
+    if (data.SaveVar == "" && BrowserResultVariable(data, actionType) != "") {
+        data := data.Clone()
+        data.SaveVar := BrowserResultVariable(data, actionType)
+    }
     selType := data.SelectorType
     usesTimeout := BrowserActions.UsesTimeout(actionType)
     timeoutAction := usesTimeout ? data.TimeoutAction : "停止"
@@ -161,6 +175,8 @@ _ExecuteBrowserAction(tableItem, index, data, actionType, resolve, selType) {
 
     switch actionType {
         case "元素信息", "元素位置/宽高":
+            if (BrowserTargetRef(tableItem, index, data, resolve) != "")
+                return BrowserElementInfo.Read(data, resolve(data.Selector), selType)
             return BrowserElementInfo.ReadMatched(data, resolve(data.Selector), selType, () => tableItem.Items[index].Killed)
         case "标签页信息":
             source := BrowserPageInfo.NormalizeSource(data.PageSource)

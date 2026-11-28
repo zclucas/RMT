@@ -774,7 +774,6 @@ class ControlOperationGui extends WindowControlGui {
         this._OperationCombo(clicks, "点击类型：", "ClickType", WindowControl.ClickTypes)
         hold := this._Row(clicks, "长按时间：", "ClickHoldMs", , , GetLang("毫秒，支持自定义数值或 {变量}。")).Grid_Column(2)
         CmdEditorForm.Combo(hold, "ClickHoldMs", true).Grid_Column(1)
-        this._OperationCombo(body, "点击位置：", "ClickPoint", WindowControl.ClickPoints)
         this._OperationCombo(body, "偏移值：", "ScrollOffset", ["0"], true, GetLang("正数向下、负数向上；像素偏移，Excel 按行折算。"))
         waits := body.Add("Grid").Name("WaitTypeRow").Cols("*", 16, "*")
         waitType := CmdEditorForm.Combo(this._Row(waits, "等待类型：", "WaitTypeChoice"), "WaitType").Grid_Column(1)
@@ -835,16 +834,11 @@ class ControlOperationGui extends WindowControlGui {
             this.Data.TimeoutStatusVar)
         this._writeKind := this.Data.WriteKind
         this._ComboPush("WaitType", "SelectedIndex", WindowControl.ChoiceIndex(this.Data.WaitType, WindowControl.WaitTypes))
-        for field in ["ClickType", "ClickPoint"] {
-            choices := field == "ClickType" ? WindowControl.ClickTypes : WindowControl.ClickPoints
-            value := this.Data.%field%
-            this._ComboPush(field, "SelectedIndex", WindowControl.ChoiceIndex(value, choices))
-        }
+        this._ComboPush("ClickType", "SelectedIndex", WindowControl.ChoiceIndex(this.Data.ClickType, WindowControl.ClickTypes))
         this._ComboPush("ClickHoldMs", "ClearItems", "")
         for reference in GetGuiVarReferences()
             this._ComboPush("ClickHoldMs", "AddItem", reference)
         this._ComboPush("ClickHoldMs", "Text", String(this.Data.ClickHoldMs))
-        this._ComboPush("ClickPointLabel", "ToolTip", GetLang("区域随机在控件中心80%区域内取点。"))
         this._RefreshClickFields()
         for reference in GetGuiVarReferences()
             this._ComboPush("ScrollOffset", "AddItem", reference)
@@ -870,8 +864,7 @@ class ControlOperationGui extends WindowControlGui {
         ; 父类用 HasTimeoutFields 判断刷新，非等待时也必须主动收起。
         this._ComboPush("CommandTimeoutRow", "Visibility", this.HasTimeoutFields ? "Visible" : "Collapsed")
         this._ComboPush("WaitTypeRow", "Visibility", this.HasTimeoutFields ? "Visible" : "Collapsed")
-        for field in ["ClickType", "ClickPoint"]
-            this._ComboPush(field "Row", "Visibility", action == "点击控件" ? "Visible" : "Collapsed")
+        this._ComboPush("ClickTypeRow", "Visibility", action == "点击控件" ? "Visible" : "Collapsed")
         this._RefreshClickFields()
         this._ComboPush("ScrollOffsetRow", "Visibility", action == "滚动到控件" ? "Visible" : "Collapsed")
         super._UpdateChoice(action)
@@ -1167,7 +1160,6 @@ class ControlOperationGui extends WindowControlGui {
         data.ClickType := this._SelectedOperationValue("ClickType", WindowControl.ClickTypes, "左键单击")
         hold := Trim(this.ui.Query("ClickHoldMs"))
         data.ClickHoldMs := IsInteger(hold) ? Integer(hold) : hold
-        data.ClickPoint := this._SelectedOperationValue("ClickPoint", WindowControl.ClickPoints, "中心点")
         data.ScrollOffset := Trim(this.ui.Query("ScrollOffset"))
         data.WaitLogic := this._SelectedOperationValue("WaitLogic", ["且", "或"], "且")
         data.WaitConditions := this._ReadWaitConditions()

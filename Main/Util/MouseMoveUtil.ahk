@@ -103,7 +103,7 @@ MouseClickByKeyMode(keyMode, clickCount := 1, button := "LButton") {
         AhiClick(button == "RButton" ? "R" : "L", clickCount)
         return true
     }
-    Click(Format("{} {}", button == "RButton" ? "Right" : "Left", clickCount))
+    Click(Format("{} {}", button == "RButton" ? "Right" : button == "MButton" ? "Middle" : "Left", clickCount))
     return true
 }
 

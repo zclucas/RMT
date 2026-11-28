@@ -53,8 +53,7 @@ TimeGraphNormSubMode(d) {
 ; ---------- 模式1：指定时刻等待 / 相对等待 ----------
 
 TimeExecWaitUntil(tableItem, index, Data) {
-    targetMs := TimeNormWaitType(Data.Param2) == "时间戳"
-        ? TimeEpochMilliseconds(TimeResolveValue(tableItem, index, Data.Param1)) : ""
+    targetMs := TimeWaitTargetMilliseconds(tableItem, index, Data)
     targetTime := targetMs == "" ? TimeCalcTargetDateTime(tableItem, index, Data) : ""
     if (targetMs == "" && targetTime == "")
         return
@@ -81,8 +80,29 @@ TimeExecWaitUntil(tableItem, index, Data) {
         floatInterval := RandomizeDurationByPercent(checkInterval, MainSoftData.PreIntervalFloat)
         if (targetMs != "")
             floatInterval := Min(floatInterval, remaining)
+        if (timeoutMs > 0)
+            floatInterval := Min(floatInterval, Max(1, timeoutMs - (A_TickCount - startTick)))
         InterruptibleSleep(tableItem, index, floatInterval)
     }
+}
+
+TimeDurationSeconds(tableItem, index, Data) {
+    parts := StrSplit(Trim(String(Data.Param1)), ":")
+    if (parts.Length == 3) {
+        h := TimeResolveValue(tableItem, index, parts[1])
+        m := TimeResolveValue(tableItem, index, parts[2])
+        s := TimeResolveValue(tableItem, index, parts[3])
+        return TimeParseDurationSecs(h ":" m ":" s, "时长")
+    }
+    return TimeParseDurationSecs(TimeResolveValue(tableItem, index, Data.Param1), "时长")
+}
+
+TimeWaitTargetMilliseconds(tableItem, index, Data) {
+    switch TimeNormWaitType(Data.Param2) {
+        case "时间戳": return TimeEpochMilliseconds(TimeResolveValue(tableItem, index, Data.Param1))
+        case "时长": return UnixNow() + TimeDurationSeconds(tableItem, index, Data) * 1000
+    }
+    return ""
 }
 
 TimeNormWaitType(unit) => CurrentCommandChoice(unit == "" ? "时刻" : unit,

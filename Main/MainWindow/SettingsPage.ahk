@@ -19,6 +19,97 @@
             . '</StackPanel>'
     }
 
+    _SettingRowGlyph(name) {
+        ; 优先匹配具体功能，避免日志、尺寸等行被同一个分类图标覆盖。
+        static glyphs := Map(
+            "ChkBootStart", "E7E8", "ChkAdminStart", "E7EF", "ChkDataReport", "E774",
+            "CmbLang", "E775", "CmbPreferredEditor", "EF60", "ChkModalSubGui", "E78B",
+            "CmbScreenShot", "E722", "CmbOCRType", "E8FE", "CmbExcelBackend", "E9F9",
+            "CmbSearchImage", "E8B9", "ChkSearchImageAdaptive", "E9A6", "EditMutiThreadNum", "E9F5",
+            "EditTranslateTimeout", "E916", "EditNetPort", "E839", "BtnDownloadManager", "E896",
+            "CmbRemarkAuto", "E70B", "ChkForeground", "E944", "ChkAutoLoosen", "E92F",
+            "ChkContinuous", "E8EE", "CmbMacroStop", "E71A", "CmbKeyDownDown", "E765",
+            "ChkNoVariable", "E7BA", "EditHoldFloat", "E916", "EditPreIntervalFloat", "E917",
+            "EditIntervalFloat", "E917", "EditCoordXFloat", "E7EA", "EditCoordYFloat", "E7EB",
+            "StartTipAudioCon", "E8D6", "EndTipAudioCon", "E8D6", "StopTipAudioCon", "E8D6",
+            "ShowBorderCon", "E9A6", "HoldMutiCon", "E8EE", "AutoLoosenCon", "E92F",
+            "BackgroundTogCon", "EF1F", "BackgroundWinCon", "E78B", "KeyboardTogCon", "E765",
+            "MouseTogCon", "E962", "MouseTrailModeCon", "E7C9", "MouseTrailSpeedCon", "EC4A",
+            "WheelFixedPosCon", "E707", "WheelShowTooltipCon", "E8F2", "WheelSelectModeCon", "E7C9",
+            "WheelScaleCon", "E71E", "CountDownStyleCon", "E916", "CountDownPadCon", "E8E9",
+            "UIPanelColsCon", "F0E2", "UIPanelShowOnActiveCon", "E890", "UIPanelCustomFoldCon", "E8B7",
+            "BtnEditUIPanelCustom", "EF60", "ThemePresetCon", "E790", "ThemeUiScaleCon", "E71E",
+            "AiProviderCon", "E753", "AiBaseUrlCon", "E774", "AiApiKeyCon", "E72E",
+            "AiModelCon", "E99A", "AiAccessCon", "E8D7", "AiApprovalCon", "E8FB",
+            "AiMcpEnabledCon", "E703", "AiMcpServerPathCon", "E756",
+            "ChkCMDTip", "E7F4", "CmdTipPosXCon", "E7EA", "CmdTipPosYCon", "E7EB",
+            "CmdTipLogFileCon", "E74E", "LogLevel_debug", "E71C", "ChkLogWarnBubble", "E7BA",
+            "ChkLogErrorBadge", "EA39", "CmdTipLogPathCon", "E8B7", "CmdTipAutoClearCon", "EA99",
+            "BtnLogCenter", "E8FD")
+        if glyphs.Has(name)
+            return "&#x" glyphs[name] ";"
+        switch {
+            case RegExMatch(name, "i)Width"): return "&#xE745;" ; ResizeMouseWide：横向尺寸
+            case RegExMatch(name, "i)Height"): return "&#xE746;" ; ResizeMouseTall：纵向尺寸
+            case RegExMatch(name, "i)FontSize|CountDownFontCon|CmdTipFontCon"): return "&#xE8E9;"
+            case RegExMatch(name, "i)Font"): return "&#xE8D2;"
+            case RegExMatch(name, "i)Alpha|Transparency"): return "&#xE7A1;"
+            case RegExMatch(name, "i)JoyInterval"): return "&#xE916;"
+            case RegExMatch(name, "i)Joy|LtRt"): return "&#xE7FC;"
+            default: return "&#xE713;"
+        }
+    }
+
+    _SettingRowSummary(name, text) {
+        summaries := Map(
+            "ChkAdminStart", "后台操作可能需要提权",
+            "ChkDataReport", "更新与 AI 助手",
+            "ChkModalSubGui", "子窗口打开时禁用主窗口",
+            "ChkSearchImageAdaptive", "适配分辨率与 DPI 变化",
+            "EditMutiThreadNum", "-1 动态；0 单线程",
+            "EditTranslateTimeout", "本地与 AI 通道共用",
+            "EditNetPort", "仅监听本机；默认 16888",
+            "CmbFont", "保存后生效",
+            "ChkForeground", "窗口不匹配时终止宏",
+            "ChkAutoLoosen", "触发前松开修饰键",
+            "ChkContinuous", "按住触发键可连续触发",
+            "ChkNoVariable", "变量为空时提示",
+            "EditHoldFloat", "按住时长浮动（%）",
+            "EditPreIntervalFloat", "重复操作间隔浮动（%）",
+            "EditIntervalFloat", "等待时长浮动（%）",
+            "EditCoordXFloat", "水平偏移（像素）",
+            "EditCoordYFloat", "垂直偏移（像素）",
+            "BackgroundTogCon", "将录制操作转为后台指令",
+            "BackgroundWinCon", "按标题、类名等匹配窗口",
+            "CmdTipLogFileCon", "将指令显示内容写入日志",
+            "ChkLogWarnBubble", "托盘气泡提示警告",
+            "ChkLogErrorBadge", "集中查看宏运行错误",
+            "CmdTipLogPathCon", "指令显示日志的保存目录",
+            "CmdTipAutoClearCon", "仅清理指令显示日志",
+            "AiMcpEnabledCon", "生成配置时优先 MCP",
+            "AiMcpServerPathCon", "留空使用内置 MCP")
+        optionSummaries := Map(
+            "调用 Windows 自带截图工具。", "Windows 自带截图",
+            "内置框选截图，支持边缘吸附。", "内置框选与边缘吸附",
+            "支持标注、马赛克和贴图。", "标注、马赛克与贴图",
+            "默认引擎，使用 PP-OCRv6 识别中英文。", "PP-OCRv6 中英文识别",
+            "使用 Tesseract 语言包识别中英文。", "Tesseract 中英文识别",
+            "默认方式，优先连接已打开的工作簿。", "优先连接已打开的工作簿",
+            "使用原有 AHK 读写方式。", "兼容原有 AHK 方式",
+            "默认灰度匹配，支持颜色匹配和缩放自适应。", "灰度、颜色与缩放匹配",
+            "使用 AHK 内置的图片搜索。", "AHK 内置图片搜索",
+            "只能读取文件和配置。", "仅可读取文件和配置",
+            "写入仅限软件目录。", "仅可写入软件目录",
+            "读写不限路径，可执行命令和脚本。", "任意路径，可执行命令")
+        for full, short in optionSummaries
+            if (text == GetLang(full))
+                return GetLang(short)
+        if (summaries.Has(name))
+            return GetLang(summaries[name])
+        ; 选项旁只放简短概述，完整限制保留在右侧问号中。
+        return StrSplit(StrReplace(text, "`r", ""), ["`n", "。", "；"])[1]
+    }
+
     ; ============ 全局页：系统 / 宏 / 显示页签 / 界面 / AI 助手 ============
     BuildSettingTab() {
         ; §23 Panel_ 编号 = TableInfo 位置：表集合新增「网络宏」后 Setting 起顺延 +1，改按 Symbol 动态取位
@@ -49,6 +140,10 @@
         ; ---------- 行/卡片构建 ----------
         ; 中文标签列预留 6 个 13 DIP 全角字及右侧留白。
         labelWidth := (MainSoftData.Lang == "简中" || MainSoftData.Lang == "繁體中文") ? 84 : 112
+        rowLabelWidth := Round(Float(XAMLHost.ScaleFontSize(13)) * 8) + 8
+        optionWidth := 180
+        fieldStyles .= '<sys:Double xmlns:sys="clr-namespace:System;assembly=mscorlib" x:Key="SetHintFontSize">'
+            . XAMLHost.FormatFontSize(XAMLHost.ScaleFontSizeRelative(10)) '</sys:Double>'
         this._setHelpMap := Map()
         this._setHelpSeq := 0
         helpFnByLabel := Map()
@@ -68,34 +163,36 @@
             this._setHelpSeq += 1
             name := "BtnSetHelp_" this._setHelpSeq
             this._setHelpMap[name] := {title: title != "" ? title : GetLang("说明"), text: tip, fn: helpFnByLabel.Has(title) ? helpFnByLabel[title] : ""}
-            return '<Button Grid.Column="1" Name="' name '" Content="?" Width="24" MinHeight="24" Padding="4,2" FontSize="11" FontWeight="Bold" HorizontalAlignment="Left" VerticalAlignment="Center" Cursor="Hand"/>'
+            return '<Button Grid.Column="4" Name="' name '" Content="?" Width="24" MinHeight="24" Padding="4,2" FontSize="11" FontWeight="Bold" HorizontalAlignment="Left" VerticalAlignment="Center" Cursor="Hand"/>'
         }
         afterHint(ctrl, hint, hintName := "") {
-            hintAttr := (hintName == "" ? "" : ' Name="' hintName '"') ' Text="' this._XmlEsc(hint) '"'
-            if (InStr(ctrl, "<Slider"))
-                return '<Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>'
-                    . ctrl
-                    . '<TextBlock Grid.Column="1"' hintAttr ' MaxWidth="200" Margin="10,0,0,0" FontSize="12" Foreground="{DynamicResource TextSub}" TextWrapping="Wrap" VerticalAlignment="Center"/></Grid>'
-            return '<Grid><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>'
-                . ctrl
-                . '<TextBlock Grid.Column="1"' hintAttr ' Margin="10,0,0,0" FontSize="12" Foreground="{DynamicResource TextSub}" TextWrapping="Wrap" VerticalAlignment="Center"/></Grid>'
+            return {control: ctrl, hint: hint, name: hintName}
         }
         row(label, ctrl, tip := "", lblName := "", help := "", icon := "") {
-            if (help == "" && tip != "" && (helpFnByLabel.Has(label) || InStr(tip, "`n"))) {
-                help := tip
-                tip := ""
+            hint := "", hintName := ""
+            if (IsObject(ctrl)) {
+                hint := ctrl.hint, hintName := ctrl.name, ctrl := ctrl.control
             }
-            if (tip != "")
-                ctrl := afterHint(ctrl, tip)
+            name := RegExMatch(ctrl, 'Name="([^"]+)"', &match) ? match[1] : ""
+            if (tip != "") {
+                if (help == "")
+                    help := tip
+                if (hint == "")
+                    hint := this._SettingRowSummary(name, tip)
+            }
             helpBtn := dot(help, label)
-            labelXaml := '<TextBlock' (lblName == "" ? "" : ' Name="' lblName '"') ' Text="' this._XmlEsc(label) '" Margin="0,0,4,0" TextWrapping="Wrap" VerticalAlignment="Center" FontWeight="SemiBold" Foreground="{DynamicResource TextMain}" FontSize="13"/>'
-            if (icon != "")
-                labelXaml := '<Grid><Grid.ColumnDefinitions><ColumnDefinition Width="24"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>'
-                    . '<Grid Width="16" Height="16" HorizontalAlignment="Left" VerticalAlignment="Center" IsHitTestVisible="False">' icon '</Grid>'
-                    . '<Grid Grid.Column="1">' labelXaml '</Grid></Grid>'
-            return '<Border MinHeight="48" Padding="0,5" BorderBrush="{DynamicResource ControlBorder}" BorderThickness="0,0,0,0.5"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="' (labelWidth + (icon != "" ? 24 : 0)) '"/><ColumnDefinition Width="' (icon != "" && helpBtn == "" ? 12 : 36) '"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>'
-                . labelXaml helpBtn
-                . '<Grid Grid.Column="2" VerticalAlignment="Center">' ctrl '</Grid></Grid></Border>'
+            if (icon == "")
+                icon := '<TextBlock Text="' this._SettingRowGlyph(name) '" FontFamily="' iconFont '" FontSize="14" FontWeight="Normal" Foreground="{DynamicResource TextMain}" HorizontalAlignment="Center" VerticalAlignment="Center"/>'
+            labelXaml := '<Grid><Grid.ColumnDefinitions><ColumnDefinition Width="24"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>'
+                . '<Grid Width="16" Height="16" HorizontalAlignment="Left" VerticalAlignment="Center" IsHitTestVisible="False">' icon '</Grid>'
+                . '<TextBlock Grid.Column="1"' (lblName == "" ? "" : ' Name="' lblName '"') ' Text="' this._XmlEsc(label) '" Margin="0,0,8,0" TextWrapping="Wrap" VerticalAlignment="Center" FontWeight="Normal" Foreground="{DynamicResource TextMain}" FontSize="13"/></Grid>'
+            hintAttr := (hintName == "" ? "" : ' Name="' hintName '"') ' Text="' this._XmlEsc(hint) '"'
+            return '<Border MinHeight="48" Padding="0,5" BorderBrush="{DynamicResource ControlBorder}" BorderThickness="0,0,0,0.5"><Grid><Grid.ColumnDefinitions>'
+                . '<ColumnDefinition Width="' (rowLabelWidth + 24) '"/><ColumnDefinition Width="' optionWidth '"/><ColumnDefinition Width="12"/><ColumnDefinition Width="*"/><ColumnDefinition Width="32"/></Grid.ColumnDefinitions>'
+                . labelXaml
+                . '<Grid Grid.Column="1"' (hint == "" ? ' Grid.ColumnSpan="3"' : "") ' VerticalAlignment="Center">' ctrl '</Grid>'
+                . '<TextBlock Grid.Column="3"' hintAttr ' FontSize="{DynamicResource SetHintFontSize}" Foreground="{DynamicResource TextSub}" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,8,0"/>'
+                . helpBtn '</Grid></Border>'
         }
         tog(label, name, val, tip := "") {
             return row(label, '<CheckBox Name="' name '" IsChecked="' (val ? "True" : "False") '" Style="{StaticResource SetSwitch}"/>', tip)
@@ -112,7 +209,7 @@
                 isSel := IsInteger(sel) ? (k == Integer(sel) + (zero ? 1 : 0)) : (it == sel)
                 if (isSel)
                     selIdx := k - 1
-                descAttr := descriptions.Length ? ' Tag="' this._XmlEsc(GetLang(descriptions[k])) '"' : ""
+                descAttr := descriptions.Length ? ' Tag="' this._XmlEsc(GetLang(descriptions[k])) '" ToolTip="' this._XmlEsc(this._SettingRowSummary(name, GetLang(descriptions[k]))) '"' : ""
                 if (name == "CmbLang") {
                     official := OfficialLanguages()
                     itemsXaml .= LanguageOptionXaml(it, it, official.Has(it) ? official[it].flag : "")
@@ -122,10 +219,15 @@
             selAttr := (selIdx == "") ? "" : ' SelectedIndex="' selIdx '"'
             if (editable)
                 selAttr := ' IsEditable="True" IsTextSearchEnabled="False" Text="' this._XmlEsc(String(sel)) '"'
-            widthAttr := width ? ' Width="' width '"' : ""
+            widthAttr := ' Width="' optionWidth '" HorizontalAlignment="Left"'
             ctrl := '<ComboBox Name="' name '" Height="33" MinHeight="33" Padding="10,0" VerticalContentAlignment="Center" FontSize="12" Foreground="{DynamicResource InputText}" Background="{DynamicResource InputBg}" BorderBrush="{DynamicResource InputStroke}" BorderThickness="1"' selAttr widthAttr '>' itemsXaml '</ComboBox>'
-            if (descriptions.Length)
-                ctrl := afterHint(ctrl, "{Binding SelectedItem.Tag, ElementName=" name "}")
+            if (descriptions.Length) {
+                descriptionsHelp := ""
+                for k, description in descriptions
+                    descriptionsHelp .= (k == 1 ? "" : "`n") items[k] "：" GetLang(description)
+                ctrl := afterHint(ctrl, "{Binding SelectedItem.ToolTip, ElementName=" name "}")
+                return row(label, ctrl, tip, , descriptionsHelp)
+            }
             return row(label, ctrl, tip)
         }
         txtRow(label, name, val, tip := "") {
@@ -152,7 +254,7 @@
             return '<Border Margin="' margin '" Background="{DynamicResource ControlBg}" BorderBrush="{DynamicResource OutlineStroke}" BorderThickness="1" CornerRadius="10" Padding="0">'
                 . '<Grid><Grid.RowDefinitions><RowDefinition Height="30"/><RowDefinition Height="*"/></Grid.RowDefinitions>'
                 . '<Border Background="{DynamicResource TitleBarColor}" CornerRadius="10,10,0,0" Padding="10,0"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><StackPanel Orientation="Horizontal" VerticalAlignment="Center">' g '<TextBlock Text="' this._XmlEsc(title) '" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource TitleBarForeground}" VerticalAlignment="Center"/></StackPanel><StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">' headerRight '</StackPanel></Grid></Border>'
-                . '<StackPanel Grid.Row="1" Margin="15,6,15,11">' body '</StackPanel></Grid></Border>'
+                . '<StackPanel Grid.Row="1" Margin="15,6,15,3">' body '</StackPanel></Grid></Border>'
         }
         twoCol(l, r) {
             ; 左右两列各自垂直堆叠，互不卡行高，避免中间断层。整行模块（如主题颜色）放在 twoCol 外面。
@@ -166,7 +268,7 @@
         }
         page(id, body, visible := false) {
             return '<StackPanel Name="SetPage_' id '"' (visible ? '' : ' Visibility="Collapsed"') '>'
-                . '<StackPanel Margin="14,20,14,28">' body '</StackPanel></StackPanel>'
+                . '<StackPanel Margin="14,6,14,14">' body '</StackPanel></StackPanel>'
         }
 
         ; ---------- 公共片段 ----------
@@ -181,13 +283,16 @@
         ltRtSwitch := '<CheckBox Name="ChkJoyLtRtAsButton" IsChecked="' (MainSoftData.JoyLtRtAsButton ? "True" : "False") '" Style="{StaticResource SetSwitch}"/>'
         behaviorPage := page("behavior"
             , twoCol(
-                card(GetLang("软件"), "&#xE74C;", tog(GetLang("开机自启"), "ChkBootStart", MainSoftData.IsBootStart)
+                card(GetLang("软件"), "&#xECAA;", tog(GetLang("开机自启"), "ChkBootStart", MainSoftData.IsBootStart)
                     . tog(GetLang("管理员启动"), "ChkAdminStart", MainSoftData.IsAdminStart, GetLang("后台功能与部分按键类型需要管理员权限"))
                     . tog(GetLang("在线功能"), "ChkDataReport", MainSoftData.IsDataReport, GetLang("获取版本更新、AI 智能助手"))
                     . cmb(GetLang("语言"), "CmbLang", MainSoftData.LangArr, MainSoftData.Lang)
                     . cmb(GetLang("首选编辑器"), "CmbPreferredEditor", GetLangArr(["逻辑树", "图形节点"]), MainSoftData.PreferredMacroEditor)
                     . tog(GetLang("模态子窗口"), "ChkModalSubGui", MainSoftData.IsModalSubGui, GetLang("打开指令编辑等子窗口时禁用主窗口")), "0", "", "soft")
-                . card(GetLang("显示页签"), "&#xE8A5;", tabsBody, "0,18,0,0", "", "tabs")
+                . card(GetLang("显示页签"), "&#xE7C4;", tabsBody, "0,10,0,0", "", "tabs")
+                . card(GetLang("手柄"), "&#xE7FC;", cmb(GetLang("手柄映射"), "CmbTriggerJoyType", ["Xbox", "PS5"], MainSoftData.TriggerJoyType)
+                    . cmb(GetLang("宏手柄类型"), "CmbJoyType", ["Xbox", "PS5"], MainSoftData.JoyType)
+                    . row(this._JoyLtRtAsButtonLabel(), afterHint(ltRtSwitch, this._JoyLtRtAsButtonDesc(), "LblJoyLtRtAsButton_Desc"), "", "LblJoyLtRtAsButton"), "0,10,0,0", "", "joy")
                 , card(GetLang("通用"), "&#xE713;", cmb(GetLang("截图工具"), "CmbScreenShot", GetLangArr(["微软截图", "RMT截图", "SC截图"]), MainSoftData.ScreenShotType, false, ""
                         , ["调用 Windows 自带截图工具。", "内置框选截图，支持边缘吸附。", "支持标注、马赛克和贴图。"], 132)
                     . cmb(GetLang("OCR类型"), "CmbOCRType", ["RapidOCR", "Tesseract OCR"], MainSoftData.OCRTypeValue, false, ""
@@ -204,9 +309,7 @@
                     . num(GetLang("网络宏端口"), "EditNetPort", MainSoftData.NetworkPort, GetLang("网络宏端口 1-65535，默认 16888；仅监听本机回环地址。"))
                     . row(GetLang("下载管理"), '<Button Name="BtnDownloadManager" Content="' GetLang("管理下载") '" HorizontalAlignment="Left" Padding="10,0"/>')
                     . cmb(GetLang("指令备注"), "CmbRemarkAuto", GetLangArr(["不生成", "自动生成", "覆盖生成"]), MainSoftData.RemarkAutoType), "0", "", "general")
-                . card(GetLang("手柄"), "&#xE7FC;", cmb(GetLang("手柄映射"), "CmbTriggerJoyType", ["Xbox", "PS5"], MainSoftData.TriggerJoyType)
-                    . cmb(GetLang("宏手柄类型"), "CmbJoyType", ["Xbox", "PS5"], MainSoftData.JoyType)
-                    . row(this._JoyLtRtAsButtonLabel(), afterHint(ltRtSwitch, this._JoyLtRtAsButtonDesc(), "LblJoyLtRtAsButton_Desc"), "", "LblJoyLtRtAsButton"), "0,18,0,0", "", "joy"))
+                )
             , true)
 
         ; ---------- 页：宏 ----------
@@ -236,7 +339,7 @@
                     . num(GetLang("坐标Y浮动"), "EditCoordYFloat", MainSoftData.CoordYFloat
                         , GetLang("鼠标目标坐标的垂直偏移（像素）")
                         , GetLang("鼠标绝对移动的目标 Y 为 300。填 10，Y 在 290～310 间随机；填 -10，只向上浮动，Y 为 290～300。") floatOff), "0", "", "float")
-                    . card(GetLang("音频"), "&#xE767;", audioRows, "0,18,0,0", "", "audio")))
+                    . card(GetLang("音频"), "&#xE8D6;", audioRows, "0,10,0,0", "", "audio")))
 
         ; ---------- 页：指令录制 ----------
         recordPage := page("record", twoCol(
@@ -244,28 +347,28 @@
                 . tog(GetLang("长按多次录制"), "HoldMutiCon", MainSoftData.RecordHoldMuti, GetLang("按住时连续录制"))
                 . tog(GetLang("结束自动添加按键松开"), "AutoLoosenCon", MainSoftData.RecordAutoLoosen, GetLang("录制结束后补充松开指令")), "0", "", "recCommon")
             . card(GetLang("背景录制"), "&#xE771;", tog(GetLang("开启背景录制"), "BackgroundTogCon", MainSoftData.RecordBackground, GetLang("录制时将正常操作转换为后台指令"))
-                . row(GetLang("绑定窗口"), '<Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="58"/></Grid.ColumnDefinitions><TextBox Name="BackgroundWinCon" Text="' (SubStr(this._XmlEsc(String(MainSoftData.RecordBackgroundWin)), 1, 1) == "{" ? "{}" : "") this._XmlEsc(String(MainSoftData.RecordBackgroundWin)) '" Padding="5,0"/><Button Grid.Column="1" Name="BtnBgWinEdit" Content="' GetLang("编辑") '" Margin="6,0,0,0" Padding="4,0"/></Grid>', GetLang("目标窗口标识（如标题/类名/进程/句柄）")), "0,18,0,0", "", "recBg")
-            . card(GetLang("键盘"), "&#xE765;", tog(GetLang("键盘录制"), "KeyboardTogCon", MainSoftData.RecordKeyboard, GetLang("记录键盘操作")), "0,18,0,0", "", "recKey")
+                . row(GetLang("绑定窗口"), '<Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="58"/></Grid.ColumnDefinitions><TextBox Name="BackgroundWinCon" Text="' (SubStr(this._XmlEsc(String(MainSoftData.RecordBackgroundWin)), 1, 1) == "{" ? "{}" : "") this._XmlEsc(String(MainSoftData.RecordBackgroundWin)) '" Padding="5,0"/><Button Grid.Column="1" Name="BtnBgWinEdit" Content="' GetLang("编辑") '" Margin="6,0,0,0" Padding="4,0"/></Grid>', GetLang("目标窗口标识（如标题/类名/进程/句柄）")), "0,10,0,0", "", "recBg")
+            . card(GetLang("键盘"), "&#xE765;", tog(GetLang("键盘录制"), "KeyboardTogCon", MainSoftData.RecordKeyboard, GetLang("记录键盘操作")), "0,10,0,0", "", "recKey")
             , card(GetLang("鼠标"), "&#xE962;", tog(GetLang("鼠标录制"), "MouseTogCon", MainSoftData.RecordMouse, GetLang("记录鼠标操作"))
                 . cmb(GetLang("鼠标轨迹"), "MouseTrailModeCon", GetLangArr(["不录制", "关键点位", "关键点相对位移", "全量"]), MainSoftData.RecordMouseTrail, true)
                 . num(GetLang("速度 (0~100)"), "MouseTrailSpeedCon", MainSoftData.RecordMouseTrailSpeed), "0", "", "recMouse")
             . card(GetLang("手柄"), "&#xE7FC;", tog(GetLang("手柄录制"), "JoyTogCon", MainSoftData.RecordJoy, GetLang("记录手柄操作"))
-                . num(GetLang("检测间隔 (ms)"), "JoyIntervalCon", MainSoftData.RecordJoyInterval), "0,18,0,0", "", "recJoy")))
+                . num(GetLang("检测间隔 (ms)"), "JoyIntervalCon", MainSoftData.RecordJoyInterval), "0,10,0,0", "", "recJoy")))
 
         ; ---------- 页：快捷键 ----------
         hotkeyGroups := [
-            {title: "全局与工具", glyph: "&#xE765;", defs: [
+            {title: "全局与工具", glyph: "&#xEDA7;", defs: [
                 {f: "SuspendHotkey", l: "软件休眠", t: true, glyph: "&#xE708;"},
                 {f: "PauseHotkey", l: "暂停宏", t: false, glyph: "&#xE769;"},
                 {f: "KillMacroHotkey", l: "终止宏", t: false, glyph: "&#xE71A;"},
                 {f: "VoiceInputHotkey", l: "语音输入", t: true, glyph: "&#xE720;"},
                 {f: "ToolRecordMacroHotKey", l: "指令录制", t: false, glyph: "&#xE7C8;"},
-                {f: "ToolTextFilterHotKey", l: "文本提取", t: false, glyph: "&#xE8E9;"}]},
-            {title: "截图与工具", glyph: "&#xE8D4;", defs: [
+                {f: "ToolTextFilterHotKey", l: "文本提取", t: false, glyph: "&#xEC34;"}]},
+            {title: "截图与工具", glyph: "&#xE722;", defs: [
                 {f: "ScreenShotHotKey", l: "屏幕截图", t: false, glyph: "&#xE722;"},
-                {f: "FreePasteHotKey", l: "自由贴", t: false, glyph: "&#xE77F;"},
+                {f: "FreePasteHotKey", l: "自由贴", t: false, glyph: "&#xE8A7;"},
                 {f: "ToolCheckHotkey", l: "鼠标信息", t: false, glyph: "&#xE962;"}]},
-            {title: "调试", glyph: "&#xE76C;", defs: [
+            {title: "调试", glyph: "&#xEBE8;", defs: [
                 {f: "DebugRunHotkey", l: "播放/继续", t: true, glyph: "&#xE768;"},
                 {f: "DebugStepOverHotkey", l: "步进", t: true, glyph: "&#xE76C;"},
                 {f: "DebugStepHotkey", l: "步入", t: true, glyph: "&#xE70D;"},
@@ -286,7 +389,7 @@
                 hb .= row(GetLang(hd.l), '<Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="40"/></Grid.ColumnDefinitions><TextBox Name="Val_' hd.f '" Text="' this._XmlEsc(hdisp) '" IsReadOnly="True"/><Button Grid.Column="1" Name="BtnEdit_' hd.f '" Content="&#xE70F;" FontFamily="' iconFont '" ToolTip="' GetLang("录入快捷键") '" Margin="8,0,0,0" Padding="0"/></Grid>', , , , icon)
             }
             ; 左列放两张卡（全局 + 截图），第二张要和上面留出间距；右列只有一张，不用
-            mg := (hi == 2) ? "0,18,0,0" : "0"
+            mg := (hi == 2) ? "0,10,0,0" : "0"
             hotkeyCards.Push(card(GetLang(hg.title), hg.glyph, hb, mg, "", "hk" hi))
         }
         ; 三张卡：左列「全局与工具 + 截图与工具」，右列「调试」（项多，单独占一列）
@@ -309,7 +412,7 @@
         }
         logLevelButtons .= '</UniformGrid>'
         logPage := page("diagnostic", twoCol(
-            card(GetLang("指令显示"), "&#xE8A5;", tog(GetLang("启用指令显示"), "ChkCMDTip", MySoftData.CMDTip, GetLang("在屏幕上显示宏运行状态"))
+            card(GetLang("指令显示"), "&#xE7F4;", tog(GetLang("启用指令显示"), "ChkCMDTip", MySoftData.CMDTip, GetLang("在屏幕上显示宏运行状态"))
                 . num(GetLang("显示位置 X"), "CmdTipPosXCon", MainSoftData.CMDPosX)
                 . num(GetLang("显示位置 Y"), "CmdTipPosYCon", MainSoftData.CMDPosY)
                 . sld(GetLang("显示宽度"), "CmdTipWidthCon", "CmdTipWidthVal", MainSoftData.CMDWidth, 80, 800, 5)
@@ -342,21 +445,21 @@
             uiFoldNames.Push(GetLang("面板") " 1")
         triggerPage := page("trigger"
             , twoCol(
-                card(GetLang("轮盘"), "&#xE700;", tog(GetLang("固定位置"), "WheelFixedPosCon", MainSoftData.FixedMenuWheel, GetLang("固定在屏幕中下方"))
+                card(GetLang("轮盘"), "&#xEB05;", tog(GetLang("固定位置"), "WheelFixedPosCon", MainSoftData.FixedMenuWheel, GetLang("固定在屏幕中下方"))
                     . tog(GetLang("显示扇区名称提示"), "WheelShowTooltipCon", MainSoftData.MenuWheelShowTooltip, GetLang("悬停显示扇区名称"))
                     . cmb(GetLang("选择模式"), "WheelSelectModeCon", GetLangArr(["点击选择", "划线选择"]), MainSoftData.MenuWheelSelectMode)
                     . sld(GetLang("轮盘大小"), "WheelScaleCon", "WheelScaleVal", MainSoftData.MenuWheelScale, 50, 200, 10), "0", "", "wheel")
                     . card(GetLang("时间-倒计时"), "&#xE916;", cmb(GetLang("样式"), "CountDownStyleCon", GetLangArr(["时分秒", "智能", "秒"]), MainSoftData.CountDownStyle)
                         . tog(GetLang("补零"), "CountDownPadCon", MainSoftData.CountDownPadZero, GetLang("如 1:30:9 显示为 01:30:09；仅秒不补"))
                         . sld(GetLang("透明度"), "CountDownAlphaCon", "CountDownAlphaVal", MainSoftData.CountDownAlpha, 0, 100, 1)
-                        . sld(GetLang("字体大小"), "CountDownFontCon", "CountDownFontVal", MainSoftData.CountDownFontSize, 8, 72, 1), "0,18,0,0", "", "countdown")
-                , card(GetLang("界面宏-浮窗"), "&#xE737;", sld(GetLang("按钮宽度"), "UIPanelBtnWidthCon", "UIPanelBtnWidthVal", MainSoftData.UIPanelBtnWidth, 40, 250, 5)
+                        . sld(GetLang("字体大小"), "CountDownFontCon", "CountDownFontVal", MainSoftData.CountDownFontSize, 8, 72, 1), "0,10,0,0", "", "countdown")
+                , card(GetLang("界面宏-浮窗"), "&#xE78B;", sld(GetLang("按钮宽度"), "UIPanelBtnWidthCon", "UIPanelBtnWidthVal", MainSoftData.UIPanelBtnWidth, 40, 250, 5)
                     . sld(GetLang("按钮高度"), "UIPanelBtnHeightCon", "UIPanelBtnHeightVal", MainSoftData.UIPanelBtnHeight, 20, 60, 2)
                     . sld(GetLang("字体大小"), "UIPanelFontSizeCon", "UIPanelFontSizeVal", MainSoftData.UIPanelFontSize, 8, 24, 1)
                     . sld(GetLang("每行个数"), "UIPanelColsCon", "UIPanelColsVal", MainSoftData.UIPanelCols, 1, 6, 1)
                     . tog(GetLang("界面激活时显示"), "UIPanelShowOnActiveCon", MainSoftData.UIPanelShowOnActive)
                     . cmb(GetLang("自定义面板"), "UIPanelCustomFoldCon", uiFoldNames, 1)
-                    . row(GetLang("自定义界面"), '<StackPanel Orientation="Horizontal"><Button Name="BtnEditUIPanelCustom" Content="' GetLang("界面编辑") '" HorizontalAlignment="Left" Padding="10,0"/><Button Name="BtnResetUIPanelCustom" Content="' GetLang("恢复自动") '" HorizontalAlignment="Left" Padding="10,0" Margin="8,0,0,0"/></StackPanel>'), "0", "", "uipanel")
+                    . row(GetLang("自定义界面"), '<Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><Button Name="BtnEditUIPanelCustom" Content="' GetLang("界面编辑") '" HorizontalAlignment="Left" Padding="10,0"/><Button Grid.Column="1" Name="BtnResetUIPanelCustom" Content="' GetLang("恢复自动") '" HorizontalAlignment="Left" Padding="10,0" Margin="8,0,0,0"/></Grid>'), "0", "", "uipanel")
             )
         )
 
@@ -385,7 +488,7 @@
                     . '<TextBlock Text="' this._XmlEsc(GetLang("选「自定义」后色块可点击取色；颜色与字体随「应用并保存」落盘。")) '" FontSize="11" Foreground="{DynamicResource TextSub}" Margin="0,8,0,0" TextWrapping="Wrap"/>', "0", "", "theme")
                 , card(GetLang("字体"), "&#xE8D2;", appearanceBody, "0", "", "font")
             )
-            . card(GetLang("主题颜色"), "&#xE790;", paletteBody, "0,18,0,0", "", "palette")
+            . card(GetLang("主题颜色"), "&#xE790;", paletteBody, "0,10,0,0", "", "palette")
         )
 
         ; ---------- 页：AI 助手 ----------
@@ -406,15 +509,17 @@
                 card(GetLang("大模型"), "&#xE99A;", cmb(GetLang("模型商"), "AiProviderCon", aiProviderNames, AiAssist.ProviderIndex(MainSoftData.AiProvider) - 1, true)
                     . row(GetLang("API URL"), '<TextBox Name="AiBaseUrlCon" Text="' this._XmlEsc(MainSoftData.AiApiBaseUrl) '" Height="33" MinHeight="33" Padding="6,0,18,0" VerticalContentAlignment="Center" FontSize="12" Foreground="{DynamicResource InputText}" Background="{DynamicResource InputBg}" BorderBrush="{DynamicResource InputStroke}" BorderThickness="1"/>')
                     . row(GetLang("API Key"), '<PasswordBox Name="AiApiKeyCon" Password="' this._XmlEsc(MainSoftData.AiApiKey) '" Height="33" MinHeight="33" Padding="6,0,18,0" VerticalContentAlignment="Center" FontSize="12" Background="{DynamicResource InputBg}" Foreground="{DynamicResource InputText}" BorderBrush="{DynamicResource InputStroke}" BorderThickness="1"/>')
-                    . row(GetLang("模型列表"), '<Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><ComboBox Name="AiModelCon" IsEditable="True" Text="' this._XmlEsc(MainSoftData.AiModel) '" Height="33" MinHeight="33" VerticalContentAlignment="Center" FontSize="12" Foreground="{DynamicResource InputText}" Background="{DynamicResource InputBg}" BorderBrush="{DynamicResource InputStroke}" BorderThickness="1">' aiModelXaml '</ComboBox><Button Grid.Column="1" Name="BtnAiRefreshModels" Content="&#xE72C;" FontFamily="' iconFont '" FontSize="14" Width="33" Height="33" MinWidth="33" MinHeight="33" Padding="0" Margin="8,0,0,0" ToolTip="' this._XmlEsc(GetLang("刷新")) '"/></Grid>'), "0", "", "aiModel")
-                , card(GetLang("权限"), "&#xE72E;", cmb(GetLang("写入权限"), "AiAccessCon", aiAccessNames, MainSoftData.AiAccessMode, false, ""
+                    . row(GetLang("模型列表"), '<Grid Width="221" HorizontalAlignment="Left"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><ComboBox Name="AiModelCon" IsEditable="True" Text="' this._XmlEsc(MainSoftData.AiModel) '" Height="33" MinHeight="33" VerticalContentAlignment="Center" FontSize="12" Foreground="{DynamicResource InputText}" Background="{DynamicResource InputBg}" BorderBrush="{DynamicResource InputStroke}" BorderThickness="1">' aiModelXaml '</ComboBox><Button Grid.Column="1" Name="BtnAiRefreshModels" Content="&#xE72C;" FontFamily="' iconFont '" FontSize="14" Width="33" Height="33" MinWidth="33" MinHeight="33" Padding="0" Margin="8,0,0,0" ToolTip="' this._XmlEsc(GetLang("刷新")) '"/></Grid>'), "0", "", "aiModel")
+                , card(GetLang("权限"), "&#xE8D7;", cmb(GetLang("写入权限"), "AiAccessCon", aiAccessNames, MainSoftData.AiAccessMode, false, ""
                         , ["只能读取文件和配置。", "写入仅限软件目录。", "读写不限路径，可执行命令和脚本。"], 132)
-                    . cmb(GetLang("指令审批"), "AiApprovalCon", aiApprovalNames, MainSoftData.AiApprovalMode, false), "0", "", "aiPerm")
+                    . cmb(GetLang("指令审批"), "AiApprovalCon", aiApprovalNames, MainSoftData.AiApprovalMode, false)
+                    . tog(GetLang("MCP优先"),"AiMcpEnabledCon",MainSoftData.AiMcpEnabled,GetLang("配置生成优先MCP，失败改用原生指令；旧服务暂停时保持关闭。"))
+                    . row(GetLang("MCP程序"),'<TextBox Name="AiMcpServerPathCon" Style="{StaticResource RmtSingleLineTextBox}" Text="' this._XmlEsc(MainSoftData.AiMcpServerPath) '"/>',GetLang("留空使用软件自带MCP；可指定修复后的服务程序。")), "0", "", "aiPerm")
             )
         )
 
         ; ---------- 组装：左侧导航 + 右侧页面 ----------
-        navDefs := [["behavior", "&#xE713;", "系统"], ["macro", "&#xE768;", "宏"], ["record", "&#xE7C8;", "指令录制"], ["trigger", "&#xE8D4;", "界面"], ["hotkey", "&#xE765;", "快捷键"], ["appearance", "&#xE790;", "主题"], ["ai", "&#xE99A;", "AI 助手"], ["diagnostic", "&#xE81C;", "日志"]]
+        navDefs := [["behavior", "&#xE713;", "系统"], ["macro", "&#xE768;", "宏"], ["record", "&#xE7C8;", "指令录制"], ["trigger", "&#xE7F4;", "界面"], ["hotkey", "&#xEDA7;", "快捷键"], ["appearance", "&#xE790;", "主题"], ["ai", "&#xE99A;", "AI 助手"], ["diagnostic", "&#xE81C;", "日志"]]
         navSep := '<Border Height="1" Background="{DynamicResource OutlineStroke}"/>'
         navAll := navSep
         for ni, nd in navDefs {
@@ -559,6 +664,8 @@
         this._Bind("AiModelCon", "LostFocus", ObjBindMethod(this, "OnAiModelChanged"))
         this._Bind("AiAccessCon", "SelectionChanged", ObjBindMethod(this, "OnComboIndex", "AiAccessMode"))
         this._Bind("AiApprovalCon", "SelectionChanged", ObjBindMethod(this, "OnComboIndex", "AiApprovalMode"))
+        this._Bind("AiMcpEnabledCon","Click",ObjBindMethod(this,"OnCheckEdit","AiMcpEnabled"))
+        this._Bind("AiMcpServerPathCon","LostFocus",ObjBindMethod(this,"OnTextEdit","AiMcpServerPath"))
         this._Bind("BtnAiRefreshModels", "Click", ObjBindMethod(this, "OnAiRefreshModels"))
 
         ; ---- 设置中心：主题（预设 + 颜色 1~14）----

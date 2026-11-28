@@ -386,7 +386,8 @@ namespace RMT
                 }
                 catch (Exception ex)
                 {
-                    if (token.IsCancellationRequested || ex is OperationCanceledException || ex is TaskCanceledException)
+                    Exception failure = ex.GetBaseException();
+                    if (token.IsCancellationRequested)
                     {
                         lock (_chatLock)
                         {
@@ -402,7 +403,9 @@ namespace RMT
                     {
                         if (seq != _chatSeq)
                             return;
-                        _chatError = ex.Message ?? "请求失败";
+                        _chatError = failure is OperationCanceledException
+                            ? "模型请求超时，请检查网络或稍后重试。"
+                            : failure.Message ?? "请求失败";
                         _chatState = 3;
                     }
                 }

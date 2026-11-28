@@ -101,6 +101,8 @@ OnSaveSetting(*) {
     CheckAndAddDirty("AiModelList", MainSoftData.HasProp("AiModelList") ? MainSoftData.AiModelList : "")
     CheckAndAddDirty("AiAccessMode", MainSoftData.HasProp("AiAccessMode") ? MainSoftData.AiAccessMode : 2)
     CheckAndAddDirty("AiApprovalMode", MainSoftData.HasProp("AiApprovalMode") ? MainSoftData.AiApprovalMode : 2)
+    CheckAndAddDirty("AiMcpEnabled",MainSoftData.AiMcpEnabled)
+    CheckAndAddDirty("AiMcpServerPath",MainSoftData.AiMcpServerPath)
     aiPanelW := (IsSet(MyMainWin) && IsObject(MyMainWin) && MyMainWin.HasProp("aiPanelW")) ? MyMainWin.aiPanelW : (MainSoftData.HasProp("AiPanelWidth") ? MainSoftData.AiPanelWidth : 380)
     CheckAndAddDirty("AiPanelWidth", aiPanelW)
     CheckAndAddDirty("LogicTreeBranchSplit", (MainSoftData.HasProp("LogicTreeBranchSplit") && MainSoftData.LogicTreeBranchSplit) ? 1 : 0)
@@ -1080,10 +1082,14 @@ ViGJoySetState(JoyType, Key, Value) {
     try instEmpty := (ViGJoy.Instance == "")
     catch as e {
         JoyDebugLog(Format("ViGJoySetState Instance check failed: {}", e.Message), "vigem")
+        if (IsObject(DirectCommandScope()))
+            throw e
         return
     }
     if (instEmpty) {
         JoyDebugLog("ViGJoySetState ABORT: Instance empty (ViGEmBus 未就绪/创建失败)", "vigem")
+        if (IsObject(DirectCommandScope()))
+            throw Error("ViGEm手柄实例不可用，请检查驱动。")
         return
     }
 
@@ -1110,6 +1116,8 @@ ViGJoySetState(JoyType, Key, Value) {
         JoyDebugLog(Format("ViGJoySetState OK type={} key={} value={}", JoyType, Key, Value), "vigem")
     } catch as e {
         JoyDebugLog(Format("ViGJoySetState EXCEPTION: {} | {}", e.Message, e.What), "vigem")
+        if (IsObject(DirectCommandScope()))
+            throw e
     }
 }
 

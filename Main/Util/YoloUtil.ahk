@@ -16,6 +16,8 @@
 
 class YoloData {
     SerialStr := ""
+    Source := "屏幕"
+    ImagePath := ""
     ModelName := ""        ; 全局模型库中的模型名
     Device := "CPU"
     Region := ""           ; 屏幕区域 x1,y1,x2,y2，空=主屏全屏
@@ -125,6 +127,7 @@ class YoloModelStore {
 }
 
 class Yolo {
+    static Sources := ["屏幕", "图片文件"]
     static ApiVersion := 2
     ; 内核实际编入的执行后端。当前发布的内核是 CPU 版，只有 CPU 可用；
     ; 其它设备要在编译内核时带上对应 EP（CUDA / DirectML / TensorRT / CoreML），
@@ -351,14 +354,26 @@ class Yolo {
             task := "detect"
         iou := this.ResolveIou(task, data, resolve)
 
-        region := this.ParseRegion(resolve(data.Region))
+        source := data.HasOwnProp("Source") ? CurrentCommandChoice(resolve(data.Source), this.Sources) : "屏幕"
+        imagePath := ""
+        if (source == "图片文件") {
+            imagePath := Trim(resolve(data.ImagePath))
+            if (imagePath == "" || !FileExist(imagePath))
+                throw Error(GetLang("检测图片文件不存在：") imagePath)
+            if (CurrentCommandChoice(data.ActionType, this.Actions) != "无动作")
+                throw Error(GetLang("图片文件检测不能点击屏幕，请将找到后设为无动作。"))
+            size := GetImageSize(imagePath)
+            region := [0, 0, size[1], size[2]]
+        } else
+            region := this.ParseRegion(resolve(data.Region))
         opts := this.BuildOptions(task, data, resolve, region)
         handle := this.Acquire(path, device, iou)
 
         if (cancelled())
             return ""
 
-        raw := this.RunFrame(handle, region, opts)
+        raw := this.RunFrame(handle, region, opts, imagePath)
+        raw.coordinateSpace := imagePath == "" ? "screen" : "image"
         if (cancelled())
             return ""
 
@@ -370,15 +385,15 @@ class Yolo {
         return task == "classify" || task == "semantic" || task == "depth" ? 0.45 : this.ParseIou(resolve(data.Iou))
     }
 
-    static RunFrame(handle, region, opts) {
+    static RunFrame(handle, region, opts, imagePath := "") {
         x := region[1], y := region[2]
         width := region[3] - region[1], height := region[4] - region[2]
         if (width <= 0 || height <= 0)
             throw Error(GetLang("检测区域无效。"))
 
-        pBitmap := Gdip_BitmapFromScreen(Format("{}|{}|{}|{}", x, y, width, height))
+        pBitmap := imagePath == "" ? Gdip_BitmapFromScreen(Format("{}|{}|{}|{}", x, y, width, height)) : Gdip_CreateBitmapFromFile(imagePath)
         if (!pBitmap)
-            throw Error(GetLang("屏幕截图失败。"))
+            throw Error(GetLang(imagePath == "" ? "屏幕截图失败。" : "读取检测图片失败。"))
 
         stride := 0, scan0 := 0, bitmapData := 0
         locked := false

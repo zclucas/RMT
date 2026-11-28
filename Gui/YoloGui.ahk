@@ -17,6 +17,7 @@ class YoloGui {
     _task := ""            ; 当前模型的任务码
     _rows := Map()         ; 字段名 → 行控件（用于按任务显隐）
     _offsetVisible := false ; 点击偏移行当前是否展开（首帧落点要用）
+    _source := "屏幕"
 
     __new() {
         this.ParentTile := ""
@@ -122,6 +123,7 @@ class YoloGui {
         this.ui.OnEvent("BtnBrowse", "Click", XamlWin.BindCurrent(this, "OnBrowseModel"))
         this.ui.OnEvent("ModelName", "SelectionChanged", XamlWin.BindCurrent(this, "OnModelChanged"))
         this.ui.OnEvent("ActionType", "SelectionChanged", XamlWin.BindCurrent(this, "OnActionChanged"))
+        this.ui.OnEvent("Source", "SelectionChanged", XamlWin.BindCurrent(this, "OnSourceChanged"))
         BindCmdEditorChrome(this.ui, "#指令手册/" this.CmdKey)
         ; 插件文件缺失时先补齐再让用户填参数；延后一拍，让窗口先画出来再弹询问。
         SetTimer(ObjBindMethod(this, "_EnsurePluginFiles"), -50)
@@ -210,6 +212,8 @@ class YoloGui {
 
         deviceRow := this._Row(body, "设备：", "Device")
         CmdEditorForm.Combo(deviceRow, "Device").Grid_Column(1)
+        CmdEditorForm.Combo(this._Row(body, "检测来源：", "Source"), "Source").Grid_Column(1)
+        this._Field(body, "图片路径：", "ImagePath").ToolTip(GetLang("图片文件在后台检测，结果为图片坐标，不执行屏幕点击。"))
 
         this._Param(body, "置信度：", "ConfLevel", GetLang("0~1 之间，也可填百分数如 50。"))
         this._Param(body, "IoU：", "Iou", GetLang("NMS 的合并阈值，0~1。目标挤在一起时调小，重叠目标被误合并时调大。"))
@@ -230,7 +234,7 @@ class YoloGui {
     ; 采样点是两个数，放一行；用不到的任务整行收起。
     _BuildSampleRow(body) {
         row := this._Row(body, "采样点：", "SamplePoint", "Center", "CommandLabel",
-            GetLang("屏幕坐标 X,Y；留空表示整块区域的平均距离"))
+            GetLang("检测坐标 X,Y；图片文件用图片像素坐标，留空取区域平均距离"))
         inner := row.Add("StackPanel").Orientation("Horizontal").Grid_Column(1)
         inner.Add("TextBlock").Text("X").Margin("0,0,4,0").VerticalAlignment("Center")
             .Foreground("{DynamicResource TextMain}")
@@ -285,6 +289,8 @@ class YoloGui {
         this.RefreshModels(this.Data.ModelName)
         task := Yolo.TaskOf(this.Data.ModelName)
         this._FillChoice("Device", Yolo.Devices, this.Data.Device)
+        this._FillChoice("Source", Yolo.Sources, this.Data.Source)
+        this._ComboPush("ImagePath", "Text", this.Data.ImagePath)
         this._FillChoice("TargetMode", Yolo.Targets, task == "classify" || task == "semantic" || task == "depth" ? Yolo.Targets[1] : this.Data.TargetMode)
         this._FillChoice("ActionType", Yolo.Actions, task == "classify" || task == "depth" ? "无动作" : this.Data.ActionType)
 
@@ -302,6 +308,7 @@ class YoloGui {
 
         this._ApplyTask(task,
             task == "classify" || task == "depth" ? "无动作" : CurrentCommandChoice(this.Data.ActionType, Yolo.Actions), this.Data.ModelName)
+        this._ApplySource(this.Data.Source)
         ; 首帧就按任务收好行，落点交给模板里的 CenterScreen 一次算准。
         this._HideRowsInXaml()
     }
@@ -347,9 +354,27 @@ class YoloGui {
     }
 
     _UpdateAction(action) {
-        clickable := this._task == "" || this._Has(YoloGui.Clickable, this._task)
+        clickable := this._source != "图片文件" && (this._task == "" || this._Has(YoloGui.Clickable, this._task))
         this._offsetVisible := clickable && action != "无动作"
         this._ComboPush("OffsetXRow", "Visibility", this._offsetVisible ? "Visible" : "Collapsed")
+    }
+
+    OnSourceChanged(*) {
+        this._ApplySource(this._EnumValue(this.ui.Query("Source"), Yolo.Sources))
+    }
+
+    _ApplySource(source) {
+        this._source := source
+        image := source == "图片文件"
+        this._ComboPush("ImagePathRow", "Visibility", image ? "Visible" : "Collapsed")
+        this._ComboPush("RegionRow", "Visibility", image ? "Collapsed" : "Visible")
+        this._ComboPush("ActionType", "IsEnabled", image ? "False" : "True")
+        if (image)
+            this._FillChoice("ActionType", Yolo.Actions, "无动作")
+        action := this._batching
+            ? (this._task == "classify" || this._task == "depth" ? "无动作" : CurrentCommandChoice(this.Data.ActionType, Yolo.Actions))
+            : this._EnumValue(this.ui.Query("ActionType"), Yolo.Actions)
+        this._UpdateAction(image ? "无动作" : action)
     }
 
     _Has(list, value) {
@@ -369,6 +394,8 @@ class YoloGui {
         if (!IsObject(this.ui))
             return
         layout := YoloGui.Layout.Has(this._task) ? YoloGui.Layout[this._task] : YoloGui.Fallback
+        hiddenSource := this._source == "图片文件" ? "RegionRow" : "ImagePathRow"
+        this.ui.xaml := StrReplace(this.ui.xaml, 'Name="' hiddenSource '"', 'Name="' hiddenSource '" Visibility="Collapsed"')
         for name, _ in this._rows {
             if (this._Has(layout, name))
                 continue
@@ -382,7 +409,7 @@ class YoloGui {
     }
 
     _ReadData() {
-        fields := ["Remark", "ModelName", "Device", "ConfLevel", "Iou", "MaxDet", "Classes",
+        fields := ["Remark", "ModelName", "Device", "Source", "ImagePath", "ConfLevel", "Iou", "MaxDet", "Classes",
             "MinMaskRatio", "KeypointConf", "AnchorKpt", "TopK", "MinRatio", "SampleX", "SampleY",
             "Region", "TargetMode", "ActionType", "OffsetX", "OffsetY",
             "CountVar", "ClassVar", "ConfVar", "RatioVar", "DepthVar", "ResultVar", "ErrorVar"]
@@ -391,11 +418,15 @@ class YoloGui {
         data := this.Data.Clone()
         data.ModelName := Trim(state["ModelName"])
         data.Device := this._EnumValue(state["Device"], Yolo.Devices)
+        data.Source := this._EnumValue(state["Source"], Yolo.Sources)
+        data.ImagePath := Trim(state["ImagePath"])
         task := CommandYoloTask(data)
         if (task != "classify" && task != "semantic" && task != "depth")
             data.TargetMode := this._EnumValue(state["TargetMode"], Yolo.Targets)
         if (task != "classify" && task != "depth")
             data.ActionType := this._EnumValue(state["ActionType"], Yolo.Actions)
+        if (data.Source == "图片文件")
+            data.ActionType := "无动作"
         for field in ["ConfLevel", "Iou", "MaxDet", "Classes", "MinMaskRatio", "KeypointConf",
             "AnchorKpt", "TopK", "MinRatio", "SampleX", "SampleY", "Region", "OffsetX", "OffsetY"]
             data.%field% := Trim(state[field])
@@ -413,7 +444,12 @@ class YoloGui {
                 throw Error(Format(GetLang("模型「{}」不在模型库中，请重新选择。"), data.ModelName))
 
             task := Yolo.TaskOf(data.ModelName)
-            region := Yolo.ParseRegion(data.Region)
+            if (data.Source == "图片文件") {
+                if (data.ImagePath == "" || (!InStr(data.ImagePath, "{") && !FileExist(data.ImagePath)))
+                    throw Error(GetLang("请填写有效的检测图片路径。"))
+                region := [0, 0, 640, 640]
+            } else
+                region := Yolo.ParseRegion(data.Region)
             ; 参数校验直接复用运行时那一套，避免编辑器放行、执行时才报错。
             Yolo.BuildOptions(task == "" ? "detect" : task, data, (text) => text, region)
 

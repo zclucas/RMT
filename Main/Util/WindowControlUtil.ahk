@@ -14,7 +14,6 @@ class WindowControlData {
     WaitType := "等待出现"
     ClickType := "左键单击"
     ClickHoldMs := 500
-    ClickPoint := "中心点"
     ScrollOffset := 0
     WaitValueKind := "text"
     WaitLogic := "且"
@@ -67,7 +66,6 @@ class WindowControl {
     static OperationActions := ["点击控件", "写入控件值", "等待控件出现", "聚焦控件", "滚动到控件"]
     static WaitTypes := ["等待出现", "等待消失", "可用", "禁用", "值变化", "值满足条件", "值不满足条件"]
     static ClickTypes := ["左键单击", "左键双击", "左键长按", "右键单击", "右键双击", "右键长按"]
-    static ClickPoints := ["中心点", "区域随机"]
 
     static ResolveClickHoldMs(value, resolve := "") {
         if (TimeoutPolicy.IsVariable(value)) {
@@ -309,7 +307,7 @@ class WindowControl {
                     "width", bounds.right - bounds.left, "height", bounds.bottom - bounds.top), 0)
             case "点击控件":
                 hold := InStr(data.ClickType, "长按") ? this.ResolveClickHoldMs(data.ClickHoldMs, resolve) : 0
-                return this._ClickElement(element, data.ClickType, data.ClickPoint, cancelled, hold)
+                return this._ClickElement(element, data.ClickType, cancelled, hold)
             case "聚焦控件":
                 if (element is ExcelControlTarget)
                     element.Reveal()
@@ -450,13 +448,13 @@ class WindowControl {
         throw Error(GetLang("条件运算符无效。"))
     }
 
-    static _ClickElement(element, kind, pointMode, cancelled, holdMs := 500) {
+    static _ClickElement(element, kind, cancelled, holdMs := 500) {
         kind := GetLangKey(kind)
         valid := false
         for candidate in this.ClickTypes
             if (candidate == kind)
                 valid := true
-        if (!valid || (pointMode != "中心点" && pointMode != "区域随机"))
+        if (!valid)
             throw Error(GetLang("点击参数无效。"))
         if (element is ExcelControlTarget) {
             element.Reveal()
@@ -465,6 +463,14 @@ class WindowControl {
         }
         if (!this._Int(element, 28))
             throw Error(GetLang("此控件已禁用。"))
+        if (cancelled())
+            return ""
+        ; Invoke 表达控件默认动作；右键、双击和长按仍需对应鼠标事件。
+        if (kind == "左键单击" && (invoke := this._Pattern(element, "invoke"))) {
+            ; 已调用后报错不能再模拟点击，避免控件已响应却被重复触发。
+            ComCall(3, invoke)
+            return cancelled() ? "" : 1
+        }
         hwnd := this._ElementWindow(element)
         WinActivate("ahk_id " hwnd)
         deadline := A_TickCount + 2000
@@ -478,8 +484,6 @@ class WindowControl {
         if (this._Int(element, 38) && (scroll := this._Pattern(element, "scroll")))
             ComCall(3, scroll)
         bounds := this._Bounds(element)
-        if (pointMode == "区域随机")
-            bounds := this._InnerRandomBounds(bounds)
         walker := this._Object(14, this._Automation())
         node := element
         loop 64 {
@@ -495,20 +499,16 @@ class WindowControl {
         if (bounds.right <= bounds.left || bounds.bottom <= bounds.top)
             throw Error(GetLang("目标控件不在可点击区域。"))
         valid := false
-        loop (pointMode == "区域随机" ? 8 : 1) {
-            x := pointMode == "区域随机" ? Random(bounds.left, bounds.right - 1) : Floor((bounds.left + bounds.right) / 2)
-            y := pointMode == "区域随机" ? Random(bounds.top, bounds.bottom - 1) : Floor((bounds.top + bounds.bottom) / 2)
-            hit := this._HitTest(x, y).element
-            loop 64 {
-                if (this._Equals(hit, element)) {
-                    valid := true
-                    break
-                }
-                hit := this._Object(3, walker, "Ptr", hit)
-                if (!hit)
-                    break
+        x := Floor((bounds.left + bounds.right) / 2)
+        y := Floor((bounds.top + bounds.bottom) / 2)
+        hit := this._HitTest(x, y).element
+        loop 64 {
+            if (this._Equals(hit, element)) {
+                valid := true
+                break
             }
-            if (valid)
+            hit := this._Object(3, walker, "Ptr", hit)
+            if (!hit)
                 break
         }
         if (!valid)
@@ -516,32 +516,31 @@ class WindowControl {
         button := InStr(kind, "右键") ? "Right" : "Left"
         count := InStr(kind, "双击") ? 2 : 1
         hold := InStr(kind, "长按") ? this.ResolveClickHoldMs(holdMs) : 0
-        DllCall("SetCursorPos", "Int", x, "Int", y)
-        loop count {
-            if (cancelled())
-                return ""
-            Click(button " Down")
-            try {
-                endTime := A_TickCount + hold
-                while (A_TickCount < endTime && !cancelled())
-                    Sleep(Max(1, Min(20, endTime - A_TickCount)))
-            } finally {
-                Click(button " Up")
+        ; 屏幕坐标不受当前 CoordMode 影响；取消或点击异常也必须恢复光标。
+        cursor := Buffer(8)
+        if (!DllCall("GetCursorPos", "Ptr", cursor))
+            throw OSError()
+        try {
+            if (!DllCall("SetCursorPos", "Int", x, "Int", y))
+                throw OSError()
+            loop count {
+                if (cancelled())
+                    return ""
+                try {
+                    Click(button " Down")
+                    endTime := A_TickCount + hold
+                    while (A_TickCount < endTime && !cancelled())
+                        Sleep(Max(1, Min(20, endTime - A_TickCount)))
+                } finally {
+                    Click(button " Up")
+                }
+                if (A_Index < count)
+                    Sleep(50)
             }
-            if (A_Index < count)
-                Sleep(50)
+        } finally {
+            DllCall("SetCursorPos", "Int", NumGet(cursor, 0, "Int"), "Int", NumGet(cursor, 4, "Int"))
         }
         return cancelled() ? "" : 1
-    }
-
-    static _InnerRandomBounds(bounds) {
-        if (bounds.right <= bounds.left || bounds.bottom <= bounds.top)
-            return bounds
-        width := Max(1, Floor((bounds.right - bounds.left) * 0.8))
-        height := Max(1, Floor((bounds.bottom - bounds.top) * 0.8))
-        left := Floor((bounds.left + bounds.right - width) / 2)
-        top := Floor((bounds.top + bounds.bottom - height) / 2)
-        return {left: left, top: top, right: left + width, bottom: top + height}
     }
 
     static _ElementWindow(element) {

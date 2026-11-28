@@ -1277,6 +1277,7 @@ class WorkPool {
                                     erContext := {mode: parsed["mode"], location: parsed["location"], command: parsed["command"]}
                                 }
                             }
+                            AiInstructionBuilder.RecordError(wd.tableID,wd.itemID,erMsg,erLevel,erContext)
                             RMTErrorShow("宏执行异常: " erMsg, erLevel, erSrc, erContext)
                         } catch {
                             RMTLogSys(RMT_LV_ERROR, "Worker#" wd.idx, "ER解析失败: " args[1])

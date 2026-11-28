@@ -183,10 +183,10 @@
                 . '<TextBlock TextWrapping="Wrap" FontSize="' this._AiChatBodyFontSize() '" Foreground="' fg '" Opacity="0.9">' this._AiInlineXaml(blk["text"], fg) '</TextBlock>'
                 . '</Border></BlockUIContainer>'
         if (tp == "code") {
-            head := blk["lang"] != "" ? '<TextBlock Text="' this._XmlEsc(blk["lang"]) '" FontSize="' this._AiChatSmallFontSize() '" Margin="0,0,0,4" Foreground="{DynamicResource TextSub}"/>' : ""
+            head := blk["lang"] != "" ? '<TextBlock Text="' this._AiXamlLiteral(blk["lang"]) '" FontSize="' this._AiChatSmallFontSize() '" Margin="0,0,0,4" Foreground="{DynamicResource TextSub}"/>' : ""
             return '<BlockUIContainer><Border Background="{DynamicResource ListAltBg}" CornerRadius="4" Padding="8,6" Margin="0,2,0,8">'
                 . '<StackPanel>' head
-                . '<TextBlock Text="' this._XmlEsc(blk["text"]) '" FontFamily="Consolas, Cascadia Mono, Courier New" FontSize="' this._AiChatSmallFontSize() '"'
+                . '<TextBlock Text="' this._AiXamlLiteral(blk["text"]) '" FontFamily="Consolas, Cascadia Mono, Courier New" FontSize="' this._AiChatSmallFontSize() '"'
                 . ' TextWrapping="Wrap" Foreground="{DynamicResource TextMain}" xml:space="preserve"/>'
                 . '</StackPanel></Border></BlockUIContainer>'
         }
@@ -360,7 +360,13 @@
     }
 
     _AiMdRun(text, extra) {
-        return '<Run' extra ' BaselineAlignment="Baseline" Text="' this._XmlEsc(text) '"/>'
+        return '<Run' extra ' BaselineAlignment="Baseline" Text="' this._AiXamlLiteral(text) '"/>'
+    }
+
+    ; XML 转义不处理 XAML 标记扩展；模型给出的 {变量} 必须按文字展示。
+    _AiXamlLiteral(text) {
+        clean := RegExReplace(String(text), "[\x00-\x08\x0B\x0C\x0E-\x1F]", "")
+        return "{}" this._XmlEsc(clean)
     }
 
     _AiParseNavUrl(url) {
@@ -423,7 +429,7 @@
         return '<InlineUIContainer BaselineAlignment="Center">'
             . '<Button Name="' btn '" Cursor="Hand" Background="Transparent" BorderThickness="0"'
             . ' Padding="0" Margin="0,0,2,0" VerticalAlignment="Center"'
-            . ' ToolTip="' this._XmlEsc(path) '">'
+            . ' ToolTip="' this._AiXamlLiteral(path) '">'
             . '<Button.ContextMenu><ContextMenu MinWidth="160" Placement="MousePoint"'
             . ' Background="{DynamicResource DropdownBg}" BorderBrush="{DynamicResource InputStroke}"'
             . ' BorderThickness="1" Foreground="{DynamicResource TextMain}">'
@@ -431,7 +437,7 @@
             . '<MenuItem Name="' mDir '" Header="' this._XmlEsc(GetLang("打开所在文件夹")) '"/>'
             . '<MenuItem Name="' mAll '" Header="' this._XmlEsc(GetLang("打开所有文件夹")) '"/>'
             . '</ContextMenu></Button.ContextMenu>'
-            . '<TextBlock Text="' this._XmlEsc(label) '" TextDecorations="Underline"'
+            . '<TextBlock Text="' this._AiXamlLiteral(label) '" TextDecorations="Underline"'
             . ' Foreground="{DynamicResource Accent}" FontSize="' this._AiChatBodyFontSize() '" Cursor="Hand"/>'
             . '</Button></InlineUIContainer>'
     }
@@ -468,7 +474,7 @@
             . '<Button Name="' name '" Tag="' tab "|" idx '" Cursor="Hand"'
             . ' Background="Transparent" BorderThickness="0" Padding="0" Margin="0,0,0,0"'
             . ' VerticalAlignment="Center" ToolTip="' this._XmlEsc(tip) '">'
-            . '<TextBlock Text="' this._XmlEsc(label) '" TextDecorations="Underline"'
+            . '<TextBlock Text="' this._AiXamlLiteral(label) '" TextDecorations="Underline"'
             . ' Foreground="{DynamicResource Accent}" FontSize="' this._AiChatBodyFontSize() '" Cursor="Hand"/>'
             . '</Button></InlineUIContainer>'
     }

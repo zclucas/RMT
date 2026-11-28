@@ -179,6 +179,10 @@ InputSelValue(result) {
 }
 
 InputApplyStop(tableItem, index, stopType) {
+    if (IsObject(DirectCommandScope())) {
+        tableItem.Items[index].Killed := true
+        return
+    }
     if (stopType == "终止所有宏")
         MyExcuteRMTCMDAction("RMT指令_宏控制_终止所有宏")
     else

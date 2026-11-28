@@ -84,6 +84,8 @@ class ViGEmWrapper {
             dllPath := ViGEmDllPath
 
             if !FileExist(dllPath) {
+                if (IsObject(DirectCommandScope()))
+                    throw Error("ViGEm插件文件不存在：" dllPath)
                 RmtDialog.Info("No se encuentra ViGEmWrapper.dll en:`n" dllPath, "Error")
                 ExitApp
             }
@@ -91,12 +93,16 @@ class ViGEmWrapper {
             try {
                 this.asm := CLR_LoadLibrary(dllPath)
             } catch as err {
+                if (IsObject(DirectCommandScope()))
+                    throw Error("ViGEm插件加载失败：" err.Message)
                 RmtDialog.Info("Error al cargar ViGEmWrapper.dll:`n" err.Message, "Error de carga")
                 ExitApp
             }
 
             ; Chequeo relajado: solo verifica que no sea vacío/0
             if !this.asm {
+                if (IsObject(DirectCommandScope()))
+                    throw Error("ViGEm插件未能加载，请检查运行库。")
                 RmtDialog.Info("CLR_LoadLibrary devolvió vacío. Verifica dependencias (ViGEmClient.dll).", "Error")
                 ExitApp
             }
@@ -115,6 +121,8 @@ class ViGEmWrapper {
         try {
             return this.asm.CreateInstance_2(cls, true)  ; Usa _2 para v2 compat
         } catch as err {
+            if (IsObject(DirectCommandScope()))
+                throw Error("ViGEm创建虚拟手柄失败：" err.Message)
             ; MsgBox "Fallo al crear instancia de " cls ":`n" err.Message, "Error", 16
             ; ExitApp
             str1 := GetLang("ViGEm创建实例失败,手柄功能无法生效")
@@ -134,11 +142,15 @@ class ViGEmTarget {
         ; Chequeo suave para evitar crash si falla OkCheck
         try {
             if (this.Instance.OkCheck() != "OK") {
+                if (IsObject(DirectCommandScope()))
+                    throw Error("ViGEm驱动未就绪。")
                 MsgBox "ViGEmWrapper.dll falló en OkCheck().`nPosible problema con el driver ViGEmBus o dependencias.",
                     "Error de inicialización", 16
                 ExitApp
             }
-        } catch {
+        } catch as err {
+            if (IsObject(DirectCommandScope()))
+                throw err
             ; MsgBox "No se pudo llamar a OkCheck(). El DLL cargó pero parece incompatible.", "Error OkCheck", 16
             ; ExitApp
         }
@@ -257,6 +269,11 @@ class ViGEmXb360 extends ViGEmTarget {
     helperClass := "ViGEmWrapper.Xb360"
 
     __New() {
+        XInput_Init()
+        occupied := Map()
+        loop 4
+            if (IsObject(XInput_GetState(A_Index - 1)))
+                occupied[A_Index - 1] := true
         static buttons := Map("A", 4096, "B", 8192, "X", 16384, "Y", 32768, "LB", 256, "RB", 512, "LS", 64, "RS", 128,
             "Back", 32, "Start", 16, "Xbox", 1024, "Guide", 1024)
         static axes := Map("LX", 2, "LY", 3, "RX", 4, "RY", 5, "LT", 0, "RT", 1)
@@ -274,6 +291,26 @@ class ViGEmXb360 extends ViGEmTarget {
         this.Dpad := ViGEmXb360._DpadHelper(this)
 
         super.__New()
+        ; Connect 返回时 XInput 端尚可能在枚举。先发中性报告，等接收端可读，
+        ; 避免第一条短按在设备真正就绪前已经松开。
+        this.SendReport()
+        deadline := A_TickCount + 3000
+        ready := false
+        while (!ready && A_TickCount < deadline) {
+            loop 4 {
+                slot := A_Index - 1
+                if (!occupied.Has(slot) && IsObject(XInput_GetState(slot))) {
+                    ready := true
+                    break
+                }
+            }
+            if (!ready)
+                Sleep(20)
+        }
+        if (!ready)
+            throw Error("虚拟 Xbox 手柄接收端未就绪，请检查 XInput 插槽和 ViGEm 驱动。")
+        this.SendReport()
+        Sleep(100)
     }
 
     class _ButtonHelper {

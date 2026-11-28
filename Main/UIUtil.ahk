@@ -1158,6 +1158,11 @@ FindChromiumBrowser() {
 ; Worker 版在 Thread\WorkUtil.ahk，只做一条 IPC 上报。两边由包含链决定，函数里没有角色分支。
 ; 返回 true 表示已处理（调用方无需再弹窗）。
 RMTErrorShow(msg, level := RMT_LV_ERROR, source := "", commandContext := "") {
+    direct := DirectCommandScope()
+    if (IsObject(direct)) {
+        direct.messages.Push(Map("message", msg, "level", level, "source", source))
+        return true
+    }
     if (!IsObject(commandContext))
         commandContext := CommandErrorContext.Current()
     if (source == "")

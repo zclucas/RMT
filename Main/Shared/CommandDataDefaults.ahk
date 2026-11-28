@@ -146,6 +146,8 @@ CommandDefaultRules(cmd, data, defaults) {
             use("TargetCustom", value("Target") == "自定义")
             use("Device", TranslateCommand.IsLocal(value("Engine")))
         case "YOLO检测":
+            use("ImagePath", value("Source") == "图片文件")
+            use("Region", value("Source") != "图片文件")
             task := CommandYoloTask(data)
             known := task != ""
             boxes := !known || task == "detect" || task == "segment" || task == "pose" || task == "obb"
@@ -214,7 +216,7 @@ CommandDefaultRules(cmd, data, defaults) {
         case "控件操作", "控件信息":
             action := value("ActionType")
             use("Argument WriteKind", action == "写入控件值")
-            use("ClickType ClickHoldMs ClickPoint", action == "点击控件")
+            use("ClickType ClickHoldMs", action == "点击控件")
             use("ScrollOffset", action == "滚动到控件")
             use("WaitType WaitValueKind WaitLogic WaitConditions", action == "等待控件出现")
             if (cmd == "控件信息") {
@@ -285,6 +287,8 @@ RestoreCommandDefaults(cmd, data) {
 
 CompactCommandData(cmd, data) {
     result := data.Clone()
+    if ((cmd == "控件操作" || cmd == "控件信息") && result.HasOwnProp("ClickPoint"))
+        result.DeleteProp("ClickPoint")
     if (!IsSet(MySoftData) || !MySoftData.HasProp("DataClassMap") || !MySoftData.DataClassMap.Has(cmd))
         return result
     defaults := CommandDefaultValues(cmd, data)

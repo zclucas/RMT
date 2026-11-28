@@ -129,7 +129,7 @@ HttpRequestExecute(data, resolve, cancelled := () => false) {
                 if (request.WaitForResponse(0)) {
                     result.Status := request.Status
                     result.TimedOut := result.Status == 408 || result.Status == 504
-                    result.Body := request.ResponseText
+                    result.Body := HttpRequestResponseText(request)
                     if (result.Status >= 400)
                         result.Error := "HTTP " result.Status
                     break
@@ -152,5 +152,33 @@ HttpRequestExecute(data, resolve, cancelled := () => false) {
             return result
         if (!TimeoutPolicy.WaitBeforeRetry(cancelled))
             return cancelledResult
+    }
+}
+
+HttpRequestResponseText(request) {
+    contentType := ""
+    try contentType := request.GetResponseHeader("Content-Type")
+    charset := ""
+    if (RegExMatch(contentType, "i)charset\s*=\s*\W*([A-Za-z0-9._-]+)", &m))
+        charset := m[1]
+    else if (InStr(StrLower(contentType), "json"))
+        charset := "utf-8"
+    if (charset == "")
+        return request.ResponseText
+    stream := ""
+    try {
+        stream := ComObject("ADODB.Stream")
+        stream.Type := 1
+        stream.Open()
+        stream.Write(request.ResponseBody)
+        stream.Position := 0
+        stream.Type := 2
+        stream.Charset := charset
+        return stream.ReadText()
+    } catch {
+        return request.ResponseText
+    } finally {
+        if (IsObject(stream))
+            try stream.Close()
     }
 }

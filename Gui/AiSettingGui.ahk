@@ -110,7 +110,7 @@ class AiSettingGui {
         ; 右缘留白根因：StackPanel+固定 fieldW 不拉伸；内容宽≈386，窗宽460→右侧空约 30px。
         ; 改为每行 Grid(Auto|*)，字段列 HorizontalAlignment=Stretch 吃满 body。
         body := main.Add("Grid").Grid_Row(1).Margin("16,14,17,14")
-        body.Rows("36", "36", "36", "36", "Auto", "36", "44", "*")
+        body.Rows("36", "36", "36", "36", "Auto", "36", "36", "36", "44", "*")
         labelW := 64
         gap := 2
         midGap := 20    ; 写入权限下拉 与「指令审批」标签间距
@@ -165,7 +165,17 @@ class AiSettingGui {
         for lab in AiAssist.ApprovalLabels
             cmbAppr.Add("ComboBoxItem").Content(GetLang(lab))
 
-        btnRow := body.Add("StackPanel").Grid_Row(6).Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center")
+        mcpRow := body.Add("Grid").Grid_Row(6).VerticalAlignment("Center")
+        mcpRow.Cols(String(labelW),"*")
+        mcpRow.Add("TextBlock").Text(GetLang("MCP优先：")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize(12)
+        mcpRow.Add("CheckBox").Name("ChkAiMcp").Grid_Column(1).Margin(gap ",0,0,0").Content(GetLang("生成配置优先MCP，失败使用原生指令"))
+            .ToolTip(GetLang("旧服务暂停期间保持关闭；单次电脑任务直接执行。"))
+        mcpPathRow := body.Add("Grid").Grid_Row(7).VerticalAlignment("Center")
+        mcpPathRow.Cols(String(labelW),"*")
+        mcpPathRow.Add("TextBlock").Text(GetLang("MCP程序：")).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize(12)
+        mcpPathRow.Add("TextBox").Name("TxtAiMcpPath").Grid_Column(1).Margin(gap ",0,0,0").Style("{StaticResource RmtSingleLineTextBox}")
+            .ToolTip(GetLang("留空使用软件自带服务，可指定修复后的MCP程序。"))
+        btnRow := body.Add("StackPanel").Grid_Row(8).Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center")
         btnRow.Add("Button").Name("BtnOk").Content(GetLang("确定")).Height(28).MinHeight(28).Padding("18,0")
 
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)
@@ -223,6 +233,8 @@ class AiSettingGui {
             this._FillModelCombo(oldHunyuan ? [] : AiAssist.ModelListArr(), oldHunyuan ? "" : MainSoftData.AiModel)
             this.ui.Update("CmbAiAccess", "SelectedIndex", String(MainSoftData.AiAccessMode - 1))
             this.ui.Update("CmbAiApproval", "SelectedIndex", String(MainSoftData.AiApprovalMode - 1))
+            this.ui.Update("ChkAiMcp","IsChecked",MainSoftData.AiMcpEnabled ? "True" : "False")
+            this.ui.Update("TxtAiMcpPath","Text",MainSoftData.AiMcpServerPath)
         } catch {
         }
         ; 打开流程：守卫延后到 _ReleaseApplyingGuard，避免 LoadedHwnd 刷入时 SelectionChanged 误改 URL
@@ -392,7 +404,10 @@ class AiSettingGui {
         MainSoftData.AiModelList := this._CollectModelListText(model)
         MainSoftData.AiAccessMode := accessMode
         MainSoftData.AiApprovalMode := approvalMode
+        MainSoftData.AiMcpEnabled := ParseBoolInt(this.ui.Query("ChkAiMcp>IsChecked"))
+        MainSoftData.AiMcpServerPath := Trim(this.ui.Query("TxtAiMcpPath"))
         AiAssist.SaveToToml()
+        try MyMainWin._AiRefreshAccess()
         Toast.Success(GetLang("AI 设置已保存"))
         try this.ui.Update("Window", "Close", "")
     }

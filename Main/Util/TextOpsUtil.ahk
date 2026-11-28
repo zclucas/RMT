@@ -305,6 +305,8 @@ TextOpsStatistics(Data, tableItem, index) {
         Lines := StrSplit(SourceText, ["`r`n", "`r", "`n"])
         Res := Lines.Length
     }
+    else
+        throw ValueError("文本统计ArgsType必须为字符数、单词数或行数。")
     MySetGlobalVariable([Data.SaveName], [Res], false)
 }
 

@@ -102,16 +102,16 @@ class AiDecision {
         return bitmap
     }
 
-    static Execute(data, resolve, cancelled, &timedOut := false, resolveWindow := "") {
+    static Execute(data, resolve, cancelled, &timedOut := false, resolveWindow := "", settings := unset) {
         timedOut := false
         question := Trim(resolve(data.Question))
         if (question == "")
             throw Error(GetLang("判断问题不能为空。"))
         options := this.ParseOptions(data.Options)
         source := this.SourceName(data.Source)
-        key := Trim(CfgRead(SettingFile, SettingSection, "AiApiKey", ""))
-        baseUrl := RTrim(Trim(CfgRead(SettingFile, SettingSection, "AiApiBaseUrl", "")), "/")
-        model := Trim(CfgRead(SettingFile, SettingSection, "AiModel", ""))
+        key := Trim(IsSet(settings) ? settings.AiApiKey : CfgRead(SettingFile, SettingSection, "AiApiKey", ""))
+        baseUrl := RTrim(Trim(IsSet(settings) ? settings.AiApiBaseUrl : CfgRead(SettingFile, SettingSection, "AiApiBaseUrl", "")), "/")
+        model := Trim(IsSet(settings) ? settings.AiModel : CfgRead(SettingFile, SettingSection, "AiModel", ""))
         if (key == "" || baseUrl == "" || model == "")
             throw Error(GetLang("请先在设置-AI中填写 API Key、API URL 与模型"))
 
