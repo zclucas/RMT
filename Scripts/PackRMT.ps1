@@ -498,6 +498,9 @@ function New-Release {
         Copy-Translate -ReleaseDir $releaseDir
 
         Copy-RuntimePlugins -ReleaseDir $releaseDir -Arch "x64"
+
+        Write-Log "复制 L2dHost ..." "Gray"
+        Copy-L2dHost -ReleaseDir $releaseDir
     }
 
     if ($Type -eq "x86" -or $Type -eq "both") {
@@ -570,6 +573,9 @@ function New-Release {
         Copy-Voice -ReleaseDir $releaseDir -Arch "x86"
 
         Copy-RuntimePlugins -ReleaseDir $releaseDir -Arch "x86"
+
+        Write-Log "复制 L2dHost ..." "Gray"
+        Copy-L2dHost -ReleaseDir $releaseDir
     }
 
     # 输出目录：命令行 -OutDir 优先，默认桌面\RMTRelease
@@ -989,6 +995,25 @@ function Copy-Translate {
     if (Test-Path $modelDst) {
         Remove-Item $modelDst -Recurse -Force
         Write-Log "  已移除按需下载模型: Translate/models" "Yellow"
+    }
+}
+
+# 看板娘是可选的独立进程，不进运行时插件清单，也不进资源修复包。
+# 缺文件只警告：主程序启动时会自己关掉看板娘。
+function Copy-L2dHost {
+    param([string]$ReleaseDir)
+
+    $names = @("L2dHost.exe", "p2l_runtime.dll", "RuoMengTu.p2lrt", "THIRD_PARTY_NOTICES.txt")
+    $srcDir = Join-Path $ProjectRoot "Plugins\L2dHost"
+    $dstDir = Join-Path $ReleaseDir "Plugins\L2dHost"
+    foreach ($name in $names) {
+        $src = Join-Path $srcDir $name
+        if (-not (Test-Path -LiteralPath $src)) {
+            Write-Log "  [WARN] 未找到: L2dHost/$name" "Yellow"
+            continue
+        }
+        Copy-IntoRelease -Source $src -Destination (Join-Path $dstDir $name)
+        Write-Log "  已复制: L2dHost/$name" "Gray"
     }
 }
 

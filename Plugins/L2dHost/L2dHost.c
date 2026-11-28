@@ -92,12 +92,22 @@ static int g_press_x, g_press_y;
 static int g_ui_alpha = 255;
 static int dip(int v);
 
+static void host_fail_a(const char *msg) {
+    if (!g_parent_pid && msg && msg[0])
+        MessageBoxA(NULL, msg, "L2dHost", MB_ICONERROR);
+}
+
+static void host_fail_w(const wchar_t *msg) {
+    if (!g_parent_pid && msg && msg[0])
+        MessageBoxW(NULL, msg, L"L2dHost", MB_ICONERROR);
+}
+
 static void *must_sym(const char *name) {
     void *p = (void *)GetProcAddress(g_dll, name);
     if (!p) {
         char msg[160];
         wsprintfA(msg, "p2l_runtime.dll missing %s", name);
-        MessageBoxA(NULL, msg, "L2dHost", MB_ICONERROR);
+        host_fail_a(msg);
         ExitProcess(1);
     }
     return p;
@@ -1145,7 +1155,7 @@ static int load_runtime(void) {
     path_join(dll_path, exe_dir(), L"p2l_runtime.dll");
     g_dll = LoadLibraryW(dll_path);
     if (!g_dll) {
-        MessageBoxW(NULL, L"p2l_runtime.dll not found next to L2dHost.exe", L"L2dHost", MB_ICONERROR);
+        host_fail_w(L"p2l_runtime.dll not found next to L2dHost.exe");
         return 0;
     }
     p2l_abi_version = (fn_u32_void)must_sym("p2l_abi_version");
@@ -1175,17 +1185,17 @@ static int load_runtime(void) {
     p2l_clip_finished = (fn_clip_done)GetProcAddress(g_dll, "p2l_clip_finished");
     abi = p2l_abi_version();
     if ((abi >> 16) != 1 || (abi & 0xffffu) < 3) {
-        MessageBoxA(NULL, "p2l_runtime.dll ABI too old (need 1.3+)", "L2dHost", MB_ICONERROR);
+        host_fail_a("p2l_runtime.dll ABI too old (need 1.3+)");
         return 0;
     }
     if (!find_p2lrt(model_path) || !read_file(model_path, &bytes, &len)) {
-        MessageBoxW(NULL, L"No .p2lrt model next to L2dHost.exe", L"L2dHost", MB_ICONERROR);
+        host_fail_w(L"No .p2lrt model next to L2dHost.exe");
         return 0;
     }
     g_rig = p2l_rig_load(bytes, len, err, sizeof err);
     free(bytes);
     if (!g_rig) {
-        MessageBoxA(NULL, err[0] ? err : "failed to load .p2lrt", "L2dHost", MB_ICONERROR);
+        host_fail_a(err[0] ? err : "failed to load .p2lrt");
         return 0;
     }
     p2l_behaviors(g_rig, 1u | 2u | 4u | 8u);

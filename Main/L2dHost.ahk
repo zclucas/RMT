@@ -174,12 +174,21 @@ class L2dHost {
         return false
     }
 
+    static _HasModel(dir) {
+        if (FileExist(dir "\RuoMengTu.p2lrt"))
+            return true
+        loop files dir "\*.p2lrt"
+            return true
+        return false
+    }
+
     static _LaunchCommand() {
         dir := L2dHost.Dir()
         exe := dir "\L2dHost.exe"
-        if (FileExist(exe))
-            return '"' exe '" ' ProcessExist()
-        return ""
+        ; exe、运行库、模型要齐，缺一个就不拉起子进程，避免它弹出错误框。
+        if (!FileExist(exe) || !FileExist(dir "\p2l_runtime.dll") || !L2dHost._HasModel(dir))
+            return ""
+        return '"' exe '" ' ProcessExist()
     }
 }
 
