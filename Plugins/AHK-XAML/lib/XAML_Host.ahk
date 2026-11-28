@@ -1837,6 +1837,23 @@ class XAMLHost {
         return ""
     }
 
+    ; 目录联接/符号链接可能指向同一引擎，不能按路径字面差异重启全部窗口。
+    static FinalFilePath(path) {
+        handle := DllCall("kernel32\CreateFileW", "Str", path, "UInt", 0, "UInt", 7, "Ptr", 0, "UInt", 3, "UInt", 0x80, "Ptr", 0, "Ptr")
+        if (!handle || handle == -1)
+            return path
+        try {
+            buf := Buffer(32768 * 2, 0)
+            size := DllCall("kernel32\GetFinalPathNameByHandleW", "Ptr", handle, "Ptr", buf, "UInt", 32768, "UInt", 0, "UInt")
+            return size && size < 32768 ? StrGet(buf, "UTF-16") : path
+        } finally DllCall("kernel32\CloseHandle", "Ptr", handle)
+    }
+
+    static SameEnginePath(first, second) {
+        return StrLower(first) == StrLower(second)
+            || StrLower(this.FinalFilePath(first)) == StrLower(this.FinalFilePath(second))
+    }
+
     ; 若当前 daemon 不是期望的 dll，杀掉以便重新拉起
     static EnsureDaemonMatches(expectedExe) {
         XAMLHost.EnsureDaemonHealthy()
@@ -1848,7 +1865,7 @@ class XAMLHost {
         actual := XAMLHost.GetDaemonExePath()
         if (actual == "")
             return
-        if (StrLower(actual) != StrLower(expectedExe)) {
+        if (!XAMLHost.SameEnginePath(actual, expectedExe)) {
             XAMLHost.Diag("EnsureDaemonMatches mismatch actual=" actual " expected=" expectedExe " -> Kill")
             XAMLHost.KillDaemon()
         }

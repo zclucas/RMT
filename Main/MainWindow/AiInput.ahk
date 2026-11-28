@@ -1,4 +1,84 @@
 
+    _AiAccessColor() {
+        return AiAssist.AccessLabel() == "完全访问" ? "#D93025" : "{DynamicResource TextSub}"
+    }
+
+    _AiAccessStyle() {
+        return '<Style x:Key="RmtAiAccessCombo" TargetType="ComboBox">'
+            . '<Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ComboBox">'
+            . '<Grid><ToggleButton Focusable="False" ClickMode="Press"'
+            . ' IsChecked="{Binding IsDropDownOpen, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}">'
+            . '<ToggleButton.Template><ControlTemplate TargetType="ToggleButton">'
+            . '<Border x:Name="Hover" Background="Transparent" CornerRadius="3"/>'
+            . '<ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True">'
+            . '<Setter TargetName="Hover" Property="Background" Value="{DynamicResource EditHoverBg}"/>'
+            . '</Trigger></ControlTemplate.Triggers></ControlTemplate></ToggleButton.Template></ToggleButton>'
+            . '<ContentPresenter Content="{TemplateBinding SelectionBoxItem}" IsHitTestVisible="False"'
+            . ' VerticalAlignment="Center" HorizontalAlignment="Left"/>'
+            . '<Popup x:Name="PART_Popup" Placement="Top" AllowsTransparency="True" Focusable="False"'
+            . ' IsOpen="{Binding IsDropDownOpen, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}" PopupAnimation="Fade">'
+            . '<Border Background="{DynamicResource DropdownBg}" BorderBrush="{DynamicResource InputStroke}"'
+            . ' BorderThickness="1" CornerRadius="3" Padding="2" MinWidth="100">'
+            . '<ScrollViewer CanContentScroll="True" MaxHeight="240"><ItemsPresenter KeyboardNavigation.DirectionalNavigation="Contained"/>'
+            . '</ScrollViewer></Border></Popup></Grid>'
+            . '</ControlTemplate></Setter.Value></Setter></Style>'
+    }
+
+    _AiRefreshAccess() {
+        if (this.HasOwnProp("_aiAccessSyncing") && this._aiAccessSyncing)
+            return
+        this._aiAccessSyncing := true
+        try {
+            index := MainSoftData.AiAccessMode - 1
+            if (this.HasOwnProp("_aiPanels") && IsObject(this._aiPanels)) {
+                for t in this._aiPanels {
+                    name := "AiAccess_" t
+                    ; 不回写刚被用户选中的控件，避免在下拉收起期间重置选中状态。
+                    try {
+                        if (this.ui.Query(name ">SelectedIndex") != index)
+                            this.ui.Update(name, "SelectedIndex", String(index))
+                        this.ui.Update(name, "Foreground", this._AiAccessColor())
+                    }
+                }
+            }
+            try {
+                if (this.ui.Query("AiAccessCon>SelectedIndex") != index)
+                    this.ui.Update("AiAccessCon", "SelectedIndex", String(index))
+            }
+        } finally {
+            this._aiAccessSyncing := false
+        }
+    }
+
+    OnAiAccessChanged(t, state, *) {
+        if (this.HasOwnProp("_aiAccessSyncing") && this._aiAccessSyncing)
+            return
+        ; 使用本次选择事件的值，避免同步查询与其它页签的回写事件交错。
+        name := "AiAccess_" t
+        value := IsObject(state) && state.Has(name) ? state[name] : this.ui.Query(name)
+        mode := 0
+        for index, label in AiAssist.AccessLabels {
+            if (value == label || value == GetLang(label)) {
+                mode := index
+                break
+            }
+        }
+        if (!mode || mode == MainSoftData.AiAccessMode)
+            return
+        MainSoftData.AiAccessMode := mode
+        CfgWrite(mode, SettingFile, SettingSection, "AiAccessMode")
+        ; 在 SelectionChanged / 鼠标松开完成后同步其它入口，保留下拉自身的开合状态。
+        SetTimer(ObjBindMethod(this, "_AiRefreshAccess"), -1)
+    }
+
+    OnAiAttachClick(t, *) {
+        files := FileSelect("M3", , GetLang("选择附件"))
+        if (!IsObject(files))
+            return
+        for path in files
+            this._AiAddAttach(t, this._AiIsImageFile(path) ? "image" : "file", path)
+    }
+
     _AiNormalizeNewlines(text, forTextBox := true) {
         text := StrReplace(text, "`r`n", "`n")
         text := StrReplace(text, "`r", "`n")
@@ -182,8 +262,8 @@
         } else {
             try this.ui.Update("AiInput_" t, "Foreground", "{DynamicResource InputText}")
             try this.ui.Update("AiMic_" t, "Foreground", "{DynamicResource TextMain}")
-            try this.ui.Update("AiMic_" t, "ToolTip", GetLang("语音输入"))
-            try this.ui.Update("AiInputPh_" t, "Text", GetLang("询问关于宏的任何问题…"))
+            try this.ui.Update("AiMic_" t, "ToolTip", "Space：" GetLang("语音输入"))
+            try this.ui.Update("AiInputPh_" t, "Text", GetLang("描述要完成的操作或宏问题…"))
         }
         this._AiSyncPlaceholder(t)
     }
@@ -207,7 +287,7 @@
         base := this._aiSttBase
         separator := (base != "" && !RegExMatch(base, "\s$")) ? " " : ""
         this.ui.Update("AiInput_" t, "Text", base separator text)
-        try this.ui.Update("AiInputPh_" t, "Text", GetLang("询问关于宏的任何问题…"))
+        try this.ui.Update("AiInputPh_" t, "Text", GetLang("描述要完成的操作或宏问题…"))
         try this.ui.Update("AiInputPh_" t, "Visibility", "Collapsed")
         this._aiFitTab := t
         SetTimer(this.aiFitTick, -30)
@@ -496,9 +576,12 @@
             else
                 rowH := this._AiInputExtraLineH()
         }
-        maxH := this._AiInputLineH() + (this._AiInputMaxLines() - 1) * rowH
-        try this.ui.Update("AiInput_" t, "MaxHeight", String(maxH))
-        try this.ui.Update("AiInputHost_" t, "MaxHeight", String(maxH + this._AiAttachHostExtra(t)))
+        minH := this._AiInputLineH() - 12 + rowH
+        maxH := this._AiInputLineH() - 10 + (this._AiInputMaxLines() - 1) * rowH
+        try this.ui.Update("AiInput_" t, "MinHeight", String(minH))
+        try this.ui.Update("AiInputInner_" t, "MinHeight", String(minH))
+        try this.ui.Update("AiInput_" t, "MaxHeight", String(maxH-2))
+        try this.ui.Update("AiInputInner_" t, "MaxHeight", String(maxH-2))
         if (IsObject(this._aiPendingCaret) && this._aiPendingCaret.Has(t)) {
             try this.ui.Update("AiInput_" t, "CaretIndex", String(this._aiPendingCaret[t]))
             this._aiPendingCaret.Delete(t)

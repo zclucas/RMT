@@ -103,12 +103,12 @@
             .VerticalScrollBarVisibility("Auto").HorizontalScrollBarVisibility("Disabled")
         msgs := aiSv.Add("StackPanel").Name("SideAiMsgs_" idx).Margin("12,12,12,8")
         lineH := this._AiInputLineH()
-        textH := lineH - 2
-        maxH := lineH + (this._AiInputMaxLines() - 1) * this._AiInputExtraLineH()
+        textH := lineH - 12 + this._AiInputExtraLineH()
+        maxH := lineH - 10 + (this._AiInputMaxLines() - 1) * this._AiInputExtraLineH()
         sendW := this._AiInputSendW()
         padL := AiSettingGui.ContentPadL
         r := this._AiInputRadius()
-        foot := g.Add("Border").Name("SideAiFoot_" idx).Grid_Row(2).Padding("10,4,10,8").BorderThickness("0")
+        foot := g.Add("Border").Name("SideAiFoot_" idx).Grid_Row(2).Padding("10,4,10,3").BorderThickness("0")
             .Visibility("Collapsed")
         footCol := foot.Add("StackPanel")
         ; 「正在思考」放在输入区上方（不进消息列表），避免第二次请求复用旧节点导致位置错乱
@@ -116,42 +116,57 @@
             .FontSize(this._AiChatBodyFontSize()).FontStyle("Italic").Foreground("{DynamicResource TextSub}")
             .Margin("2,0,0,6").Visibility("Collapsed").IsHitTestVisible("False")
             .TextWrapping("Wrap")
-        ; 不设 Height：高度由 TextBox 按内容自己撑开，外框跟着内容走
-        chrome := footCol.Add("Border").Name("AiInputHost_" idx).MinHeight(lineH).MaxHeight(maxH + this._AiAttachBarH())
+        ; 文字区默认两行，底栏独占框内一行；输入增高时底栏始终贴底
+        chrome := footCol.Add("Border").Name("AiInputHost_" idx).MinHeight(lineH)
             .Padding(padL ",0," padL ",0")
             .Background("{DynamicResource InputBg}").BorderBrush("{DynamicResource InputStroke}")
             .BorderThickness("1").CornerRadius(String(r)).AllowDrop("True")
         chrome.Apply({SnapsToDevicePixels: "True", UseLayoutRounding: "True"})
         box := chrome.Add("Grid")
-        box.Rows("Auto", "*")
+        box.Rows("Auto", "Auto", "Auto")
         att := box.Add("StackPanel").Name("AiAttachBar_" idx).Grid_Row(0).Orientation("Horizontal")
             .Margin("0,6,4,4").Visibility("Collapsed").ClipToBounds("False")
-        inner := box.Add("Grid").Grid_Row(1)
+        inner := box.Add("Grid").Name("AiInputInner_" idx).Grid_Row(1).MinHeight(textH).MaxHeight(maxH-2).Margin("0,5,0,0")
         tb := inner.Add("TextBox").Name("AiInput_" idx).Style("{StaticResource RmtAiChatBox}")
             .HorizontalAlignment("Stretch").VerticalAlignment("Stretch")
-            .MinHeight(textH).MaxHeight(maxH)
+            .MinHeight(textH).MaxHeight(maxH-2)
             .AcceptsReturn("True").TextWrapping("Wrap").AllowDrop("False")
             .VerticalScrollBarVisibility("Auto").HorizontalScrollBarVisibility("Disabled")
-            .VerticalContentAlignment("Center").Padding("0").Margin("0")
+            .VerticalContentAlignment("Top").Padding("0").Margin("0")
             .FontSize(this._AiChatBodyFontSize())
             .Foreground("{DynamicResource InputText}")
             .Background("Transparent").BorderThickness("0")
         this._AttachTextEditContextMenu(tb, true)
-        ph := inner.Add("TextBlock").Name("AiInputPh_" idx).Text(GetLang("询问关于宏的任何问题…")).IsHitTestVisible("False")
-            .VerticalAlignment("Center").HorizontalAlignment("Left").Margin("0")
+        ph := inner.Add("TextBlock").Name("AiInputPh_" idx).Text(GetLang("描述要完成的操作或宏问题…")).IsHitTestVisible("False")
+            .VerticalAlignment("Top").HorizontalAlignment("Left").Margin("0")
             .Foreground("{DynamicResource TextSub}").Opacity("0.55")
             .FontSize(this._AiChatBodyFontSize())
-        btns := inner.Add("StackPanel").Name("AiInputBtns_" idx).Orientation("Horizontal")
-            .HorizontalAlignment("Right").VerticalAlignment("Center")
-            .SetProp("Panel.ZIndex", "2")
+        toolbar := box.Add("Grid").Name("AiInputToolbar_" idx).Grid_Row(2).Height(sendW+4).Margin("0,2,0,2")
+        toolbar.Cols("Auto", "*", "Auto")
+        toolbar.Add("Button").Name("AiAttach_" idx).Grid_Column(0).Width(sendW).Height(sendW).MinHeight(sendW)
+            .Style("{StaticResource RmtAiIconBtn}").Margin("0,0,4,0")
+            .Content(Chr(0xE723)).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets").FontSize(11)
+            .ToolTip(GetLang("选择附件"))
+        access := toolbar.Add("ComboBox").Name("AiAccess_" idx).Grid_Column(1).Height(sendW).MinHeight(sendW)
+            .Width(Float(XAMLHost.ChatSmallFontSize()) * 5).HorizontalAlignment("Left")
+            .FontSize(this._AiChatSmallFontSize()).Padding("0").Margin("0,0,4,0")
+            .Background("Transparent").BorderThickness("0").Cursor("Hand")
+            .Foreground(this._AiAccessColor()).ToolTip(GetLang("更改权限"))
+            .SelectedIndex(MainSoftData.AiAccessMode - 1)
+        toolbar.InjectResources(this._AiAccessStyle())
+        access.Style("{StaticResource RmtAiAccessCombo}")
+        for label in AiAssist.AccessLabels
+            access.Add("ComboBoxItem").Content(GetLang(label)).Foreground("{DynamicResource TextMain}")
+        btns := toolbar.Add("StackPanel").Name("AiInputBtns_" idx).Grid_Column(2).Orientation("Horizontal")
+            .VerticalAlignment("Center")
         btns.Add("Button").Name("AiMic_" idx).Width(sendW).Height(sendW).MinHeight(sendW)
             .Style("{StaticResource RmtAiIconBtn}").Margin("0,0,2,0")
             .Content(Chr(0xE720)).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets").FontSize(11)
-            .ToolTip(GetLang("语音输入"))
+            .ToolTip("Space：" GetLang("语音输入"))
         btns.Add("Button").Name("AiSend_" idx).Width(sendW).Height(sendW).MinHeight(sendW)
             .Style("{StaticResource RmtAiIconBtn}").Margin("0")
             .Content(Chr(0xE724)).FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets").FontSize(11)
-            .ToolTip(GetLang("发送"))
+            .ToolTip("Enter：" GetLang("发送"))
     }
 
     ; 文本框 / 只读富文本：用 XAML ContextMenu 替换系统旧菜单
@@ -226,9 +241,6 @@
     _AiInputSendW() {
         return 24
     }
-    _AiInputIconReserve() {
-        return this._AiInputSendW() * 2 + 4
-    }
 
     _AiAttachBarH() {
         return 52
@@ -262,7 +274,7 @@
         fence := Chr(96) Chr(96) Chr(96)
         tick := Chr(96)
         ; Cursor 风格：单条助手欢迎，不做 A/B 对聊演示
-        welcome := "我是 **RMT 助手**，可以帮你解读、修改和生成宏配置。`n`n"
+        welcome := "我是 **RMT 助手**，可以解读、修改宏配置；完全访问时，也能直接操作电脑并核对结果。`n`n"
             . "试试：`n"
             . "- 描述你想做的操作，我给出可落地的改法`n"
             . "- 粘贴或拖入文件路径，一起分析配置`n"
@@ -278,8 +290,27 @@
         this._aiPendingFileActs := []
         this._aiPendingCopyAll := []
         this._aiPendingUserCards := []
-        xaml := this._AiMsgXaml(isUser, text)
-        try this.ui.Update("SideAiMsgs_" t, "AddXamlItem", xaml)
+        rendered := false
+        try {
+            xaml := this._AiMsgXaml(isUser, text)
+            rootName := this._aiRenderedMsgName
+            this.ui.Update("SideAiMsgs_" t, "AddXamlItem", xaml)
+            rendered := this.ui.Query(rootName ">Tag") == "AiMessageReady"
+        }
+        if (!rendered) {
+            this._aiPendingLinks := [], this._aiPendingFileActs := [], this._aiPendingCopyAll := [], this._aiPendingUserCards := []
+            this._aiLinkSeq += 1
+            rootName := "AiPlainMsg_" this._aiLinkSeq
+            plain := '<Border xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" Name="' rootName '" Tag="AiMessageReady" Margin="0,2,0,13" Padding="2">'
+                . '<TextBlock Text="' this._AiXamlLiteral(text) '" TextWrapping="Wrap" Foreground="{DynamicResource TextMain}" FontSize="' this._AiChatBodyFontSize() '"/></Border>'
+            try {
+                this.ui.Update("SideAiMsgs_" t, "AddXamlItem", plain)
+                rendered := this.ui.Query(rootName ">Tag") == "AiMessageReady"
+            }
+            try RMTLogSys(RMT_LV_WARN, "AI", rendered ? "回复富文本显示失败，已使用纯文本显示。" : "回复显示失败，请从对话记录读取结果。")
+            if (!rendered)
+                Toast.Warning(GetLang("回复显示失败，请打开对话记录查看。"))
+        }
         for name in this._aiPendingLinks
             this._Bind(name, "Click", ObjBindMethod(this, "OnAiNavClick", name))
         for act in this._aiPendingFileActs
@@ -305,6 +336,7 @@
         if (isUser) {
             this._aiLinkSeq += 1
             card := "AiUserMsg_" this._aiLinkSeq
+            this._aiRenderedMsgName := card
             rtbName := ' Name="' card '_Body"'
             if (this._AiUserNeedsClip(text)) {
                 rtbHit := ' IsHitTestVisible="False"'
@@ -328,13 +360,15 @@
             extra := clip
                 ? ' MaxHeight="' this._AiUserPreviewH() '" ClipToBounds="True" Cursor="Hand" ToolTip="' this._XmlEsc(GetLang("点击展开")) '"'
                 : ""
-            return '<Border ' ns ' Name="' card '" Margin="0,2,0,9" Padding="' pad ',' pad '" HorizontalAlignment="Stretch"'
+            return '<Border ' ns ' Name="' card '" Tag="AiMessageReady" Margin="0,2,0,9" Padding="' pad ',' pad '" HorizontalAlignment="Stretch"'
                 . ' Background="{DynamicResource InputBg}" BorderBrush="{DynamicResource InputStroke}"'
                 . ' BorderThickness="1" CornerRadius="' r '"' extra '>'
                 . rtb
                 . '</Border>'
         }
-        return '<Border ' ns ' Margin="0,0,0,13" Padding="2,0,0,0" Background="Transparent" HorizontalAlignment="Stretch">'
+        this._aiLinkSeq += 1
+        this._aiRenderedMsgName := "AiReplyMsg_" this._aiLinkSeq
+        return '<Border ' ns ' Name="' this._aiRenderedMsgName '" Tag="AiMessageReady" Margin="0,0,0,13" Padding="2,0,0,0" Background="Transparent" HorizontalAlignment="Stretch">'
             . rtb
             . '</Border>'
     }

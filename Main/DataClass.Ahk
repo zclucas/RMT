@@ -256,6 +256,8 @@ class MainConfig {
         this.AiModel := ""
         this.AiModelList := ""          ; 逗号分隔的候选模型 id
         this.AiAccessMode := 2          ; 1=只读 2=工作区 3=完全访问
+        this.AiMcpEnabled := false      ; 旧MCP暂停期间默认停用，修复后可启用
+        this.AiMcpServerPath := ""      ; 空=软件自带RMTMcps.exe
         this.AiApprovalMode := 2        ; 1=手动审批 2=自动审批 3=完全访问
         this.AiPanelWidth := 380        ; 扩展面板宽度（应用保存后记住）
         this.LogicTreeBranchSplit := false  ; 逻辑树真假分支左右分栏

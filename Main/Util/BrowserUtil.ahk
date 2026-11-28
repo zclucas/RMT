@@ -204,7 +204,11 @@ class BrowserUtil {
             Run(command)
             return true
         }
-        if (!headless && userDataDir == "" && this.TryManagedConnection(browserPath, port)) {
+        if ((headless || userDataDir != "") && this.TryLaunchConnection(browserPath, userDataDir, headless, port)) {
+            this.OpenConnectedUrl(url, incognito ? 1 : (newWindow ? 2 : 0), timeoutMs)
+            return true
+        }
+        if (!headless && userDataDir == "" && this.TryManagedConnection(browserPath, port, true)) {
             this.OpenConnectedUrl(url, incognito ? 1 : (newWindow ? 2 : 0), timeoutMs)
             return true
         }
@@ -216,7 +220,7 @@ class BrowserUtil {
             "Int", headless, "Ptr", this._Utf8(userDataDir), "Int", port, "Ptr", this._Utf8(url),
             "Int", incognito ? 1 : (newWindow ? 2 : 0), "Int", timeoutMs, "Cdecl Int")
         if (this.ConnectionPort())
-            this.RegisterCDPSession(browserPath)
+            this.RegisterCDPSession(browserPath, userDataDir, headless)
         if (res != 0)
             this._ThrowLastError()
         return true
@@ -314,7 +318,7 @@ class BrowserUtil {
         return 0
     }
 
-    static RegisterCDPSession(browserPath) {
+    static RegisterCDPSession(browserPath, userDataDir := "", headless := 0) {
         port := this.ConnectionPort(), pid := this.DebugPortPID(port)
         stamp := this.ProcessStamp(pid)
         if (!pid || stamp == "")
@@ -324,7 +328,8 @@ class BrowserUtil {
             throw BrowserConnectionError(GetLang("CDP 会话与所选浏览器不匹配，请重新打开网址。"))
         dir := this.CDPStateDir()
         DirCreate(dir)
-        record := Map("port", port, "pid", pid, "stamp", stamp, "path", actualPath)
+        record := Map("port", port, "pid", pid, "stamp", stamp, "path", actualPath,
+            "userDataDir", userDataDir == "" ? "" : ResolvePathNoDotDot(userDataDir), "headless", headless ? 1 : 0)
         temporary := dir "\" port "-" DllCall("GetCurrentProcessId", "UInt") "-" A_TickCount ".tmp"
         file := FileOpen(temporary, "w", "UTF-8-RAW")
         file.Write(JSON.stringify(record))
@@ -354,9 +359,11 @@ class BrowserUtil {
         return ""
     }
 
-    static TryManagedConnection(browserPath := "", preferredPort := 9222) {
+    static TryManagedConnection(browserPath := "", preferredPort := 9222, visibleOnly := false) {
         sessions := this.CDPSessions(), current := this.ConnectionPort()
         for session in sessions {
+            if (visibleOnly && session.Get("headless", 0))
+                continue
             if (browserPath != "" && StrCompare(session["path"], browserPath, false) != 0)
                 continue
             if (session["port"] == current)
@@ -364,6 +371,8 @@ class BrowserUtil {
         }
         for wanted in [preferredPort, 0] {
             for session in sessions {
+                if (visibleOnly && session.Get("headless", 0))
+                    continue
                 if ((wanted && session["port"] != wanted)
                     || (browserPath != "" && StrCompare(session["path"], browserPath, false) != 0))
                     continue
@@ -371,6 +380,25 @@ class BrowserUtil {
                     this.Connect("127.0.0.1", session["port"])
                     return true
                 }
+            }
+        }
+        return false
+    }
+
+    ; 显式指定的后台/独立配置目录只能复用完全匹配的会话。
+    ; 重启 Worker 后直接重新启动同一目录，浏览器单实例会把请求转发到旧进程，
+    ; 新分配的调试端口不会监听，最终一直等到超时。
+    static TryLaunchConnection(browserPath, userDataDir, headless, port) {
+        profile := userDataDir == "" ? "" : ResolvePathNoDotDot(userDataDir)
+        for session in this.CDPSessions() {
+            if (StrCompare(session["path"], browserPath, false) != 0
+                || !session.Has("headless") || session["headless"] != (headless ? 1 : 0)
+                || !session.Has("userDataDir") || StrCompare(session["userDataDir"], profile, false) != 0
+                || (profile == "" && session["port"] != port))
+                continue
+            try {
+                this.Connect("127.0.0.1", session["port"])
+                return true
             }
         }
         return false

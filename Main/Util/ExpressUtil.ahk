@@ -7,7 +7,9 @@ GetExpressionResult(expression, tableItem, tableIndex, &result) {
     try {
         result := EvaluateExpression(expression, (name) => ResolveOperationExpressionValue(tableItem, tableIndex, name))
         return true
-    } catch {
+    } catch as e {
+        if (IsObject(DirectCommandScope()))
+            throw e
         return false
     }
 }

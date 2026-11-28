@@ -110,6 +110,9 @@ TryParseCommandData(val) {
 }
 
 GetMacroCMDData(serialStr) {
+    direct := DirectCommandScope()
+    if (IsObject(direct) && serialStr == direct.token)
+        return direct.data
     SplitSerialTextAndNumbers(serialStr, &textOnly, &numbersOnly)
     cmd := GetCommandKey(textOnly)
     normalizedSerialStr := cmd numbersOnly
@@ -129,6 +132,14 @@ GetMacroCMDData(serialStr) {
         RegisterVariableIconTypes(cmd, Data)
     MySoftData.DataCacheMap[normalizedSerialStr] := Data
     return Data
+}
+
+; 一次直接调用的参数通道。仅精确令牌命中，不读写配置或指令缓存。
+DirectCommandScope(value := unset) {
+    static current := ""
+    if (IsSet(value))
+        current := value
+    return current
 }
 
 CommandHas122Resource(cmd) {

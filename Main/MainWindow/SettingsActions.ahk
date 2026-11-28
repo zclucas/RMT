@@ -71,7 +71,7 @@
             {id: "font", fields: [{key: "FontType", def: ResolveUiFont(MainSoftData.FontList), ctrl: "CmbFont", kind: "cmbText"}, {key: "UiScale", def: 100, ctrl: "ThemeUiScaleCon", kind: "uiScale"}]},
             {id: "palette", fields: [{key: "AppTheme", def: "Default", ctrl: "ThemePresetCon", kind: "theme"}]},
             {id: "aiModel", fields: [{key: "AiProvider", def: "openai", ctrl: "AiProviderCon", kind: "aiProv"}, {key: "AiApiBaseUrl", def: "https://api.openai.com/v1", ctrl: "AiBaseUrlCon", kind: "txt"}, {key: "AiApiKey", def: "", ctrl: "AiApiKeyCon", kind: "pwd"}, {key: "AiModel", def: "", ctrl: "AiModelCon", kind: "txt"}]},
-            {id: "aiPerm", fields: [{key: "AiAccessMode", def: 2, ctrl: "AiAccessCon", kind: "cmb"}, {key: "AiApprovalMode", def: 2, ctrl: "AiApprovalCon", kind: "cmb"}]}
+            {id: "aiPerm", fields: [{key: "AiAccessMode", def: 2, ctrl: "AiAccessCon", kind: "cmb"}, {key: "AiApprovalMode", def: 2, ctrl: "AiApprovalCon", kind: "cmb"}, {key:"AiMcpEnabled",def:false,ctrl:"AiMcpEnabledCon",kind:"chk"}, {key:"AiMcpServerPath",def:"",ctrl:"AiMcpServerPathCon",kind:"txt"}]}
         ]
     }
 
@@ -891,8 +891,21 @@
     }
 
     OnComboIndex(fieldName, state, ctrl, event) {
-        MainSoftData.%fieldName% := RuntimeChoice.Definitions.Has(fieldName)
-            ? RuntimeChoice.Code(fieldName, this.ui.Query(ctrl)) : Integer(this.ui.Query(ctrl ">SelectedIndex")) + 1
+        if (fieldName == "AiAccessMode" && this.HasOwnProp("_aiAccessSyncing") && this._aiAccessSyncing)
+            return
+        if (fieldName == "AiAccessMode") {
+            ; 设置页的选项 Tag 用于显示权限说明，Query(ctrl) 返回的是说明而非权限名。
+            index := this.ui.Query(ctrl ">SelectedIndex")
+            if (!IsInteger(index) || index < 0 || index >= AiAssist.AccessLabels.Length)
+                return
+            mode := RuntimeChoice.Code(fieldName, AiAssist.AccessLabels[Integer(index) + 1])
+            if (mode == MainSoftData.AiAccessMode)
+                return
+            MainSoftData.AiAccessMode := mode
+            this._AiRefreshAccess()
+        } else
+            MainSoftData.%fieldName% := RuntimeChoice.Definitions.Has(fieldName)
+                ? RuntimeChoice.Code(fieldName, this.ui.Query(ctrl)) : Integer(this.ui.Query(ctrl ">SelectedIndex")) + 1
         this.MarkSettingDirty(ctrl)
     }
 

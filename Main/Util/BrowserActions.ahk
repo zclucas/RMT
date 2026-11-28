@@ -118,7 +118,7 @@ class BrowserActions {
     }
 
     static UsesTarget(action) {
-        return (this.UsesSelector(action) && !BrowserElementInfo.IsRead(action)) || action == "执行JS" || action == "网页截图"
+        return this.UsesSelector(action) || action == "执行JS" || action == "网页截图"
             || action == "获取网址" || action == "获取标题"
             || action == "等待加载"
             || action == "鼠标移动" || action == "鼠标点击" || action == "鼠标滚轮"

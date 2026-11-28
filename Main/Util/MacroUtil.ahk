@@ -1055,7 +1055,9 @@ OnMMProOnce(tableItem, index, Data) {
 OnDeltaMove(tableItem, cmd, index) {
     paramArr := StrSplit(cmd, "_")
     SplitSerialTextAndNumbers(paramArr[1], &textOnly, &numbersOnly)
-    if (numbersOnly != "" && MySoftData.DataFileMap.Has(GetCommandKey(textOnly))) {
+    direct := DirectCommandScope()
+    if ((IsObject(direct) && paramArr[1] == direct.token)
+        || (numbersOnly != "" && MySoftData.DataFileMap.Has(GetCommandKey(textOnly)))) {
         Data := GetMacroCMDData(paramArr[1])
         deltaX := Data.DeltaX
         deltaY := Data.DeltaY
@@ -1837,7 +1839,9 @@ OnPressKey(tableItem, cmd, index) {
     paramArr := SplitCommand(cmd)
     ; 阶段5：新格式 按键<serial> 走配置文件；旧格式 按键_a_点击_100 兼容
     SplitSerialTextAndNumbers(paramArr[1], &textOnly, &numbersOnly)
-    isConfigCmd := (numbersOnly != "" && MySoftData.DataFileMap.Has(textOnly))
+    direct := DirectCommandScope()
+    isConfigCmd := (IsObject(direct) && paramArr[1] == direct.token)
+        || (numbersOnly != "" && MySoftData.DataFileMap.Has(textOnly))
     if (isConfigCmd) {
         Data := GetMacroCMDData(paramArr[1])
         keyName := Data.KeyName
