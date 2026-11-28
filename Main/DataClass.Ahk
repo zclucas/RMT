@@ -308,6 +308,8 @@ class MainConfig {
         this.CMDLogToFile := false      ; 是否输出到日志文件
         this.CMDLogFilePath := ""       ; 日志目录（空=软件所在目录\Log，相对路径，换文件夹后自动跟着走）
         this.CMDLogAutoClear := 2       ; 自动清理 0=从不, 1=每天, 2=每周
+        this.ShowL2dMascot := false     ; 独立进程看板娘（不进 RMT.dll / XAML 守护进程）
+        this.L2dMascotHotkey := ""      ; 显示/隐藏看板娘快捷键（空=不绑定）
         ; ========== 宏提示音文件 ==========
         this.StartTipAudio := ""        ; 开始提示音文件路径（空=内置 Audio\\Start.wav）
         this.EndTipAudio := ""          ; 结束/终止提示音文件路径（空=内置 Audio\\End.wav）
