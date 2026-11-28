@@ -152,7 +152,7 @@ CmdEnumRunOptionNames() => ["后台", "默认", "最小化", "最大化"]
 CmdEnumTimingTypeNames() => ["单次", "软件启动时", "周期触发"]
 CmdEnumTimingUnitNames() => ["秒", "分钟", "小时", "天", "周", "月"]
 CmdEnumTimingDurationNames() => ["无限制", "固定时长"]
-CmdEnumShotNames() => ["屏幕抓图", "窗口抓图"]
+CmdEnumShotNames() => ["屏幕抓图", "窗口抓图", "自定义截图"]
 CmdEnumNameTypeNames() => ["默认", "固定名称"]
 CmdEnumKeyCheckNames() => ["同时按下", "有一个按下"]
 CmdEnumJoyAnalogNames() => ["大于设定值", "大于等于", "等于设定值", "小于等于", "小于设定值"]
@@ -283,7 +283,8 @@ CmdEnumNorm(cmd, Data) {
                     CmdEnumNormSearchObj(t)
             }
         case "搜索All", "搜索Combo":
-            Data.SearchType := CurrentCommandChoice(Data.SearchType, CmdEnumSearchNames())
+            if (cmd == "搜索All")
+                Data.SearchType := CurrentCommandChoice(Data.SearchType, CmdEnumSearchNames())
             Data.MouseActionType := CurrentCommandChoice(Data.MouseActionType, CmdEnumMouseActNames())
             if (cmd == "搜索Combo")
                 for target in Data.SearchTargetArr
@@ -347,7 +348,8 @@ CmdEnumNorm(cmd, Data) {
             CmdEnumSet(Data, "StateType", CmdEnumStateNames())
         case "手柄检测":
             Data.CheckType := CurrentJoyCheck(Data.CheckType)
-            Data.StateType := CurrentCommandChoice(Data.StateType, CmdEnumStateNames())
+            if (!CommandHasAnalogKeys(Data))
+                Data.StateType := CurrentCommandChoice(Data.StateType, CmdEnumStateNames())
         case "运行", "运行Pro":
             CmdEnumSet(Data, "Mode", CmdEnumRunModeNames())
             CmdEnumSet(Data, "Option", CmdEnumRunOptionNames(), 0)

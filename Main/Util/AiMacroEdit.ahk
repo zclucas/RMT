@@ -34,7 +34,9 @@ class AiMacroEdit {
             throw Error("缺少指令配置：" info.serial)
         if (SubStr(LTrim(raw), 1, 1) != "{")
             throw Error("指令配置不是 JSON 对象：" info.serial)
-        return {file: file, raw: raw, data: JSON.parse(raw, true)}
+        data := JSON.parse(raw, , false)
+        RestoreCommandDefaults(info.kind, data)
+        return {file: file, raw: raw, data: JSON.parse(JSON.stringify(data, 0), true)}
     }
 
     static IsSearch(kind) {
@@ -353,7 +355,7 @@ class AiMacroEdit {
             fields["Breakpoints"] := "," Trim(step.item.Breakpoints, ",") "," serial ","
 
         edit.data["SerialStr"] := serial
-        saved := JSON.stringify(edit.data, 0)
+        saved := SerializeCommandData(JSON.parse(JSON.stringify(edit.data, 0), , false), info.kind)
         AiMacroEdit.pending := ""
         try CfgWrite(saved, edit.file, SettingSection, serial)
         catch as e {

@@ -285,7 +285,7 @@ class TimeGui {
         param2 := this.Data.Param2
         param4 := this.Data.Param4
         subMode := TimeNormSubMode(this.Data)
-        waitType := TimeNormWaitType(param2 != "" ? param2 : "时刻")
+        waitType := subMode == "等待" ? TimeNormWaitType(param2 != "" ? param2 : "时刻") : "时刻"
         this._SetSelectedByKey("WaitUnitCon", waitType, TimeGui.WaitUnitKeys)
         this._SetCombo("WaitVarCon", timestampVars, GetLang(waitType == "时间戳" ? param1 : ""))
         wh := 14, wm := 30, ws := 0
@@ -294,7 +294,8 @@ class TimeGui {
         this._SetCombo("WaitMinCon", GetGuiVarArr("minute"), GetLang(wm))
         this._SetCombo("WaitSecCon", GetGuiVarArr("second"), GetLang(ws))
         h := 0, m := 0, s := 10
-        this._ParseDurationToHMS(param1, param2, &h, &m, &s)
+        if (subMode == "等待" && waitType == "时长")
+            this._ParseDurationToHMS(param1, param2, &h, &m, &s)
         this._SetCombo("HourCon", vars, h)
         this._SetCombo("MinCon", vars, m)
         this._SetCombo("SecCon", vars, s)

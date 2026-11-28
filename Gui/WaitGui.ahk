@@ -406,9 +406,8 @@ class WaitGui {
         if (!this._initialConditions.Length)
             this._initialConditions := [{Variable: "", Operator: "等于", Value: ""}]
         this._Choose("VarLogicCon", this.Data.ConditionLogic, CmdEnumLogicNames())
-        cfg := this.Data.TimeConfig
-        range := CurrentCommandChoiceWait(this.Data.WaitType) == "等待时间区间"
-        kind := range ? TimeNormWindowType(cfg.Param5) : TimeNormWaitType(cfg.Param2 == "" ? "时长" : cfg.Param2)
+        timeState := WaitTimeEditorState(this.Data)
+        cfg := timeState.config, range := timeState.range, kind := timeState.kind
         this._FillTimeKinds(range, kind)
         this._timeValues := Map()
         this._timeValueKey := ""

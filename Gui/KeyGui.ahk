@@ -317,7 +317,8 @@ class KeyGui {
     }
 
     _KeyTypeText() {
-        return IsObject(this.ui) ? this.ui.Query("KeyTypeCon") : ""
+        ; 建窗前静态下拉候选项尚不可查询，选中索引已在初始化队列中。
+        return GetLang(this._KeyTypeIndex())
     }
 
     _SetKeyType(text) {

@@ -1255,7 +1255,7 @@ class WorkPool {
                             , args.Length >= 2 ? args[2] : ""
                             , args.Length >= 3 ? args[3] : ""
                             , args.Length >= 4 ? args[4] : "")
-                    case "IP", "IB", "IF":
+                    case "IP", "IB", "IF", "IS":
                         this._QueueWorkerInput(wd, Integer(args.RemoveAt(1)), opcode, args*)
                     case "IC":
                         this._CancelWorkerInput(wd, Integer(args[1]))
@@ -1400,6 +1400,20 @@ class WorkPool {
         pack := SplitInputReqArgs(args)
         real := pack.args
         try {
+            if (opcode == "IS") {
+                if (MainSoftData.SelectAreaAction != "") {
+                    SetTimer((*) => this._ShowInputDialogReq(req, opcode, args*), -100)
+                    return
+                }
+                selector := RuntimeScreenShotArea()
+                req.gui := selector
+                cancelCheck := () => req.local && IsObject(req.item) && req.item.Killed && this._CancelInput(req)
+                SetTimer(cancelCheck, 50)
+                try area := selector.Select()
+                finally SetTimer(cancelCheck, 0)
+                this._SendInputResult(req, "IR", area*)
+                return
+            }
             if (opcode == "IF") {
                 req.nativeFile := true
                 this._nativeFileQueue.Push({req: req, timeoutMs: pack.timeoutMs,

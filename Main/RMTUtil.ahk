@@ -1338,6 +1338,31 @@ OnGetSelectAreaCancel(*) {
     TogGetSelectArea(false)
 }
 
+; 运行时截图共用主进程框选；输入请求取消时释放鼠标捕获。
+class RuntimeScreenShotArea {
+    __new() {
+        this.cancelled := false
+        this.active := false
+        this.area := []
+    }
+
+    Select() {
+        ; WorkPool 在已有框选时延后请求，避免覆盖全局回调。
+        if (this.cancelled)
+            return []
+        this.active := true
+        try TogSelectArea(true, (x1, y1, x2, y2) => this.area := [x1, y1, x2, y2])
+        finally this.active := false
+        return this.cancelled ? [] : this.area
+    }
+
+    _CloseWindow() {
+        this.cancelled := true
+        if (this.active)
+            TogSelectArea(false)
+    }
+}
+
 TogSelectArea(isEnable, action := "", showPrompt := true, pointOnly := false) {
     global SelectAreaState
     if (isEnable && action != "") {

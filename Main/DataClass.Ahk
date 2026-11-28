@@ -1,4 +1,4 @@
-; ============================================================
+﻿; ============================================================
 ; 条目对象（MacroItem）—— 替代原 TableItem 内 20+ 平行数组
 ; 每条宏配置一个对象，字段即属性，跨表引用一律引用 ItemID
 ; ============================================================
@@ -1148,11 +1148,9 @@ class ScreenShotData {
         this.StartPosY := 0
         this.EndPosX := A_ScreenWidth
         this.EndPosY := A_ScreenHeight
-        this.NameType := "固定名称"              ;默认（指令名+序号） 固定名称
-        this.FixedName := "Shot"            ;固定名称（NameType=1时使用）
-        this.SavePath := ""             ;保存路径（默认为Temp_ScreenShot）
-        this.ResultToggle := 0          ;是否保存结果到变量
-        this.ResultSaveName := GetLang("图片路径")  ;结果变量名
+        this.NameType := "固定名称"      ;固定=Shot加指令序号，默认=序号自增
+        this.ToClipboard := 0          ;同时将截图复制到剪切板
+        this.ResultSaveName := "ImgPath"  ;结果变量名
     }
 
 }

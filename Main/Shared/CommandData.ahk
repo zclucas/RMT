@@ -1,3 +1,5 @@
+#Include %A_LineFile%\..\CommandDataDefaults.ahk
+
 SplitMacro(macroStr) {
     cmdArr := StrSplit(macroStr, [",", "，", "`n", "⫶"])
     resultArr := []
@@ -95,8 +97,14 @@ TryParseCommandData(val) {
     if (FirstChar != "{" || LastChar != "}")
         return ""
 
-    try
-        return JSON.parse(SaveStr, , false)
+    try {
+        data := JSON.parse(SaveStr, , false)
+        if (IsObject(data) && data.HasOwnProp("SerialStr")) {
+            SplitSerialTextAndNumbers(data.SerialStr, &name, &number)
+            RestoreCommandDefaults(GetCommandKey(name), data)
+        }
+        return data
+    }
     catch
         return ""
 }
@@ -155,6 +163,7 @@ ReadCommandConfig(path, serial, cmd) {
 }
 
 NormalizeCommandData(cmd, Data) {
+    RestoreCommandDefaults(cmd, Data)
     CmdEnumNorm(cmd, Data)
     if (cmd == "浏览器")
         Data.ActionType := BrowserActions.Action(Data.ActionType)
@@ -162,17 +171,22 @@ NormalizeCommandData(cmd, Data) {
         case "AI判断": Data.Source := AiDecision.SourceName(Data.Source)
         case "YOLO检测":
             Data.Device := CurrentCommandChoice(Data.Device, Yolo.Devices)
-            Data.TargetMode := CurrentCommandChoice(Data.TargetMode, Yolo.Targets)
-            Data.ActionType := CurrentCommandChoice(Data.ActionType, Yolo.Actions)
+            task := CommandYoloTask(Data)
+            if (task == "detect" || task == "segment" || task == "pose" || task == "obb")
+                Data.TargetMode := CurrentCommandChoice(Data.TargetMode, Yolo.Targets)
+            if (task != "" && task != "classify" && task != "depth")
+                Data.ActionType := CurrentCommandChoice(Data.ActionType, Yolo.Actions)
         case "翻译":
             Data.Source := CurrentCommandChoice(Data.Source, TranslateCommand.Sources)
             Data.Target := CurrentCommandChoice(Data.Target, TranslateCommand.Targets)
             Data.Engine := CurrentCommandChoice(Data.Engine, TranslateCommand.Engines)
-            Data.Device := CurrentCommandChoice(Data.Device, TranslateCommand.Devices)
+            if (TranslateCommand.IsLocal(Data.Engine))
+                Data.Device := CurrentCommandChoice(Data.Device, TranslateCommand.Devices)
         case "进程管理":
             Data.Action := ProcessManage.ActionKey(Data.Action)
             Data.MatchBy := CurrentCommandChoice(Data.MatchBy, ProcessManage.MatchModes)
-            Data.PickMatch := CurrentCommandChoice(Data.PickMatch, ProcessManage.MatchPicks)
+            if (Data.Action == "进程信息")
+                Data.PickMatch := CurrentCommandChoice(Data.PickMatch, ProcessManage.MatchPicks)
     }
     if (cmd == "变量")
         NormalizeVariableAssignmentRows(Data)
@@ -215,11 +229,11 @@ ExpandNumberedMoveCommand(cmd) {
 SaveMacroCMDData(Data) {
     SplitSerialTextAndNumbers(Data.SerialStr, &cmd, &number)
     cmdKey := GetCommandKey(cmd)
-    ValidateCommandVariableNames(cmdKey, Data)
     DataFile := MySoftData.DataFileMap[cmdKey]
     Data.SerialStr := cmdKey number
     NormalizeCommandData(cmdKey, Data)
-    saveStr := JSON.stringify(Data, 0)
+    ValidateCommandVariableNames(cmdKey, Data)
+    saveStr := SerializeCommandData(Data, cmdKey)
     CfgWrite(saveStr, DataFile, SettingSection, Data.SerialStr)
     RegisterVariableIconTypes(cmdKey, Data)
     if (cmdKey == "变量")
@@ -230,6 +244,8 @@ SaveMacroCMDData(Data) {
 
 ; 统一拦截普通编辑器、图形节点与其他直接保存入口，读取参数不按保存名称校验。
 ValidateCommandVariableNames(cmd, data) {
+    rules := MySoftData.HasProp("DataClassMap") && MySoftData.DataClassMap.Has(cmd)
+        ? CommandDefaultRules(cmd, data, CommandDefaultValues(cmd, data)) : Map()
     fields := ["SaveName", "SaveVar", "VarName", "ResultSaveName", "CoordXName", "CoordYName", "AllSaveName",
         "TimeoutStatusVar", "ResultVar", "ErrorVar", "ControlVar", "ValueVar", "StateVar", "ClassVar", "HwndVar",
         "XVar", "YVar", "WindowXVar", "WindowYVar", "WidthVar", "HeightVar", "CountVar", "NameVar",
@@ -241,6 +257,8 @@ ValidateCommandVariableNames(cmd, data) {
     Loop 12
         fields.Push("ResultVar" A_Index)
     for field in fields {
+        if (!rules.Get(field, true))
+            continue
         if (data.HasOwnProp(field) && data.%field% != "") {
             error := CustomVariableNameError(data.%field%)
             if (error != "")

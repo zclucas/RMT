@@ -1205,7 +1205,7 @@ class JoyGui {
     }
 
     _KeyTypeText() {
-        return IsObject(this.ui) ? this.ui.Query("KeyTypeCon") : GetLang("点击")
+        return GetLang(this._KeyTypeIndex())
     }
 
     _SetKeyType(text) {

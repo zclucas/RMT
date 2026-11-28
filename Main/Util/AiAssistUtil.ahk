@@ -17,22 +17,26 @@ class AiAssist {
         Map("id", "deepseek", "name", "DeepSeek", "url", "https://api.deepseek.com/v1"),
         Map("id", "dashscope", "name", "通义千问", "url", "https://dashscope.aliyuncs.com/compatible-mode/v1"),
         Map("id", "volcengine", "name", "火山方舟", "url", "https://ark.cn-beijing.volces.com/api/v3"),
-        Map("id", "hunyuan", "name", "腾讯混元", "url", "https://api.hunyuan.cloud.tencent.com/v1"),
+        Map("id", "hunyuan", "name", "腾讯云 TokenHub", "url", "https://tokenhub.tencentmaas.com/v1"),
         Map("id", "qianfan", "name", "百度千帆", "url", "https://qianfan.baidubce.com/v2"),
         Map("id", "moonshot", "name", "月之暗面", "url", "https://api.moonshot.cn/v1"),
         Map("id", "zhipu", "name", "智谱 GLM", "url", "https://open.bigmodel.cn/api/paas/v4"),
         Map("id", "baichuan", "name", "百川智能", "url", "https://api.baichuan-ai.com/v1"),
         Map("id", "yi", "name", "零一万物", "url", "https://api.lingyiwanwu.com/v1"),
         Map("id", "stepfun", "name", "阶跃星辰", "url", "https://api.stepfun.com/v1"),
-        Map("id", "minimax", "name", "MiniMax", "url", "https://api.minimax.chat/v1"),
+        Map("id", "minimax", "name", "MiniMax", "url", "https://api.minimax.cn/v1"),
         Map("id", "siliconflow", "name", "硅基流动", "url", "https://api.siliconflow.cn/v1"),
         Map("id", "gemini", "name", "Google Gemini", "url", "https://generativelanguage.googleapis.com/v1beta/openai"),
         Map("id", "xai", "name", "xAI Grok", "url", "https://api.x.ai/v1"),
         Map("id", "mistral", "name", "Mistral", "url", "https://api.mistral.ai/v1"),
         Map("id", "groq", "name", "Groq", "url", "https://api.groq.com/openai/v1"),
-        Map("id", "together", "name", "Together AI", "url", "https://api.together.xyz/v1"),
+        Map("id", "together", "name", "Together AI", "url", "https://api.together.ai/v1"),
         Map("id", "fireworks", "name", "Fireworks", "url", "https://api.fireworks.ai/inference/v1"),
         Map("id", "openrouter", "name", "OpenRouter", "url", "https://openrouter.ai/api/v1"),
+        Map("id", "nvidia", "name", "NVIDIA NIM", "url", "https://integrate.api.nvidia.com/v1"),
+        Map("id", "cerebras", "name", "Cerebras", "url", "https://api.cerebras.ai/v1"),
+        Map("id", "sambanova", "name", "SambaNova", "url", "https://api.sambanova.ai/v1"),
+        Map("id", "modelscope", "name", "魔搭 ModelScope", "url", "https://api-inference.modelscope.cn/v1"),
         Map("id", "ollama", "name", "Ollama", "url", "http://localhost:11434/v1"),
         Map("id", "lmstudio", "name", "LM Studio", "url", "http://localhost:1234/v1"),
         Map("id", "custom", "name", "自定义", "url", "")
@@ -74,6 +78,11 @@ class AiAssist {
             MainSoftData.AiApprovalMode := 2
         if (Trim(MainSoftData.AiProvider) == "")
             MainSoftData.AiProvider := AiAssist.MatchProviderId(MainSoftData.AiApiBaseUrl)
+        ; 只更新预设的旧地址；用户填写的自定义网关保持原值。
+        oldUrl := AiAssist.NormalizeBaseUrl(MainSoftData.AiApiBaseUrl)
+        legacy := Map("minimax", "https://api.minimax.chat/v1", "together", "https://api.together.xyz/v1")
+        if (legacy.Has(MainSoftData.AiProvider) && oldUrl = legacy[MainSoftData.AiProvider])
+            MainSoftData.AiApiBaseUrl := AiAssist.ProviderByIndex(AiAssist.ProviderIndex())["url"]
     }
 
     static SaveToToml() {
@@ -110,6 +119,11 @@ class AiAssist {
         url := AiAssist.NormalizeBaseUrl(url)
         if (url == "")
             return "custom"
+        switch url {
+            case "https://api.minimax.chat/v1", "https://api.minimaxi.com/v1": return "minimax"
+            case "https://api.together.xyz/v1": return "together"
+            case "https://api.hunyuan.cloud.tencent.com/v1": return "hunyuan"
+        }
         for p in AiAssist.Providers {
             if (p["id"] = "custom")
                 continue
@@ -122,7 +136,37 @@ class AiAssist {
     static IsConfigured() {
         global MainSoftData
         AiAssist.EnsureDefaults()
-        return Trim(MainSoftData.AiApiKey) != "" && Trim(MainSoftData.AiApiBaseUrl) != "" && Trim(MainSoftData.AiModel) != ""
+        return AiAssist.ResolveApiKey(MainSoftData.AiApiBaseUrl, MainSoftData.AiApiKey) != "" && Trim(MainSoftData.AiApiBaseUrl) != "" && Trim(MainSoftData.AiModel) != ""
+    }
+
+    static ResolveApiKey(baseUrl, apiKey) {
+        apiKey := Trim(apiKey)
+        ; 本地服务默认无需鉴权；云端与远程服务仍须填写真实 Key。
+        if (apiKey == "" && RegExMatch(baseUrl, "i)^https?://(localhost|127\.0\.0\.1|\[::1\])(:\d+)?(/|$)"))
+            return "local"
+        return apiKey
+    }
+
+    static ValidateEndpoint(baseUrl) {
+        if (RegExMatch(baseUrl, "i)^https?://api\.cursor\.com(:\d+)?(/|$)"))
+            throw Error(GetLang("Cursor API Key 用于代理服务，不能用于此处的模型聊天接口。请使用模型商签发的 Key。"))
+        if (RegExMatch(baseUrl, "i)^https?://api\.hunyuan\.cloud\.tencent\.com(/|$)"))
+            throw Error(GetLang("腾讯混元旧平台已下线，请重新选择腾讯云 TokenHub，并填写新平台的 API Key。"))
+    }
+
+    static ProviderHint(providerId) {
+        hint := GetLang("API Key 必须由所选模型商签发；Cursor 的 Key 不能用于模型聊天。")
+        switch providerId {
+            case "azure":
+                hint .= "`n" GetLang("地址填写 https://资源名.openai.azure.com/openai/v1；模型填写部署名称。")
+            case "hunyuan":
+                hint .= "`n" GetLang("旧混元平台已迁移，请使用 TokenHub 的新 Key；套餐专用地址请选择自定义。")
+            case "ollama", "lmstudio":
+                hint := GetLang("本地服务未启用鉴权时，API Key 可留空；启用鉴权后请填写服务令牌。")
+            case "modelscope":
+                hint .= "`n" GetLang("使用魔搭访问令牌，模型填写模型页的完整 ID。")
+        }
+        return hint "`n" GetLang("刷新不可用时可手填模型 ID；请选择支持聊天与工具调用的模型。")
     }
 
     static NormalizeBaseUrl(url) {
@@ -171,10 +215,18 @@ class AiAssist {
         if (apiKey == "")
             apiKey := MainSoftData.AiApiKey
         baseUrl := AiAssist.NormalizeBaseUrl(baseUrl)
+        AiAssist.ValidateEndpoint(baseUrl)
+        apiKey := AiAssist.ResolveApiKey(baseUrl, apiKey)
         if (baseUrl == "" || Trim(apiKey) == "")
             throw Error(GetLang("请先填写 API Key 与 API URL"))
         ai := GetRmtAi()
-        idsJson := ai.GetModels(baseUrl, apiKey)
+        try idsJson := ai.GetModels(baseUrl, apiKey)
+        catch as e {
+            hint := RegExMatch(e.Message, "HTTP (401|403)\b")
+                ? GetLang("请检查 Key 是否属于当前模型商、区域及套餐，并确认接口权限。")
+                : GetLang("请检查 API URL；服务不支持模型列表时，可直接手填模型 ID。")
+            throw Error(e.Message "`n" hint)
+        }
         ids := AiAssist._ParseJsonStringArray(idsJson)
         if (ids.Length < 1)
             throw Error(GetLang("未解析到可用模型，请检查 API URL 是否指向 OpenAI 兼容接口"))
@@ -192,6 +244,8 @@ class AiAssist {
         if (model == "")
             model := MainSoftData.AiModel
         baseUrl := AiAssist.NormalizeBaseUrl(baseUrl)
+        AiAssist.ValidateEndpoint(baseUrl)
+        apiKey := AiAssist.ResolveApiKey(baseUrl, apiKey)
         if (baseUrl == "" || Trim(apiKey) == "" || Trim(model) == "")
             throw Error(GetLang("请先在设置-AI中填写 API Key、API URL 与模型"))
         messagesJson := AiAssist._BuildMessagesJson(messages)
@@ -210,6 +264,8 @@ class AiAssist {
         if (model == "")
             model := MainSoftData.AiModel
         baseUrl := AiAssist.NormalizeBaseUrl(baseUrl)
+        AiAssist.ValidateEndpoint(baseUrl)
+        apiKey := AiAssist.ResolveApiKey(baseUrl, apiKey)
         if (baseUrl == "" || Trim(apiKey) == "" || Trim(model) == "")
             throw Error(GetLang("请先在设置-AI中填写 API Key、API URL 与模型"))
         messagesJson := AiAssist._BuildMessagesJson(messages)

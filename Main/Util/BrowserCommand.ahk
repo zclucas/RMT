@@ -181,7 +181,7 @@ _ExecuteBrowserAction(tableItem, index, data, actionType, resolve, selType) {
             if (url == "")
                 throw Error("URL 不能为空")
             bType := data.BrowserType
-            bPath := resolve(data.BrowserPath)
+            bPath := bType == "自定义路径" ? resolve(data.BrowserPath) : ""
             uDir := resolve(data.UserDataDir)
             hPort := Integer(data.BrowserPort)
             hLess := Integer(data.Headless)

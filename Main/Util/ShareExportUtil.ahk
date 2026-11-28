@@ -46,7 +46,7 @@ class ShareExportUtil {
                     target := data.HasOwnProp("MacroSerial") ? data.MacroSerial : ""
                     data.Index := targets.Get(target, 0)
                     data.MacroSerial := data.Index ? target : ""
-                    raw := JSON.stringify(data, 0)
+                    raw := SerializeCommandData(data, cmdType)
                 }
             }
             CfgWrite(raw, outDir "\" baseName, SettingSection, serial)

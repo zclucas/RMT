@@ -203,7 +203,8 @@ class TranslateGui {
             this._glossary.Push({id: this._glossSeq, source: String(item.source), target: String(item.target)})
         }
         for name, values in TranslateGui.Choices {
-            value := CurrentCommandChoice(this.Data.%name%, values)
+            value := name == "Device" && !TranslateCommand.IsLocal(this.Data.Engine)
+                ? values[1] : CurrentCommandChoice(this.Data.%name%, values)
             this._ComboPush(name, "SelectedIndex", CurrentCommandChoiceIndex(value, values))
         }
         ; Init 阶段批量更新尚未提交，Query 取不到刚设的下拉值，按存储值直接算初始显隐
@@ -221,6 +222,8 @@ class TranslateGui {
             data.%name% := this.ui.Query(name)
         for name in ["Source", "Target", "Engine", "Device"]
             data.%name% := TranslateGui._ChoiceValue(this.ui.Query(name), TranslateGui.Choices[name])
+        if (!TranslateCommand.IsLocal(data.Engine))
+            data.Device := this.Data.Device
         ; 来源=变量 时内容取变量下拉；剪切板 时内容无用，清空避免残留旧值
         if (data.Source == "变量")
             data.Text := Trim(this.ui.Query("TextVar"))

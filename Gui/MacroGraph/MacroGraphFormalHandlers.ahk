@@ -1,4 +1,4 @@
-#Requires AutoHotkey v2.0
+﻿#Requires AutoHotkey v2.0
 
 ; 形式化节点：内联变更处理、显隐刷新、摘要（与 MacroGraphFormal.ahk 配套）
 
@@ -1210,7 +1210,16 @@ class MacroGraphFormalHandlersMixin {
     }
 
     _OnFormalScreenShot(id, state, ctrl, event) {
-        typeNames := GetLangArr(["屏幕抓图", "窗口抓图"])
+        if (ctrl == "SsClipTog_" id) {
+            data := this._FormalIniData(id)
+            if (data == "")
+                return
+            data.ToClipboard := this._FormalReadToggle(state, ctrl, data.ToClipboard)
+            SaveMacroCMDData(data)
+            this._SaveGraphAndNotifyParent()
+            return
+        }
+        typeNames := GetLangArr(CmdEnumShotNames())
         if (!IsObject(state))
             state := Map()
         if (ctrl == "SsTypeCmb_" id) {
@@ -1220,28 +1229,21 @@ class MacroGraphFormalHandlersMixin {
             data := this._FormalIniData(id)
             if (data == "")
                 return
-            data.ScreenShotType := GetLangKey(ttTxt)
+            data.ScreenShotType := CmdEnumZh(ttTxt, CmdEnumShotNames())
             SaveMacroCMDData(data)
             this._RefreshFormalScreenShotVisibility(id, data.ScreenShotType)
             this._SaveGraphAndNotifyParent()
             return
         }
-        if (ctrl == "SsNameTog_" id || ctrl == "SsResTog_" id) {
+        if (ctrl == "SsNameCmb_" id) {
+            choice := this._ComboText(ctrl, state, GetLangArr(["固定", "序号自增"]))
+            if (choice == "")
+                return
             data := this._FormalIniData(id)
             if (data == "")
                 return
-            if (!IsObject(state))
-                state := Map()
-            if (ctrl == "SsNameTog_" id) {
-                checkedNow := data.NameType == "固定名称" || data.NameType == 1 || data.NameType == "1"
-                data.NameType := this._FormalReadToggle(state, "SsNameTog_" id, checkedNow) ? "固定名称" : "默认"
-            }
-            else
-                data.ResultToggle := this._FormalReadToggle(state, "SsResTog_" id, data.ResultToggle)
+            data.NameType := choice == GetLang("固定") ? "固定名称" : "默认"
             SaveMacroCMDData(data)
-            nt := data.NameType
-            resOn := data.ResultToggle == 1 || data.ResultToggle == "1"
-            this._RefreshFormalScreenShotVisibility(id, unset, nt, resOn)
             this._SaveGraphAndNotifyParent()
             return
         }
@@ -1258,10 +1260,8 @@ class MacroGraphFormalHandlersMixin {
             data.EndPosX := TranslateBuiltinVarReferences(state["SsEX_" id])
         if (state.Has("SsEY_" id) && state["SsEY_" id] != "")
             data.EndPosY := TranslateBuiltinVarReferences(state["SsEY_" id])
-        if (state.Has("SsFixed_" id))
-            data.FixedName := state["SsFixed_" id]
-        if (state.Has("SsResName_" id) && state["SsResName_" id] != "")
-            data.ResultSaveName := GetVarName(state["SsResName_" id])
+        if (state.Has("SsResName_" id))
+            data.ResultSaveName := GetVarName(Trim(state["SsResName_" id]))
         SaveMacroCMDData(data)
         this._SaveGraphAndNotifyParent()
     }
@@ -1981,7 +1981,7 @@ class MacroGraphFormalHandlersMixin {
         this.ui.Update("KcVar_" id, "Text", GetLang(vn))
     }
 
-    _RefreshFormalScreenShotVisibility(id, st := unset, nt := unset, resOn := unset) {
+    _RefreshFormalScreenShotVisibility(id, st := unset) {
         if (this.ui == "" || !this.cmdNodes.Has(id))
             return
         d := this._FormalDFromId(id)
@@ -1989,20 +1989,13 @@ class MacroGraphFormalHandlersMixin {
             st := CmdEnumZh(d.HasOwnProp("ssType") ? d.ssType : "屏幕抓图", CmdEnumShotNames())
         else
             st := CmdEnumZh(st, CmdEnumShotNames())
-        if (!IsSet(nt))
-            nt := CmdEnumNameType(d.HasOwnProp("ssNameType") ? d.ssNameType : "固定名称")
-        else
-            nt := CmdEnumNameType(nt)
-        if (!IsSet(resOn)) {
-            rt := d.HasOwnProp("ssResultToggle") ? d.ssResultToggle : 0
-            resOn := rt == 1 || rt == "1"
-        }
         isWin := st == "窗口抓图"
+        this.ui.Update("SsTypeLabel_" id, "ToolTip", st == "自定义截图" ? GetLang("该类型只进入截图状态，需要运行时手动框选范围。") : "")
+        for name in ["SsSXRow", "SsSYRow", "SsEXRow", "SsEYRow"]
+            this._FormalSetVis(id, name "_" id, st != "自定义截图")
         for name in ["SsSX", "SsSY", "SsEX", "SsEY"]
             this._SetVariableComboItems(name "_" id, isWin ? GetGuiVarReferences() : GetGuiVarReferences(StrLower(SubStr(name, -1))))
         this._FormalSetVis(id, "SsWinRow_" id, isWin)
-        this._FormalSetVis(id, "SsFixedRow_" id, nt == "固定名称")
-        this._FormalSetVis(id, "SsResNameRow_" id, resOn)
     }
 
     ; 抓图节点：编辑器确定后就地刷新内联控件值（避免整窗 _Render 闪烁）。
@@ -2010,25 +2003,21 @@ class MacroGraphFormalHandlersMixin {
         varList := GetGuiVarArr()
         st := CmdEnumZh(d.HasOwnProp("ssType") ? d.ssType : "屏幕抓图", CmdEnumShotNames())
         nt := CmdEnumNameType(d.HasOwnProp("ssNameType") ? d.ssNameType : "固定名称")
-        showFixed := nt == "固定名称"
         wi := d.HasOwnProp("ssWinInfo") ? d.ssWinInfo : ""
-        fixed := d.HasOwnProp("ssFixedName") ? d.ssFixedName : "Shot"
-        on := d.HasOwnProp("ssResultToggle") && (d.ssResultToggle == 1 || d.ssResultToggle == "1")
-        rn := d.HasOwnProp("ssResultSaveName") ? d.ssResultSaveName : GetLang("图片路径")
+        rn := d.HasOwnProp("ssResultSaveName") ? d.ssResultSaveName : "ImgPath"
         this.ui.Update("SsTypeCmb_" id, "SelectedIndex", CmdEnumIndex(st, CmdEnumShotNames()))
         this.ui.Update("SsWin_" id, "Text", wi)
-        this.ui.Update("SsNameTog_" id, "IsChecked", showFixed ? "True" : "False")
-        this.ui.Update("SsFixed_" id, "Text", fixed)
+        this.ui.Update("SsNameCmb_" id, "SelectedIndex", nt == "固定名称" ? 0 : 1)
+        this.ui.Update("SsClipTog_" id, "IsChecked", d.HasOwnProp("ssToClipboard") && d.ssToClipboard ? "True" : "False")
         for nm, val in Map("SsSX", d.HasOwnProp("ssStartX") ? d.ssStartX : 0, "SsSY", d.HasOwnProp("ssStartY") ? d.ssStartY : 0,
             "SsEX", d.HasOwnProp("ssEndX") ? d.ssEndX : A_ScreenWidth, "SsEY", d.HasOwnProp("ssEndY") ? d.ssEndY : A_ScreenHeight) {
             this.ui.Update(nm "_" id, "Text", TranslateBuiltinVarReferences(val, true))
         }
-        this.ui.Update("SsResTog_" id, "IsChecked", on ? "True" : "False")
         this.ui.Update("SsResName_" id, "ClearItems", "")
         for item in varList
             this.ui.Update("SsResName_" id, "AddItem", item)
         this.ui.Update("SsResName_" id, "Text", GetLang(rn))
-        this._RefreshFormalScreenShotVisibility(id, st, nt, on)
+        this._RefreshFormalScreenShotVisibility(id, st)
     }
 
     ; 仅用于初始注册/显隐刷新：更新标题与各类型显隐。
@@ -2367,7 +2356,7 @@ class MacroGraphFormalHandlersMixin {
         showWait := !isCdCmd && sub == "等待"
         showWin := !isCdCmd && sub == "区间判断"
         showCd := isCdCmd || sub == "倒计时"
-        kind := TimeNormWaitType(d.HasOwnProp("cdKind") ? d.cdKind : (d.HasOwnProp("timeParam2") ? d.timeParam2 : "时长"))
+        kind := showCd ? TimeNormWaitType(d.HasOwnProp("cdKind") ? d.cdKind : (d.HasOwnProp("timeParam2") ? d.timeParam2 : "时长")) : "时长"
         if (!isCdCmd) {
             if (showWait)
                 this.ui.Update("TimeTargetRow_" id "Label", "ToolTip", CmdEditorForm.TimeValueTip(TimeNormWaitType(InputField(d, "timeParam2", ""))))

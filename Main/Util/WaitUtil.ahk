@@ -50,7 +50,7 @@ OnWait(tableItem, cmd, index) {
 }
 
 WaitRunOnce(tableItem, index, Data, t) {
-    cfg := Data.TimeConfig
+    cfg := (t == "等待时间" || t == "等待时间区间") ? Data.TimeConfig : ""
     targetMs := ""
     if (t == "等待时间") {
         kind := TimeNormWaitType(cfg.Param2)
@@ -122,6 +122,21 @@ WaitRunOnce(tableItem, index, Data, t) {
             WaitStateMap.Delete(key)
     }
     return timedOut
+}
+
+; 非时间等待可以保留上次时间设置；无效的隐藏值不阻止其他类型开窗。
+WaitTimeEditorState(data) {
+    current := data.WaitType == "等待时间" || data.WaitType == "等待时间区间"
+    cfg := data.TimeConfig
+    range := current ? data.WaitType == "等待时间区间" : InputField(cfg, "SubMode", "等待") == "区间判断"
+    try kind := range ? TimeNormWindowType(cfg.Param5) : TimeNormWaitType(cfg.Param2 == "" ? "时长" : cfg.Param2)
+    catch as err {
+        if (current)
+            throw err
+        cfg := WaitData().TimeConfig
+        range := false, kind := "毫秒"
+    }
+    return {config: cfg, range: range, kind: kind}
 }
 
 WaitMilliseconds(tableItem, index, Data, useRandom := false) {

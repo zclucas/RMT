@@ -222,6 +222,11 @@ GetLang(Key) {
     if (MainSoftData.Lang == "简中") {
         switch Key {
             case "进程管理": return "进程"
+            case "抓图": return "截图"
+            case "抓图编辑器": return "截图编辑器"
+            case "抓图类型：": return "截图类型："
+            case "屏幕抓图": return "屏幕截图"
+            case "窗口抓图": return "窗口截图"
             case "完整路径匹配": return "完整路径"
         }
         return Key
@@ -282,7 +287,7 @@ CommandLanguageIndex(reset := false) {
     }
     if (IsObject(index))
         return index
-    keys := Map("进程", "进程管理",
+    keys := Map("进程", "进程管理", "截图", "抓图",
         "Window Management", "窗口管理", "Window", "窗口管理", "視窗管理", "窗口管理")
     aliases := Map()
     for name in CommandNames() {

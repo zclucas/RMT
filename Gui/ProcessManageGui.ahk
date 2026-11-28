@@ -179,7 +179,7 @@ class ProcessManageGui extends CommentGui {
         }
         this._ComboPush("Action", "SelectedIndex", CurrentCommandChoiceIndex(action, ProcessManage.Actions))
         this._ComboPush("MatchBy", "SelectedIndex", CurrentCommandChoiceIndex(this._matchMode, ProcessManage.MatchModes))
-        this._ComboPush("PickMatch", "SelectedIndex", CurrentCommandChoiceIndex(this.Data.PickMatch, ProcessManage.MatchPicks))
+        this._ComboPush("PickMatch", "SelectedIndex", action == "进程信息" ? CurrentCommandChoiceIndex(this.Data.PickMatch, ProcessManage.MatchPicks) : 0)
         this._FillTargets()
         this._ComboPush("Remark", "Text", parts.Length >= 2 ? parts[2] : "")
         vars := GetGuiVarArr()
@@ -463,7 +463,7 @@ class ProcessManageGui extends CommentGui {
         data.Action := CurrentCommandChoice(state["Action"], ProcessManage.Actions)
         data.MatchBy := CurrentCommandChoice(state["MatchBy"], ProcessManage.MatchModes)
         data.Target := Trim(state[data.MatchBy == "窗口绑定" ? "ProcessWindowBinding" : "Target"])
-        data.PickMatch := CurrentCommandChoice(state["PickMatch"], ProcessManage.MatchPicks)
+        data.PickMatch := data.Action == "进程信息" ? CurrentCommandChoice(state["PickMatch"], ProcessManage.MatchPicks) : InputField(this.Data, "PickMatch", "首个")
         return data
     }
 

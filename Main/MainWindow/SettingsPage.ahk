@@ -80,7 +80,7 @@
                 . ctrl
                 . '<TextBlock Grid.Column="1"' hintAttr ' Margin="10,0,0,0" FontSize="12" Foreground="{DynamicResource TextSub}" TextWrapping="Wrap" VerticalAlignment="Center"/></Grid>'
         }
-        row(label, ctrl, tip := "", lblName := "", help := "") {
+        row(label, ctrl, tip := "", lblName := "", help := "", icon := "") {
             if (help == "" && tip != "" && (helpFnByLabel.Has(label) || InStr(tip, "`n"))) {
                 help := tip
                 tip := ""
@@ -88,8 +88,13 @@
             if (tip != "")
                 ctrl := afterHint(ctrl, tip)
             helpBtn := dot(help, label)
-            return '<Border MinHeight="48" Padding="0,5" BorderBrush="{DynamicResource ControlBorder}" BorderThickness="0,0,0,0.5"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="' labelWidth '"/><ColumnDefinition Width="36"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>'
-                . '<TextBlock' (lblName == "" ? "" : ' Name="' lblName '"') ' Text="' this._XmlEsc(label) '" Margin="0,0,4,0" TextWrapping="Wrap" VerticalAlignment="Center" FontWeight="SemiBold" Foreground="{DynamicResource TextMain}" FontSize="13"/>' helpBtn
+            labelXaml := '<TextBlock' (lblName == "" ? "" : ' Name="' lblName '"') ' Text="' this._XmlEsc(label) '" Margin="0,0,4,0" TextWrapping="Wrap" VerticalAlignment="Center" FontWeight="SemiBold" Foreground="{DynamicResource TextMain}" FontSize="13"/>'
+            if (icon != "")
+                labelXaml := '<Grid><Grid.ColumnDefinitions><ColumnDefinition Width="24"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>'
+                    . '<Grid Width="16" Height="16" HorizontalAlignment="Left" VerticalAlignment="Center" IsHitTestVisible="False">' icon '</Grid>'
+                    . '<Grid Grid.Column="1">' labelXaml '</Grid></Grid>'
+            return '<Border MinHeight="48" Padding="0,5" BorderBrush="{DynamicResource ControlBorder}" BorderThickness="0,0,0,0.5"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="' (labelWidth + (icon != "" ? 24 : 0)) '"/><ColumnDefinition Width="' (icon != "" && helpBtn == "" ? 12 : 36) '"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>'
+                . labelXaml helpBtn
                 . '<Grid Grid.Column="2" VerticalAlignment="Center">' ctrl '</Grid></Grid></Border>'
         }
         tog(label, name, val, tip := "") {
@@ -250,24 +255,24 @@
         ; ---------- 页：快捷键 ----------
         hotkeyGroups := [
             {title: "全局与工具", glyph: "&#xE765;", defs: [
-                {f: "SuspendHotkey", l: "软件休眠", t: true},
-                {f: "PauseHotkey", l: "暂停宏", t: false},
-                {f: "KillMacroHotkey", l: "终止宏", t: false},
-                {f: "VoiceInputHotkey", l: "语音输入", t: true},
-                {f: "ToolRecordMacroHotKey", l: "指令录制", t: false},
-                {f: "ToolTextFilterHotKey", l: "文本提取", t: false}]},
+                {f: "SuspendHotkey", l: "软件休眠", t: true, glyph: "&#xE708;"},
+                {f: "PauseHotkey", l: "暂停宏", t: false, glyph: "&#xE769;"},
+                {f: "KillMacroHotkey", l: "终止宏", t: false, glyph: "&#xE71A;"},
+                {f: "VoiceInputHotkey", l: "语音输入", t: true, glyph: "&#xE720;"},
+                {f: "ToolRecordMacroHotKey", l: "指令录制", t: false, glyph: "&#xE7C8;"},
+                {f: "ToolTextFilterHotKey", l: "文本提取", t: false, glyph: "&#xE8E9;"}]},
             {title: "截图与工具", glyph: "&#xE8D4;", defs: [
-                {f: "ScreenShotHotKey", l: "屏幕截图", t: false},
-                {f: "FreePasteHotKey", l: "自由贴", t: false},
-                {f: "ToolCheckHotkey", l: "鼠标信息", t: false}]},
+                {f: "ScreenShotHotKey", l: "屏幕截图", t: false, glyph: "&#xE722;"},
+                {f: "FreePasteHotKey", l: "自由贴", t: false, glyph: "&#xE77F;"},
+                {f: "ToolCheckHotkey", l: "鼠标信息", t: false, glyph: "&#xE962;"}]},
             {title: "调试", glyph: "&#xE76C;", defs: [
-                {f: "DebugRunHotkey", l: "播放/继续", t: true},
-                {f: "DebugStepOverHotkey", l: "步进", t: true},
-                {f: "DebugStepHotkey", l: "步入", t: true},
-                {f: "DebugStepOutHotkey", l: "步出", t: true},
-                {f: "DebugRunToCursorHotkey", l: "运行到光标", t: true},
-                {f: "DebugToggleSkipHotkey", l: "跳过指令", t: true},
-                {f: "DebugRunAllHotkey", l: "运行", t: true}]}
+                {f: "DebugRunHotkey", l: "播放/继续", t: true, glyph: "&#xE768;"},
+                {f: "DebugStepOverHotkey", l: "步进", t: true, glyph: "&#xE76C;"},
+                {f: "DebugStepHotkey", l: "步入", t: true, glyph: "&#xE70D;"},
+                {f: "DebugStepOutHotkey", l: "步出", t: true, glyph: "&#xE70E;"},
+                {f: "DebugRunToCursorHotkey", l: "运行到光标", t: true, path: "M 1,4 L 7,8 L 1,12 Z M 9,2 L 15,9 L 12,9 L 10.5,12 Z"},
+                {f: "DebugToggleSkipHotkey", l: "跳过指令", t: true, glyph: "&#xE893;"},
+                {f: "DebugRunAllHotkey", l: "运行", t: true, glyph: "&#xE768;"}]}
         ]
         hotkeyCards := []
         for hi, hg in hotkeyGroups {
@@ -275,7 +280,10 @@
             for hd in hg.defs {
                 hv := MainSoftData.HasProp(hd.f) ? String(MainSoftData.%hd.f%) : ""
                 hdisp := hv == "" ? GetLang("无") : FormatHotkeyDisplay(hv)
-                hb .= row(GetLang(hd.l), '<Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="40"/></Grid.ColumnDefinitions><TextBox Name="Val_' hd.f '" Text="' this._XmlEsc(hdisp) '" IsReadOnly="True"/><Button Grid.Column="1" Name="BtnEdit_' hd.f '" Content="&#xE70F;" FontFamily="' iconFont '" ToolTip="' GetLang("录入快捷键") '" Margin="8,0,0,0" Padding="0"/></Grid>')
+                icon := hd.HasOwnProp("path")
+                    ? '<Path Data="' hd.path '" Stretch="Uniform" Stroke="{DynamicResource TextMain}" StrokeThickness="1.5" StrokeLineJoin="Round"/>'
+                    : '<TextBlock Text="' hd.glyph '" FontFamily="' iconFont '" FontSize="14" FontWeight="Normal" Foreground="{DynamicResource TextMain}" HorizontalAlignment="Center" VerticalAlignment="Center"/>'
+                hb .= row(GetLang(hd.l), '<Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="40"/></Grid.ColumnDefinitions><TextBox Name="Val_' hd.f '" Text="' this._XmlEsc(hdisp) '" IsReadOnly="True"/><Button Grid.Column="1" Name="BtnEdit_' hd.f '" Content="&#xE70F;" FontFamily="' iconFont '" ToolTip="' GetLang("录入快捷键") '" Margin="8,0,0,0" Padding="0"/></Grid>', , , , icon)
             }
             ; 左列放两张卡（全局 + 截图），第二张要和上面留出间距；右列只有一张，不用
             mg := (hi == 2) ? "0,18,0,0" : "0"

@@ -283,9 +283,10 @@ class YoloGui {
         this._ComboPush("Remark", "Text", parts.Length >= 2 ? parts[2] : "")
 
         this.RefreshModels(this.Data.ModelName)
+        task := Yolo.TaskOf(this.Data.ModelName)
         this._FillChoice("Device", Yolo.Devices, this.Data.Device)
-        this._FillChoice("TargetMode", Yolo.Targets, this.Data.TargetMode)
-        this._FillChoice("ActionType", Yolo.Actions, this.Data.ActionType)
+        this._FillChoice("TargetMode", Yolo.Targets, task == "classify" || task == "semantic" || task == "depth" ? Yolo.Targets[1] : this.Data.TargetMode)
+        this._FillChoice("ActionType", Yolo.Actions, task == "classify" || task == "depth" ? "无动作" : this.Data.ActionType)
 
         for field in ["ConfLevel", "Iou", "MaxDet", "Classes", "MinMaskRatio", "KeypointConf",
             "AnchorKpt", "TopK", "MinRatio", "SampleX", "SampleY", "Region", "OffsetX", "OffsetY"]
@@ -299,8 +300,8 @@ class YoloGui {
         for field in varFields
             this._ComboPush(field, "Text", String(this.Data.%field%))
 
-        this._ApplyTask(Yolo.TaskOf(this.Data.ModelName),
-            CurrentCommandChoice(this.Data.ActionType, Yolo.Actions), this.Data.ModelName)
+        this._ApplyTask(task,
+            task == "classify" || task == "depth" ? "无动作" : CurrentCommandChoice(this.Data.ActionType, Yolo.Actions), this.Data.ModelName)
         ; 首帧就按任务收好行，落点交给模板里的 CenterScreen 一次算准。
         this._HideRowsInXaml()
     }
@@ -390,8 +391,11 @@ class YoloGui {
         data := this.Data.Clone()
         data.ModelName := Trim(state["ModelName"])
         data.Device := this._EnumValue(state["Device"], Yolo.Devices)
-        data.TargetMode := this._EnumValue(state["TargetMode"], Yolo.Targets)
-        data.ActionType := this._EnumValue(state["ActionType"], Yolo.Actions)
+        task := CommandYoloTask(data)
+        if (task != "classify" && task != "semantic" && task != "depth")
+            data.TargetMode := this._EnumValue(state["TargetMode"], Yolo.Targets)
+        if (task != "classify" && task != "depth")
+            data.ActionType := this._EnumValue(state["ActionType"], Yolo.Actions)
         for field in ["ConfLevel", "Iou", "MaxDet", "Classes", "MinMaskRatio", "KeypointConf",
             "AnchorKpt", "TopK", "MinRatio", "SampleX", "SampleY", "Region", "OffsetX", "OffsetY"]
             data.%field% := Trim(state[field])
@@ -413,7 +417,7 @@ class YoloGui {
             ; 参数校验直接复用运行时那一套，避免编辑器放行、执行时才报错。
             Yolo.BuildOptions(task == "" ? "detect" : task, data, (text) => text, region)
 
-            if (task == "" || this._Has(YoloGui.Clickable, task)) {
+            if ((task == "" || this._Has(YoloGui.Clickable, task)) && data.ActionType != "无动作") {
                 for field in ["OffsetX", "OffsetY"] {
                     value := Trim(data.%field%)
                     if (value != "" && !IsInteger(value))
@@ -426,15 +430,16 @@ class YoloGui {
             RmtDialog.Info(e.Message, GetLang(this.CmdKey), this.Hwnd())
             return false
         }
-        for name in [data.CountVar, data.ClassVar, data.ConfVar, data.RatioVar, data.DepthVar,
-            data.ResultVar, data.ErrorVar]
+        for field in Yolo.OutputFields(CommandYoloTask(data)) {
+            name := data.%field%
             if (name != "" && !CheckVarNameIfValid(name))
                 return false
+        }
         return true
     }
 
     _HasOutput(data) {
-        for field in ["CountVar", "ClassVar", "ConfVar", "RatioVar", "DepthVar", "ResultVar", "ErrorVar"]
+        for field in Yolo.OutputFields(CommandYoloTask(data))
             if (data.%field% != "")
                 return true
         return false

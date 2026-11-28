@@ -600,9 +600,7 @@ class MacroGraphDataMixin {
             d.ssEndX := data.EndPosX
             d.ssEndY := data.EndPosY
             d.ssNameType := data.NameType
-            d.ssFixedName := data.FixedName
-            d.ssSavePath := data.SavePath
-            d.ssResultToggle := data.ResultToggle
+            d.ssToClipboard := data.ToClipboard
             d.ssResultSaveName := data.ResultSaveName
         } else if (cmdKey == "循环") {
             d.loopCount := data.LoopCount
@@ -624,7 +622,7 @@ class MacroGraphDataMixin {
             d.time2 := data.Time2
         } else if (cmdKey == "按键") {
             d.key := data.KeyName
-            d.ktype := GetLangArr(["按下", "松开", "点击"])[data.KeyType]
+            d.ktype := GetLang(CmdEnumKeyAct(data.KeyType))
             d.hold := data.HoldTime
             d.count := data.Count
             d.inter := data.IntervalTime

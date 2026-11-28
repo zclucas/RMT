@@ -513,7 +513,7 @@ class MergeUtil {
             }
             Data.SerialStr := serial
 
-            configJson := JSON.stringify(Data, 0)
+            configJson := SerializeCommandData(Data, cmdType)
             collectedConfigs.Set(serial, Map("类型", cmdType, "配置", configJson))
 
             depSerials := MergeUtil.FindDependentSerialsFromSource(Data)

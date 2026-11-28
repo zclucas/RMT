@@ -285,12 +285,11 @@ class MMProGui {
         this.Data := GetMacroCMDData(this.SerialStr)
 
         
-        this._RefreshActionItems(this.Data.ActionType)
-
         MoveMode := ObjHasOwnProp(this.Data, "MouseMoveMode") ? CmdEnumMoveMode(this.Data.MouseMoveMode) : "绝对移动"
         if (MoveMode == "游戏视角")
             MoveMode := "绝对移动"
         this.ui.Update("MouseMoveModeCombo", "SelectedIndex", String(MoveMode == "相对移动" ? 1 : 0))
+        this._RefreshActionItems(this.Data.ActionType)
 
         RefMode := ObjHasOwnProp(this.Data, "RefMode") ? this.Data.RefMode : "屏幕"
         this.ui.Update("RefCombo", "SelectedIndex", String(CmdEnumIndex(RefMode, CmdEnumRefNames(), 0)))

@@ -342,9 +342,11 @@ RegisterVariableIconTypes(cmd, data) {
                 VariableIconOutput(outputs, data.SaveVar, "")
         default:
             ; 其他写入入口先登记为未知，避免同名变量保留另一条指令的类型。
+            rules := MySoftData.HasProp("DataClassMap") && MySoftData.DataClassMap.Has(cmd)
+                ? CommandDefaultRules(cmd, data, CommandDefaultValues(cmd, data)) : Map()
             for field in ["SaveName", "SaveVar", "VarName", "ResultSaveName", "ResultVar", "ErrorVar", "ControlVar",
                 "ClassVar", "HwndVar", "StateVar", "ValueVar", "XVar", "YVar", "WindowXVar", "WindowYVar", "WidthVar", "HeightVar"] {
-                if (!data.HasOwnProp(field))
+                if (!data.HasOwnProp(field) || !rules.Get(field, true))
                     continue
                 glyph := ""
                 if (cmd == "控件信息") {

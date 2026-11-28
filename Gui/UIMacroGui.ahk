@@ -349,19 +349,20 @@ class UIMacroGui {
         main.Background("{DynamicResource UIPanelBgColor}")
         main.Rows(titleBarH, "*")
 
-        ; 标题栏：标题居中，右上角「收起成球 / 关闭」两个按钮。
+        ; 标题栏：标题左对齐，右上角「收起成球 / 关闭」两个按钮。
         ; 以前这里是一整条只放标题文字的 Border，于是没有自定义界面的默认面板右上角
         ; 什么都没有，收球、关闭只能靠热键。现在两种面板共用同一套标题栏。
         titleBar := main.Add("Border").Grid_Row(0).Name("TitleBar").Background("{DynamicResource UIPanelTitleBg}")
             .WindowChrome_IsHitTestVisibleInChrome("True")
-        tbGrid := titleBar.Add("Grid")
+        tbGrid := titleBar.Add("Grid").Cols("*", "Auto")
         tbGrid.Add("TextBlock").Name("TitleText").Text(foldRemark)
             .Foreground("{DynamicResource UIPanelTitleText}").FontSize(11).FontWeight("SemiBold")
-            .VerticalAlignment("Center").HorizontalAlignment("Center").Margin("6,0,6,0")
+            .VerticalAlignment("Center").HorizontalAlignment("Stretch").TextAlignment("Left")
+            .TextTrimming("CharacterEllipsis").Margin("6,0,6,0")
         ; 两个按钮画成「实色圆点 / 字符 ×」，不走 DynamicResource、也不用图标字体：
         ; 图标字体回退失败时 E8BB 会渲染成空白，DynamicResource 缺定义时解析成空画刷，
         ; 两种都会让按钮「明明在、却看不见」。颜色直接取面板标题文字色。
-        tbBtns := tbGrid.Add("StackPanel").Orientation("Horizontal")
+        tbBtns := tbGrid.Add("StackPanel").Grid_Column(1).Orientation("Horizontal")
             .HorizontalAlignment("Right").VerticalAlignment("Center").Margin("0,0,4,0")
         for btnName in ["BtnPanelBall", "BtnPanelClose"] {
             b := tbBtns.Add("Button").Name(btnName)
@@ -2053,20 +2054,21 @@ class UIMacroGui {
         main.Background("{DynamicResource UIPanelBgColor}")
         main.Rows(titleBarH, "*")
 
-        ; 标题栏：只有一行居中的标题文字，不加任何按钮
+        ; 标题栏：标题左对齐，分页和交互按钮分别预留宽度。
         titleBar := main.Add("Border").Grid_Row(0).Name("TitleBar").Background("{DynamicResource UIPanelTitleBg}")
             .WindowChrome_IsHitTestVisibleInChrome("True")
-        tbGrid := titleBar.Add("Grid")
+        tbGrid := titleBar.Add("Grid").Cols("*", "Auto", "Auto")
         tbGrid.Add("TextBlock").Name("TitleText").Text(foldRemark)
             .Foreground("{DynamicResource UIPanelTitleText}").FontSize(11).FontWeight("SemiBold")
-            .VerticalAlignment("Center").HorizontalAlignment("Center").Margin("6,0,6,0")
+            .VerticalAlignment("Center").HorizontalAlignment("Stretch").TextAlignment("Left")
+            .TextTrimming("CharacterEllipsis").Margin("6,0,6,0")
         ; 右上角：收起成球 / 关闭浮窗。图标字形必须指定图标字体，
         ; 否则继承了正文字体，Chr(0xE921) 会渲染成空白。
         ; 分页：页数来自 schema.window.pages；窗口尺寸由 window 统一，各页天然一致。
         ; 页码直接列成小数字按钮（1 2 3 …），点哪个去哪页，比上一页/下一页直观。
         pages := (schema.window.HasProp("pages") ? Integer(schema.window.pages) : 1)
         if (pages > 1) {
-            pgBar := tbGrid.Add("StackPanel").Orientation("Horizontal")
+            pgBar := tbGrid.Add("StackPanel").Grid_Column(1).Orientation("Horizontal")
                 .HorizontalAlignment("Left").VerticalAlignment("Center").Margin("4,0,0,0")
             loop pages {
                 n := A_Index
@@ -2081,7 +2083,7 @@ class UIMacroGui {
             }
         }
 
-        tbBtns := tbGrid.Add("StackPanel").Orientation("Horizontal")
+        tbBtns := tbGrid.Add("StackPanel").Grid_Column(2).Orientation("Horizontal")
             .HorizontalAlignment("Right").VerticalAlignment("Center").Margin("0,0,4,0")
         ; 两个按钮画成「实色圆点 / 字符 ×」，不走 DynamicResource、也不用图标字体：
         ; 图标字体在部分机器上回退失败时 E8BB 会渲染成方框或空白，看起来就是「标题栏

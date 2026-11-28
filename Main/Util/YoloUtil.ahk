@@ -342,11 +342,14 @@ class Yolo {
             throw Error(Format(GetLang("模型文件不存在：{}"), path))
 
         device := CurrentCommandChoice(data.Device, this.Devices)
-        iou := this.ParseIou(resolve(data.Iou))
+        hint := CommandYoloTask(data)
+        ; 首次遇到未知任务先读模型信息，不用尚未确定是否需要的 NMS 参数。
+        iou := hint == "" ? 0.45 : this.ResolveIou(hint, data, resolve)
         info := this.Info(path, device, iou)
         task := this._Prop(info, "task", "")
         if (task == "")
             task := "detect"
+        iou := this.ResolveIou(task, data, resolve)
 
         region := this.ParseRegion(resolve(data.Region))
         opts := this.BuildOptions(task, data, resolve, region)
@@ -363,6 +366,10 @@ class Yolo {
     }
 
     ; 截屏 → 推理 → 解析。输入区域是屏幕坐标，内核拿到的是区域内的图。
+    static ResolveIou(task, data, resolve) {
+        return task == "classify" || task == "semantic" || task == "depth" ? 0.45 : this.ParseIou(resolve(data.Iou))
+    }
+
     static RunFrame(handle, region, opts) {
         x := region[1], y := region[2]
         width := region[3] - region[1], height := region[4] - region[2]
@@ -429,6 +436,11 @@ class Yolo {
             }
             return opts
         }
+        if (task == "semantic") {
+            opts.minMaskRatio := this.ParseRatio(resolve(data.MinRatio),
+                GetLang("比例须为 0~1 之间的数字。"))
+            return opts
+        }
 
         opts.conf := this.ParseConf(resolve(data.ConfLevel))
 
@@ -449,9 +461,6 @@ class Yolo {
         } else if (task == "segment") {
             opts.minMaskRatio := this.ParseRatio(resolve(data.MinMaskRatio),
                 GetLang("比例须为 0~1 之间的数字。"))
-        } else if (task == "semantic") {
-            opts.minMaskRatio := this.ParseRatio(resolve(data.MinRatio),
-                GetLang("比例须为 0~1 之间的数字。"))
         }
         return opts
     }
@@ -460,7 +469,7 @@ class Yolo {
 
     ; 把内核的原始 JSON 变成“该任务要写的那几个变量”。
     static BuildOutcome(task, raw, data, resolve, region, opts) {
-        out := {count: "", name: "", conf: "", ratio: "", depth: "", result: ""}
+        out := {task: task, count: "", name: "", conf: "", ratio: "", depth: "", result: ""}
 
         switch task {
             case "classify":
@@ -500,6 +509,18 @@ class Yolo {
                     this.ClickTarget(items[1], data, resolve)
         }
         return out
+    }
+
+    static OutputFields(task) {
+        switch task {
+            case "detect", "segment", "pose", "obb": fields := ["CountVar"]
+            case "classify": fields := ["ClassVar", "ConfVar"]
+            case "semantic": fields := ["ClassVar", "RatioVar"]
+            case "depth": fields := ["DepthVar"]
+            default: fields := ["CountVar", "ClassVar", "ConfVar", "RatioVar", "DepthVar"]
+        }
+        fields.Push("ResultVar", "ErrorVar")
+        return fields
     }
 
     ; JSON 里的双精度直接转字符串会变成 0.67720000000000002，写进变量很难看。
@@ -786,10 +807,11 @@ OnYolo(tableItem, cmd, index) {
 }
 
 RegisterYoloVars(data) {
-    for name in [data.CountVar, data.ClassVar, data.ConfVar, data.RatioVar, data.DepthVar,
-        data.ResultVar, data.ErrorVar]
+    for field in Yolo.OutputFields(CommandYoloTask(data)) {
+        name := data.%field%
         if (name != "")
             MySoftData.GlobalVariMap[name] := true
+    }
 }
 
 SaveYoloResult(data, out, failure) {
@@ -798,13 +820,13 @@ SaveYoloResult(data, out, failure) {
 
     names := []
     values := []
-    for pair in [[data.CountVar, out.count], [data.ClassVar, out.name], [data.ConfVar, out.conf],
-        [data.RatioVar, out.ratio], [data.DepthVar, out.depth],
-        [data.ResultVar, out.result], [data.ErrorVar, failure]] {
-        if (pair[1] == "")
+    task := out.HasOwnProp("task") ? out.task : CommandYoloTask(data)
+    resultFields := Map("CountVar", "count", "ClassVar", "name", "ConfVar", "conf", "RatioVar", "ratio", "DepthVar", "depth", "ResultVar", "result")
+    for field in Yolo.OutputFields(task) {
+        if (data.%field% == "")
             continue
-        names.Push(pair[1])
-        values.Push(pair[2])
+        names.Push(data.%field%)
+        values.Push(field == "ErrorVar" ? failure : out.%resultFields[field]%)
     }
     if (names.Length)
         MySetGlobalVariable(names, values, false)

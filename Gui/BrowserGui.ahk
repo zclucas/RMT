@@ -221,9 +221,14 @@ class BrowserGui extends CommentGui {
     }
 
     _FillTabMatchModes(action, selected := "") {
-        if (selected == "")
-            selected := this.ui.Query("TabMatchMode")
         modes := BrowserActions.MatchModes(action)
+        if (selected == "") {
+            selected := GetConfigKey(this.ui.Query("TabMatchMode"), modes)
+            ; 切换操作时，关闭专用的“当前标签页”不能沿用到切换标签页。
+            if (this.HasOwnProp("_tabMatchAction") && this._tabMatchAction != action
+                && selected == "当前标签页")
+                selected := modes[1]
+        }
         this._tabMatchAction := action
         this._updatingMatchModes := true
         try {
@@ -296,7 +301,7 @@ class BrowserGui extends CommentGui {
     }
 
     OnActionGroupChanged(*) {
-        if (this._updatingActions)
+        if (this._batching || this._updatingActions)
             return
         index := this.ui.Query("ActionGroup>SelectedIndex")
         if (!IsInteger(index) || index < 0 || index >= BrowserActions.Groups.Length)
@@ -329,14 +334,14 @@ class BrowserGui extends CommentGui {
     _ActionLabel(action) => GetLang(action == "元素信息" ? "基础信息" : action == "元素位置/宽高" ? "位置/宽高" : action)
 
     OnFieldsChanged(*) {
-        if (this.HasOwnProp("_updatingMatchModes") && this._updatingMatchModes)
+        if (this._batching || (this.HasOwnProp("_updatingMatchModes") && this._updatingMatchModes))
             return
         action := this._Action(this.ui)
         browser := BrowserActions._Choice(this.ui.Query("BrowserType"), this._browserNames)
         this._UpdateFieldVisibilities(action, browser)
     }
 
-    _UpdateFieldVisibilities(action, browser, pageSource := "", pageField := "") {
+    _UpdateFieldVisibilities(action, browser, pageSource := "", pageField := "", initialData := "") {
         action := BrowserActions.Action(action)
         textLabels := Map(
             "输入", GetLang("输入内容："),
@@ -356,7 +361,9 @@ class BrowserGui extends CommentGui {
         isMatching := action == "切换标签页" || action == "关闭标签页"
         if (isMatching && (!this.HasOwnProp("_tabMatchAction") || this._tabMatchAction != action))
             this._FillTabMatchModes(action)
-        matchMode := isMatching ? BrowserActions._Choice(this.ui.Query("TabMatchMode"), BrowserActions.MatchModes(action)) : ""
+        ; Init 的更新尚在批次中；首次布局读取配置，不能查询尚未回填的控件。
+        matchMode := isMatching ? BrowserActions._Choice(IsObject(initialData) ? initialData.TabMatchMode
+            : this.ui.Query("TabMatchMode"), BrowserActions.MatchModes(action)) : ""
         source := isInfo ? (pageSource != "" ? pageSource : BrowserActions._Choice(this.ui.Query("PageSource"), BrowserPageInfo.Sources)) : ""
         isMouseCoord := action == "鼠标移动" || action == "鼠标点击" || action == "鼠标滚轮"
         elementMatch := (isInfo && source == "元素匹配") || (isMatching && matchMode == "元素匹配")
@@ -389,9 +396,16 @@ class BrowserGui extends CommentGui {
         this._ComboPush("BtnCmdF1", "Visibility", hasSelector ? "Visible" : "Collapsed")
         if (!hasSelector && this._picking)
             this._FinishPicker()
-        field := isInfo ? (pageField != "" ? pageField
-            : (this.ui.Query("PageIdVar") != "" || this.ui.Query("PageStateVar") != "") ? "标签页ID" : "") : (action == "当前标签页" ? BrowserActions._Choice(this.ui.Query("CurrentTabAction"), BrowserActions.CurrentTabActions) : "")
-        closeMode := BrowserActions._Choice(this.ui.Query("TabCloseMode"), BrowserActions.TabCloseModes)
+        field := pageField
+        if (isInfo && field == "") {
+            hasCdpOutput := IsObject(initialData) ? (initialData.PageIdVar != "" || initialData.PageStateVar != "")
+                : (this.ui.Query("PageIdVar") != "" || this.ui.Query("PageStateVar") != "")
+            field := hasCdpOutput ? "标签页ID" : ""
+        } else if (action == "当前标签页")
+            field := BrowserActions._Choice(IsObject(initialData) ? initialData.CurrentTabAction
+                : this.ui.Query("CurrentTabAction"), BrowserActions.CurrentTabActions)
+        closeMode := action == "关闭标签页" ? BrowserActions._Choice(IsObject(initialData) ? initialData.TabCloseMode
+            : this.ui.Query("TabCloseMode"), BrowserActions.TabCloseModes) : "匹配标签页"
         this._ComboPush("CdpNotice", "Visibility", BrowserActions.RequiresCDP(action, field, isInfo ? source : matchMode, closeMode) ? "Visible" : "Collapsed")
         this._ComboPush("UrlLabel", "Text", GetLang(isInfo && BrowserPageInfo.MatchesTitle(source) ? "标题：" : "网址："))
         if (attrLabels.Has(action))
@@ -737,7 +751,7 @@ class BrowserGui extends CommentGui {
             this._ComboPush(name, "SelectedIndex", BrowserActions.ChoiceIndex((name == "BrowserType" ? browserType : this.Data.%name%), values))
         CommandTimeoutFields.Init(this.ui, this.Data.TimeoutMs, this.Data.TimeoutAction, this.Data.TimeoutStatusVar)
         this._UpdateFieldVisibilities(actionType, browserType, this.Data.PageSource,
-            this.Data.PageIdVar != "" || this.Data.PageStateVar != "" ? "标签页ID" : "")
+            this.Data.PageIdVar != "" || this.Data.PageStateVar != "" ? "标签页ID" : "", this.Data)
     }
 
     _ReadData() {
@@ -752,7 +766,8 @@ class BrowserGui extends CommentGui {
             for label, name in BrowserElementInfo.Outputs(action)
                 data.%name% := data.ActionType == action ? GetVarName(Trim(this.ui.Query(name))) : ""
         data.CurrentTabAction := BrowserActions._Choice(state["CurrentTabAction"], BrowserActions.CurrentTabActions)
-        data.TabMatchMode := BrowserActions._Choice(state["TabMatchMode"], BrowserActions.MatchModes(data.ActionType))
+        data.TabMatchMode := data.ActionType == "切换标签页" || data.ActionType == "关闭标签页"
+            ? BrowserActions._Choice(state["TabMatchMode"], BrowserActions.MatchModes(data.ActionType)) : BrowserActions.TabMatchModes[1]
         data.TabCloseMode := BrowserActions._Choice(state["TabCloseMode"], BrowserActions.TabCloseModes)
         data.OpenMode := BrowserActions._Choice(state["OpenMode"], BrowserActions.OpenModes)
         data.UseCDP := state["UseCDP"] == "True"

@@ -25,6 +25,8 @@ class AiSettingGui {
         this._providerGuard := false
         this._revealed := false
         this._applying := false
+        this._modelIds := []
+        this._selectedProvider := ""
     }
 
     static ShowGui() {
@@ -108,7 +110,7 @@ class AiSettingGui {
         ; 右缘留白根因：StackPanel+固定 fieldW 不拉伸；内容宽≈386，窗宽460→右侧空约 30px。
         ; 改为每行 Grid(Auto|*)，字段列 HorizontalAlignment=Stretch 吃满 body。
         body := main.Add("Grid").Grid_Row(1).Margin("16,14,17,14")
-        body.Rows("36", "36", "36", "36", "36", "44", "*")
+        body.Rows("36", "36", "36", "36", "Auto", "36", "44", "*")
         labelW := 64
         gap := 2
         midGap := 20    ; 写入权限下拉 与「指令审批」标签间距
@@ -141,9 +143,11 @@ class AiSettingGui {
         modelHost.Cols("*", "Auto")
         this._StyleCombo(modelHost.Add("ComboBox").Name("CmbAiModel").Grid_Column(0).Margin("0,0," gap ",0").HorizontalAlignment("Stretch").IsEditable("True"))
         this._StyleActionBtn(modelHost.Add("Button").Name("BtnRefreshModels").Grid_Column(1).Content(GetLang("刷新")))
+        body.Add("TextBlock").Name("AiProviderHint").Grid_Row(4).Margin("0,4,0,8")
+            .TextWrapping("Wrap").Foreground("{DynamicResource TextSub}").FontSize("11")
 
-        ; 行4：写入权限 + 指令审批（两侧 * 等宽）
-        row4 := body.Add("Grid").Grid_Row(4).VerticalAlignment("Center")
+        ; 行5：写入权限 + 指令审批（两侧 * 等宽）
+        row4 := body.Add("Grid").Grid_Row(5).VerticalAlignment("Center")
         row4.Cols(String(labelW), "*")
         row4.Add("TextBlock").Name("AiAccessLabel").Text(GetLang("写入权限：")).ToolTip(GetLang("只读：只能读取任意文件内容") "`n" GetLang("工作区：可以读取任意文件，写入仅限软件目录") "`n" GetLang("完全访问") "：" GetLang("读写不限路径，可执行命令和脚本。")).Grid_Column(0).VerticalAlignment("Center").Foreground("{DynamicResource TextMain}").FontSize("12")
         permHost := row4.Add("Grid").Grid_Column(1).Height(h).Margin(gap ",0,0,0").HorizontalAlignment("Stretch")
@@ -161,7 +165,7 @@ class AiSettingGui {
         for lab in AiAssist.ApprovalLabels
             cmbAppr.Add("ComboBoxItem").Content(GetLang(lab))
 
-        btnRow := body.Add("StackPanel").Grid_Row(5).Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center")
+        btnRow := body.Add("StackPanel").Grid_Row(6).Orientation("Horizontal").HorizontalAlignment("Center").VerticalAlignment("Center")
         btnRow.Add("Button").Name("BtnOk").Content(GetLang("确定")).Height(28).MinHeight(28).Padding("18,0")
 
         tmp := StrReplace(XAML_TEMPLATE, "%CaptionHeight%", titleHeight)
@@ -207,11 +211,16 @@ class AiSettingGui {
         this._providerGuard := true
         try {
             pIdx := AiAssist.ProviderIndex(MainSoftData.AiProvider) - 1
+            this._selectedProvider := MainSoftData.AiProvider
             this.ui.Update("CmbAiProvider", "SelectedIndex", String(pIdx))
-            this.ui.Update("TxtAiBaseUrl", "Text", MainSoftData.AiApiBaseUrl)
+            oldHunyuan := MainSoftData.AiProvider = "hunyuan"
+                && AiAssist.NormalizeBaseUrl(MainSoftData.AiApiBaseUrl) = "https://api.hunyuan.cloud.tencent.com/v1"
+            baseUrl := oldHunyuan ? AiAssist.ProviderByIndex(pIdx + 1)["url"] : MainSoftData.AiApiBaseUrl
+            this.ui.Update("TxtAiBaseUrl", "Text", baseUrl)
             this._ApplyUrlEditable(this._IsUrlEditable(MainSoftData.AiProvider))
-            this.ui.Update("TxtAiApiKey", "Password", MainSoftData.AiApiKey)
-            this._FillModelCombo(AiAssist.ModelListArr(), MainSoftData.AiModel)
+            this.ui.Update("AiProviderHint", "Text", AiAssist.ProviderHint(MainSoftData.AiProvider))
+            this.ui.Update("TxtAiApiKey", "Password", oldHunyuan ? "" : MainSoftData.AiApiKey)
+            this._FillModelCombo(oldHunyuan ? [] : AiAssist.ModelListArr(), oldHunyuan ? "" : MainSoftData.AiModel)
             this.ui.Update("CmbAiAccess", "SelectedIndex", String(MainSoftData.AiAccessMode - 1))
             this.ui.Update("CmbAiApproval", "SelectedIndex", String(MainSoftData.AiApprovalMode - 1))
         } catch {
@@ -240,6 +249,7 @@ class AiSettingGui {
         if (!IsObject(this.ui))
             return
         this.ui.Update("CmbAiModel", "ClearItems", "")
+        this._modelIds := ids.Clone()
         for id in ids {
             if (Trim(id) == "")
                 continue
@@ -249,6 +259,8 @@ class AiSettingGui {
             this.ui.Update("CmbAiModel", "Text", selected)
         else if (ids.Length >= 1)
             this.ui.Update("CmbAiModel", "SelectedIndex", "0")
+        else
+            this.ui.Update("CmbAiModel", "Text", "")
     }
 
     _ReadForm(&apiKey, &baseUrl, &model, &accessMode, &approvalMode, &providerId) {
@@ -275,7 +287,7 @@ class AiSettingGui {
             list.Push(curModel)
             seen[curModel] := true
         }
-        for id in AiAssist.ModelListArr() {
+        for id in this._modelIds {
             if (seen.Has(id))
                 continue
             seen[id] := true
@@ -294,6 +306,13 @@ class AiSettingGui {
         if (!IsNumber(pIdx))
             return
         prov := AiAssist.ProviderByIndex(Integer(pIdx) + 1)
+        if (this._selectedProvider = prov["id"])
+            return
+        this._selectedProvider := prov["id"]
+        ; 不把上一家的凭据与模型带到新平台；取消时不改已保存的配置。
+        this.ui.Update("TxtAiApiKey", "Password", "")
+        this._FillModelCombo([])
+        this.ui.Update("AiProviderHint", "Text", AiAssist.ProviderHint(prov["id"]))
         this._ApplyUrlEditable(this._IsUrlEditable(prov["id"]))
         if (prov["id"] = "custom" || Trim(prov["url"]) == "")
             this.ui.Update("TxtAiBaseUrl", "Text", Trim(prov["url"]))
@@ -322,6 +341,7 @@ class AiSettingGui {
             return
         apiKey := "", baseUrl := "", model := "", accessMode := 2, approvalMode := 2, providerId := "custom"
         this._ReadForm(&apiKey, &baseUrl, &model, &accessMode, &approvalMode, &providerId)
+        apiKey := AiAssist.ResolveApiKey(baseUrl, apiKey)
         if (apiKey == "" || baseUrl == "") {
             Toast.Warning(GetLang("请先填写 API Key 与 API URL"))
             return
@@ -331,10 +351,11 @@ class AiSettingGui {
         try this.ui.Update("BtnRefreshModels", "Content", GetLang("刷新中…"))
         try {
             ids := AiAssist.FetchModels(baseUrl, apiKey)
-            MainSoftData.AiModelList := ""
-            for id in ids
-                MainSoftData.AiModelList .= (MainSoftData.AiModelList == "" ? "" : ",") id
-            keep := model
+            keep := ""
+            for id in ids {
+                if (id == model)
+                    keep := model
+            }
             if (keep == "" && ids.Length >= 1)
                 keep := ids[1]
             this._FillModelCombo(ids, keep)
@@ -351,12 +372,17 @@ class AiSettingGui {
     OnOkClick(state, ctrl, event) {
         apiKey := "", baseUrl := "", model := "", accessMode := 2, approvalMode := 2, providerId := "custom"
         this._ReadForm(&apiKey, &baseUrl, &model, &accessMode, &approvalMode, &providerId)
-        if (apiKey == "" || baseUrl == "") {
+        if (AiAssist.ResolveApiKey(baseUrl, apiKey) == "" || baseUrl == "") {
             Toast.Warning(GetLang("请填写 API Key 与 API URL"))
             return
         }
         if (model == "") {
             Toast.Warning(GetLang("请选择或填写模型"))
+            return
+        }
+        try AiAssist.ValidateEndpoint(baseUrl)
+        catch as e {
+            Toast.Warning(e.Message)
             return
         }
         MainSoftData.AiProvider := providerId
